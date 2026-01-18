@@ -52,7 +52,7 @@ public class ApplicationDbContext : DbContext
            builder.HasOne(d => d.Patient).WithMany(u => u.Appointments).HasForeignKey("PatientId").OnDelete(DeleteBehavior.Restrict);
            builder.HasOne(d => d.Doctor).WithMany(s => s.Appointments).HasForeignKey("DoctorId").OnDelete(DeleteBehavior.Restrict);
            builder.Property(s => s.Status).HasConversion<string>();
-
+           builder.Property(s => s.CancellationReason).IsRequired();
         });
 
     

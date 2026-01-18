@@ -1,12 +1,11 @@
-//IMPORTANT
-
 public class LoginResultDto
 {
     public bool IsSuccess { get; set; }
-    public UserRole? Role { get; set; }
+    public string Token { get; set; }
+    public string Role { get; set; }
     public string Error { get; set; }
 
-     public static LoginResultDto Fail(string error)
+    public static LoginResultDto Fail(string error)
     {
         return new LoginResultDto
         {
@@ -15,12 +14,13 @@ public class LoginResultDto
         };
     }
 
-    public static LoginResultDto Success(UserRole role)
+    public static LoginResultDto Success(string token, string role)
     {
         return new LoginResultDto
         {
             IsSuccess = true,
+            Token = token,
             Role = role
         };
-}
+    }
 }
