@@ -55,6 +55,7 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddScoped<IAuthService,AuthService>();
 builder.Services.AddScoped<IUserService,UserService>();
 builder.Services.AddScoped<IAppointmentService,AppointmentService>();
+builder.Services.AddScoped<IDepartmentService,DepartmentService>();
 builder.Services.Configure<JwtSettings>(
     builder.Configuration.GetSection("JwtSettings"));
 builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));

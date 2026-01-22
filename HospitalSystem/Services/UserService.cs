@@ -15,30 +15,52 @@ public class UserService : IUserService
     }
 
     public async Task<ChangeRoleResultDto> ChangeRoleAsync(ChangeRoleDto dto)
+{
+    if (!Enum.IsDefined(typeof(UserRole), dto.NewRole))
+        return ChangeRoleResultDto.Fail("Role does not exist");
+
+    var user = await _context.Users
+        .Include(u => u.Doctor)
+        .SingleOrDefaultAsync(u => u.Id == dto.UserId);
+
+    if (user == null)
+        return ChangeRoleResultDto.Fail("User not found");
+
+    if (user.Role == dto.NewRole)
+        return ChangeRoleResultDto.Fail("User already has this role");
+
+    if (dto.NewRole == UserRole.Pending)
+        return ChangeRoleResultDto.Fail("Cannot assign Pending role");
+
+    user.Role = dto.NewRole;
+
+    if (dto.NewRole == UserRole.Doctor)
     {
-        if (!Enum.IsDefined(typeof(UserRole), dto.NewRole))
+        if (user.Doctor == null)
         {
-           return ChangeRoleResultDto.Fail("Role doesnt exits");
+            _context.Doctors.Add(new DoctorEntity
+            {
+                UserId = user.Id,
+                IsActive = true
+            });
         }
-        var user = await _context.Users.FindAsync(dto.UserId);
-        if (user == null)
+        else
         {
-             return ChangeRoleResultDto.Fail("user not found");
+            user.Doctor.IsActive = true;
         }
-
-        if (user.Role == dto.NewRole)
-        {
-            return ChangeRoleResultDto.Fail("User already has this role");
-        }
-        if (dto.NewRole == UserRole.Pending)
-        {
-            return ChangeRoleResultDto.Fail("Cannot assign Pending role.");
-        }
-
-        user.Role = dto.NewRole;
-        await _context.SaveChangesAsync();
-        return ChangeRoleResultDto.Success();
     }
+    else
+    {
+        if (user.Doctor != null)
+        {
+            user.Doctor.IsActive = false;
+        }
+    }
+
+    await _context.SaveChangesAsync();
+    return ChangeRoleResultDto.Success();
+}
+
 
     public async Task<List<UserDisplayDto>>ListUsersAsync()
     {
