@@ -24,14 +24,11 @@ public class AuthService : IAuthService
 }
  public async Task<LoginResultDto> LoginAsync(LoginDto dto)
 {
-    // 1️⃣ Validate input
-    if (string.IsNullOrWhiteSpace(dto.Name) ||
-        string.IsNullOrWhiteSpace(dto.Password))
+    if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Password))
     {
         return LoginResultDto.Fail("Invalid credentials");
     }
 
-    // 2️⃣ Find user
     var user = await _context.Users
         .SingleOrDefaultAsync(u => u.Name == dto.Name);
 
@@ -40,7 +37,7 @@ public class AuthService : IAuthService
         return LoginResultDto.Fail("Invalid credentials");
     }
 
-    // 3️⃣ Verify hashed password
+    
     var result = _hasher.VerifyHashedPassword(
         user,
         user.PasswordHash,
@@ -52,14 +49,12 @@ public class AuthService : IAuthService
         return LoginResultDto.Fail("Invalid credentials");
     }
 
-    // 4️⃣ Create claims (THIS is why User.FindFirst works)
     var claims = new List<Claim>
     {
-        new Claim("UserId", user.Id.ToString()), // custom claim
+        new Claim("UserId", user.Id.ToString()), 
         new Claim(ClaimTypes.Role, user.Role.ToString())
     };
 
-    // 5️⃣ Create JWT
     var key = new SymmetricSecurityKey(
         Encoding.UTF8.GetBytes(_jwtSettings.SecretKey)
     );
@@ -80,7 +75,6 @@ public class AuthService : IAuthService
     var tokenString = new JwtSecurityTokenHandler()
         .WriteToken(token);
 
-    // 6️⃣ Return token + role
     return LoginResultDto.Success(tokenString, user.Role.ToString());
 }
 

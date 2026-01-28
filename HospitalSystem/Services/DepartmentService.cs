@@ -12,17 +12,22 @@ public class DepartmentService : IDepartmentService
         _context = context;
 
     }
-    public Task<DepartmentActionResultDto> ChangeDepartmentStatusAsync(ChangeDepartmentStatusDto dto)
+    public async Task<DepartmentActionResultDto> ChangeDepartmentStatusAsync(ChangeDepartmentStatusDto dto)
     {
-        throw new NotImplementedException();
+       
+        var department = await _context.Departments.FirstOrDefaultAsync(u => u.Id == dto.DepartmentId );
+        if (department==null)
+        {
+            return DepartmentActionResultDto.Fail("Department doesnt exist");
+        }
+
+        department.IsActive = dto.IsActive;
+        await _context.SaveChangesAsync();
+        return DepartmentActionResultDto.Success();
     }
 
     public async Task<DepartmentActionResultDto> ChangeDoctorDepartmentAsync(ChangeDoctorDepartmentDto dto)
     {
-        if (dto.DepartmentId == null || dto.DoctorId == null)
-        {
-            return DepartmentActionResultDto.Fail("Invalid input");
-        }
 
         var Doctor = await _context.Doctors.FirstOrDefaultAsync(u => u.Id == dto.DoctorId );
         if (Doctor==null)
@@ -37,7 +42,7 @@ public class DepartmentService : IDepartmentService
         var Department = await _context.Departments.FirstOrDefaultAsync(u => u.Id == dto.DepartmentId );
         if (Department==null)
         {
-            return DepartmentActionResultDto.Fail("Doctor doesnt exist");
+            return DepartmentActionResultDto.Fail("Department doesnt exist");
         }
         if(!Department.IsActive)
         {

@@ -61,6 +61,17 @@ public class UserService : IUserService
     return ChangeRoleResultDto.Success();
 }
 
+    public async Task<List<DoctorDisplayDto>> ListDoctorsAsync()
+    {
+        return await _context.Doctors.Select(u => new DoctorDisplayDto
+        {
+            DoctorId = u.Id,
+            DeparmentId = u.DepartmentId,
+            Name = u.User != null && u.User.Doctor != null ? u.User.Name : null,
+            UserId = u.UserId
+            
+        }).ToListAsync();
+    }
 
     public async Task<List<UserDisplayDto>>ListUsersAsync()
     {
