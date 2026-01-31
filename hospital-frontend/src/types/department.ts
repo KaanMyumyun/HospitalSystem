@@ -25,4 +25,5 @@ export interface ViewDepartmentDto
 {
     DepartmentId:number;
     Name:string;
+    IsActive: boolean; 
 }

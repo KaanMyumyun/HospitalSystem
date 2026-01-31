@@ -1,110 +1,129 @@
-import { useEffect, useState } from "react";
-import { ViewDepartment,CreateDepartment,ChangeDepartmentStatus,ChangeDoctorDepartment} from "../api/departmentApi";
-import type { CreateDepartmentDto, ViewDepartmentDto } from "../types/department";
-import { Preview } from "@mui/icons-material";
+import { useEffect, useState, type SetStateAction } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import {
+  ViewDepartment,
+  CreateDepartment,
+  ChangeDepartmentStatus,
+} from "../api/departmentApi";
+import { ListDoctors } from "../api/userApi";
+import type { ViewDepartmentDto } from "../types/department";
+import type { DoctorDisplayDto } from "../types/user";
 
-export default  function Department()
-{
-const [name, setName] = useState("");
-const [isSuccess, setIsSuccess] = useState(true);
-const[departments,setDepartments] = useState<ViewDepartmentDto[]>([]);
-const [loading, setLoading] = useState(true);
-const [error, setError] = useState<string | null>(null);
- useEffect(() => {
-    const fetchDeparments = async() => {
-  try{
-            const data = await ViewDepartment();
-            setDepartments(data);
-        }catch(error){
-            setError("Failed to load deparments");
-        }finally{
-            setLoading(false);
-        }
-        };
-      fetchDeparments();
-    },[]);
+export default function HospitalAdminPanel() {
+  const [departments, setDepartments] = useState<ViewDepartmentDto[]>([]);
+  const [doctors, setDoctors] = useState<DoctorDisplayDto[]>([]);
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(true);
 
-const createDepartment = async() =>{
-try{
-    const result = await CreateDepartment({Name:name});
-       if (!result.isSuccess) {
-        console.log(result.error);
-        return;
-      }
-      const data = await ViewDepartment();
-      setDepartments(data);
-      setName("");
-      console.log("Department is created");
-    } catch (error) {
-      console.error("Create Deparment failed:", error);
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [deptData, doctorData] = await Promise.all([
+        ViewDepartment(),
+        ListDoctors(),
+      ]);
+      setDepartments(deptData);
+      setDoctors(doctorData);
+    } finally {
+      setLoading(false);
     }
-};
+  };
 
-const changeDepartmentStatus = async (departmentId: number, currentStatus: boolean) => {
-  try {
-    const result = await ChangeDepartmentStatus({
-      DepartmentId: departmentId,
-      IsActive: !currentStatus, 
-    });
+  const createDepartment = async () => {
+    if (!name.trim()) return;
+    await CreateDepartment({ Name: name });
+    setName("");
+    loadData();
+  };
 
-    if (!result.isSuccess) {
-      console.log(result.error);
-      return;
-    }
+ 
+  const toggleStatus = async (id: number) => {
+    await ChangeDepartmentStatus({ DepartmentId: id, IsActive: false });
+  };
 
-  
-    setDepartments((prev) =>
-      prev.map((dept) => dept.DepartmentId === departmentId
-          ? { ...dept, IsActive: !currentStatus }
-          : dept
-      )
-    );
+  const getDoctorsByDepartment = (departmentId: number) =>
+    doctors.filter((d) => d.DeparmentId === departmentId);
 
-  } catch (error) {
-    console.error("Status change failed:", error);
-  }
-};
+  if (loading) return <div className="p-6">Loading...</div>;
 
-
-
-
-
-
-    if(loading) return<p>Loading deparments</p>
-    if (error) return <p>{error}</p>;
-return (
-        <div>
-            <h2>Departments</h2>
-            <div>
-  <input
-    type="text"
-    placeholder="Department name"
-    value={name}
-    onChange={(e) => setName(e.target.value)}
-  />
-  <button onClick={createDepartment}>Create</button>
-</div>
-
-            {departments.length === 0 ? (
-                <p>No departments found.</p>
-            ) : (
-                <table border={1} cellPadding={8}>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Name</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {departments.map((dept) => (
-                            <tr key={dept.DepartmentId}>
-                                <td>{dept.DepartmentId}</td>
-                                <td>{dept.Name}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            )}
+  return (
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Hospital Admin Panel</h1>
+        <div className="space-x-2">
+          <Button variant="secondary">Admin ▾</Button>
+          <Button variant="destructive">Logout</Button>
         </div>
-    );
+      </div>
+
+    <Card className="p-4">
+  <div className="flex gap-2">
+    <Input
+      placeholder="Department name"
+      value={name}
+      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+        setName(e.target.value)
+      }
+    />
+    <Button onClick={createDepartment} className="flex gap-2">
+      <Plus size={16} /> Add Department
+    </Button>
+  </div>
+</Card>
+      {departments.map((dept) => {
+        const deptDoctors = getDoctorsByDepartment(dept.DepartmentId);
+
+        return (
+          <Card key={dept.DepartmentId} className="shadow-md rounded-2xl">
+            <CardContent className="p-4">
+              <div className="flex justify-between items-center">
+                <div
+                  className="flex items-center gap-2 cursor-pointer"
+                  onClick={() =>
+                    setExpanded(expanded === dept.DepartmentId ? null : dept.DepartmentId)
+                  }
+                >
+                  {expanded === dept.DepartmentId ? (
+                    <ChevronDown size={18} />
+                  ) : (
+                    <ChevronRight size={18} />
+                  )}
+                  <span className="font-semibold">{dept.Name} Department</span>
+                </div>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => toggleStatus(dept.DepartmentId)}
+                >
+                  Deactivate
+                </Button>
+              </div>
+
+              {expanded === dept.DepartmentId && (
+                <div className="mt-4 pl-6 space-y-2 text-sm text-muted-foreground">
+                  {deptDoctors.length ? (
+                    deptDoctors.map((doc) => (
+                      <div key={doc.DoctorId}>
+                         Dr. {doc.Name}
+                      </div>
+                    ))
+                  ) : (
+                    <div>No doctors assigned</div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
 }

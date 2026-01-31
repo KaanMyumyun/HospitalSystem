@@ -84,7 +84,8 @@ public class DepartmentService : IDepartmentService
         return await _context.Departments.Select(u => new ViewDepartmentDto
         {
             DepartmentId = u.Id,
-            Name = u.Department
+            Name = u.Department,
+            IsActive = u.IsActive
         }).ToListAsync();
     }
 }

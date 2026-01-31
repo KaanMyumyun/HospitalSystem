@@ -68,7 +68,8 @@ public class UserService : IUserService
             DoctorId = u.Id,
             DeparmentId = u.DepartmentId,
             Name = u.User != null && u.User.Doctor != null ? u.User.Name : null,
-            UserId = u.UserId
+            UserId = u.UserId,
+            IsActive =u.IsActive
             
         }).ToListAsync();
     }

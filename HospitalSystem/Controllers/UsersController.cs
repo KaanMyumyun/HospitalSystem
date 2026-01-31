@@ -45,14 +45,14 @@ public class UsersController : ControllerBase
         return Ok(result);
     }
 
-    [HttpGet]
+    [HttpGet("ListUsers")]
     public async Task<ActionResult<List<UserDisplayDto>>> ListUsersAsync()
     {
         var users = await _userService.ListUsersAsync();
         return Ok(users);
     }
-    [HttpGet]
-    public async Task<ActionResult<List<UserDisplayDto>>> ListDoctorsAsync()
+    [HttpGet("ListDoctors")]
+    public async Task<ActionResult<List<DoctorDisplayDto>>> ListDoctorsAsync()
     {
         var users = await _userService.ListDoctorsAsync();
         return Ok(users);
