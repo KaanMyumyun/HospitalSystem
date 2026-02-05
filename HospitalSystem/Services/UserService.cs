@@ -19,9 +19,7 @@ public class UserService : IUserService
     if (!Enum.IsDefined(typeof(UserRole), dto.NewRole))
         return ChangeRoleResultDto.Fail("Role does not exist");
 
-    var user = await _context.Users
-        .Include(u => u.Doctor)
-        .SingleOrDefaultAsync(u => u.Id == dto.UserId);
+    var user = await _context.Users.FindAsync(dto.UserId);
 
     if (user == null)
         return ChangeRoleResultDto.Fail("User not found");
@@ -34,32 +32,65 @@ public class UserService : IUserService
 
     user.Role = dto.NewRole;
 
-    if (dto.NewRole == UserRole.Doctor)
-    {
-        if (user.Doctor == null)
-        {
-            _context.Doctors.Add(new DoctorEntity
-            {
-                UserId = user.Id,
-                IsActive = true
-            });
-        }
-        else
-        {
-            user.Doctor.IsActive = true;
-        }
-    }
-    else
-    {
-        if (user.Doctor != null)
-        {
-            user.Doctor.IsActive = false;
-        }
-    }
+    // if (dto.NewRole == UserRole.Doctor)
+    // {
+    //     if (user.Doctor == null)
+    //     {
+    //         _context.Doctors.Add(new DoctorEntity
+    //         {
+    //             UserId = user.Id,
+    //             IsActive = true
+    //         });
+    //     }
+    //     else
+    //     {
+    //         user.Doctor.IsActive = true;
+    //     }
+    // }
+    // else
+    // {
+    //     if (user.Doctor != null)
+    //     {
+    //         user.Doctor.IsActive = false;
+    //     }
+    // }
 
     await _context.SaveChangesAsync();
     return ChangeRoleResultDto.Success();
 }
+
+    public async Task<CreateDoctorResultDto> CreateDoctorAsync(CreateDoctorDto dto)
+    {
+        if (!Enum.IsDefined(typeof(UserRole), dto.NewRole))
+        return CreateDoctorResultDto.Fail("Role does not exist");
+
+        var user = await _context.Users.FindAsync(dto.UserId);
+
+        if (user == null)
+        return CreateDoctorResultDto.Fail("User not found");
+
+        if (user.Role == dto.NewRole)
+        return CreateDoctorResultDto.Fail("User already has this role");
+
+        if (dto.NewRole == UserRole.Pending)
+        return CreateDoctorResultDto.Fail("Cannot assign Pending role");
+
+        var deparment = await _context.Departments.FindAsync(dto.DeparmentId);
+
+        if(deparment == null)
+        return CreateDoctorResultDto.Fail("Deparment not found");
+        
+       await _context.Doctors.AddAsync(new DoctorEntity
+        {
+           DepartmentId = dto.DeparmentId,
+           UserId = dto.UserId,
+           IsActive = true 
+        });
+
+
+        await _context.SaveChangesAsync();
+        return CreateDoctorResultDto.Success();
+    }
 
     public async Task<List<DoctorDisplayDto>> ListDoctorsAsync()
     {

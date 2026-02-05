@@ -2,10 +2,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-[ApiController]
-[Route("api/[controller]")]
-public class AuthController : ControllerBase
-{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class AuthController : ControllerBase
+    {
     private readonly IAuthService _authService;
     public AuthController(ApplicationDbContext applicationDbContext, IAuthService authService)
     {

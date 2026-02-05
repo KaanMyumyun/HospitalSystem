@@ -30,8 +30,8 @@ public class AppointmentsController : ControllerBase
         return Ok(result);
     }
 
-
-    [HttpGet]
+    [Authorize(Roles = "FrontDesk")]
+    [HttpGet("ListAppointments")]
     public async Task<ActionResult<List<ViewAppointmentDto>>> ListAppointmentAsync()
     {
         var appointment = await _appointmentService.GetAppointmentsAsync();
@@ -54,6 +54,5 @@ public class AppointmentsController : ControllerBase
         }
         return Ok(result);      
     }
-    
-
+   
 }

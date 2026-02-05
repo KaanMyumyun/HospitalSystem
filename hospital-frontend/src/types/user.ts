@@ -2,13 +2,13 @@ import type { UserRole } from "./userRole";
 
 export interface ChangeRoleResultDto
 {
-  isSuccess:boolean;
+    isSuccess:boolean;
     error?:string;
 }
 export interface ChangeRoleDto
 {
     UserId:number;
-    NewRole:UserRole
+    NewRole:UserRole;
 }
 export interface DoctorDisplayDto
 {
@@ -33,4 +33,15 @@ export interface ResetPasswordDto
 {
     UserId:number;
     NewPassword:string;
+}
+export interface CreateDoctorResultDto
+{
+    isSuccess:boolean;
+    error?:string;
+}
+export interface CreateDoctorDto
+{
+    UserId:number;
+    DeparmentId:number;
+    NewRole:UserRole;
 }

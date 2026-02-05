@@ -1,15 +1,18 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Login from "./pages/LoginPage";
-import Department from "./pages/AdminPanel";
+import Admin from "./pages/AdminPanel";
+import ReceptionDashboard from "./pages/ReceptionDashboard";
+
 function App() {
-return(
-  <BrowserRouter>
-  <Routes>
-    <Route path="/" element={<Login/>}/>
-    <Route path="departments" element={<Department/>}/>
-  </Routes>
-  </BrowserRouter>
-);
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Login />} />
+        <Route path="/admin" element={<Admin />} />
+        <Route path="/receptiondashboard" element={<ReceptionDashboard/>}/>
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
 export default App;

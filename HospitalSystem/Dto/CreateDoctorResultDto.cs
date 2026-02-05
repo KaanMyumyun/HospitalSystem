@@ -1,20 +1,19 @@
-public class CreateUserResultDto
+public class CreateDoctorResultDto
 {
-
     public bool IsSuccess { get; set; }
     public string? Error { get; set; }
-    public static CreateUserResultDto Fail(string error)
+    public static CreateDoctorResultDto Fail(string error)
     {
-        return new CreateUserResultDto
+        return new CreateDoctorResultDto
         {
             Error = error,
             IsSuccess = false
         };
     }
 
-    public static CreateUserResultDto Success()
+    public static CreateDoctorResultDto Success()
     {
-        return new CreateUserResultDto
+        return new CreateDoctorResultDto
         {
             IsSuccess = true
         };

@@ -30,6 +30,20 @@ public class UsersController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("create-doctor")]
+    public async Task<IActionResult>CreateDoctor([FromBody]CreateDoctorDto dto)
+    {
+        if (!ModelState.IsValid)
+        return BadRequest(ModelState);
+        
+        CreateDoctorResultDto result = await _userService.CreateDoctorAsync(dto);
+        
+        if (!result.IsSuccess)
+        return BadRequest(result);
+        
+        return Ok();
+    }
+
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
     {
