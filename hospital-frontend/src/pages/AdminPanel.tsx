@@ -1,5 +1,3 @@
-//when they click doctor managemnt the users comes out like the user managment and you can create a doctor with that
-
 import { useEffect, useState } from "react";
 import {
   ViewDepartment,
@@ -7,7 +5,13 @@ import {
   ChangeDepartmentStatus,
   ChangeDoctorDepartment,
 } from "../api/departmentApi";
-import { ListDoctors, ListUsers, ChangeRole } from "../api/userApi";
+import { 
+  ListDoctors, 
+  ListUsers, 
+  ChangeRole,
+  CreateDoctor,
+   ChangeDoctorStatus
+} from "../api/userApi";
 import type { UserRole } from "../types/userRole";
 import type { ViewDepartmentDto } from "../types/department";
 import type { DoctorDisplayDto, UserDisplayDto } from "../types/user";
@@ -21,7 +25,15 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [showAddDept, setShowAddDept] = useState(false);
   const [showUserMgmt, setShowUserMgmt] = useState(false);
+  const [showDoctorMgmt, setShowDoctorMgmt] = useState(false);
+  const [showAddDoctor, setShowAddDoctor] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  
+  // New doctor form state
+  const [newDoctor, setNewDoctor] = useState({
+    userId: "",
+    departmentId: "",
+  });
 
   useEffect(() => {
     loadData();
@@ -58,17 +70,22 @@ export default function AdminPanel() {
   };
 
   const toggleDepartmentStatus = async (dept: ViewDepartmentDto) => {
-    const result = await ChangeDepartmentStatus({
-      DepartmentId: dept.DepartmentId,
-      IsActive: !dept.IsActive,
-    });
-    if (result.isSuccess) {
-      loadData();
-      showNotification('success', `Department ${dept.IsActive ? 'deactivated' : 'activated'}`);
-    } else {
-      showNotification('error', result.error || 'Failed to update department');
-    }
-  };
+  const result = await ChangeDepartmentStatus({
+    DepartmentId: (dept as any).Id ?? dept.departmentId,
+    IsActive: !dept.isActive,
+  });
+
+  if (result.isSuccess) {
+    loadData();
+    showNotification(
+      'success',
+      `Department ${dept.isActive ? 'deactivated' : 'activated'}`
+    );
+  } else {
+    showNotification('error', result.error || 'Failed to update department');
+  }
+};
+
 
   const assignDoctor = async (doctorId: number, departmentId: number) => {
     const result = await ChangeDoctorDepartment({ DoctorId: doctorId, DepartmentId: departmentId });
@@ -90,6 +107,49 @@ export default function AdminPanel() {
     showNotification('success', 'User role updated');
   };
 
+  const createDoctor = async () => {
+    if (!newDoctor.userId || !newDoctor.departmentId) {
+      showNotification('error', 'Please select both user and department');
+      return;
+    }
+
+    const result = await CreateDoctor({
+      UserId: parseInt(newDoctor.userId),
+      DeparmentId: parseInt(newDoctor.departmentId),
+      NewRole: "Doctor" as UserRole
+    });
+
+    if (result.isSuccess) {
+      setNewDoctor({ userId: "", departmentId: "" });
+      setShowAddDoctor(false);
+      loadData();
+      showNotification('success', 'Doctor created successfully');
+    } else {
+      showNotification('error', result.error || 'Failed to create doctor');
+    }
+  };
+
+ const toggleDoctorStatus = async (
+  doctorId: number, 
+  currentStatus: boolean,
+  userId: number,      
+  userName: string      
+) => {
+  const result = await ChangeDoctorStatus({
+    DoctorId: doctorId,
+    IsActive: !currentStatus,
+    UserId: userId,       
+    UserName: userName     
+  });
+
+  if (result.isSuccess) {
+    loadData();
+    showNotification('success', `Doctor ${currentStatus ? 'deactivated' : 'activated'}`);
+  } else {
+    showNotification('error', result.error || 'Failed to update doctor status');
+  }
+};
+
   const toggleExpand = (id: number) => {
     setExpanded((prev) => {
       const newSet = new Set(prev);
@@ -104,7 +164,14 @@ export default function AdminPanel() {
 
   const getDoctorsByDepartment = (id: number) =>
     doctors.filter((d) => d.DeparmentId === id);
-  const unassignedDoctors = doctors.filter((d) => d.DeparmentId === 0);
+  
+  const activeDoctors = doctors.filter((d) => d.IsActive);
+  const inactiveDoctors = doctors.filter((d) => !d.IsActive);
+  
+  // Get users who are not yet doctors
+  const eligibleUsers = users.filter(
+    user => !doctors.some(doc => doc.UserId === user.UserId)
+  );
 
   if (loading) {
     return (
@@ -300,6 +367,7 @@ export default function AdminPanel() {
 
         .section:nth-child(2) { animation-delay: 0.1s; }
         .section:nth-child(3) { animation-delay: 0.2s; }
+        .section:nth-child(4) { animation-delay: 0.3s; }
 
         .section-header {
           display: flex;
@@ -386,6 +454,18 @@ export default function AdminPanel() {
           border: 2px dashed var(--border);
         }
 
+        .form-group {
+          margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+          display: block;
+          font-weight: 500;
+          color: var(--text);
+          margin-bottom: 0.5rem;
+          font-size: 0.95rem;
+        }
+
         .input {
           flex: 1;
           padding: 0.875rem 1.25rem;
@@ -395,6 +475,7 @@ export default function AdminPanel() {
           font-family: 'Poppins', sans-serif;
           transition: all 0.3s ease;
           background: white;
+          width: 100%;
         }
 
         .input:focus {
@@ -493,27 +574,30 @@ export default function AdminPanel() {
           border-color: var(--accent);
         }
 
-        .doctor-name {
-          font-weight: 500;
-          color: var(--text);
-        }
-
-        .unassigned-section {
-          margin-top: 2rem;
-          padding: 1.5rem;
-          background: linear-gradient(135deg, rgba(255, 167, 38, 0.05) 0%, rgba(255, 167, 38, 0.02) 100%);
-          border-radius: 12px;
-          border: 2px dashed var(--warning);
-        }
-
-        .unassigned-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: var(--warning);
-          margin-bottom: 1rem;
+        .doctor-info {
           display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+        }
+
+        .doctor-name {
+          font-weight: 600;
+          color: var(--text);
+          font-size: 1.05rem;
+        }
+
+        .doctor-meta {
+          font-size: 0.875rem;
+          color: var(--text-muted);
+          display: flex;
+          gap: 1rem;
           align-items: center;
-          gap: 0.5rem;
+        }
+
+        .doctor-actions {
+          display: flex;
+          gap: 0.75rem;
+          align-items: center;
         }
 
         .select {
@@ -548,6 +632,12 @@ export default function AdminPanel() {
           box-shadow: 0 2px 8px var(--shadow);
         }
 
+        .user-info {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
         .user-info h4 {
           font-weight: 600;
           color: var(--text);
@@ -557,6 +647,18 @@ export default function AdminPanel() {
         .user-role {
           font-size: 0.875rem;
           color: var(--text-muted);
+        }
+
+        .user-role-section {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .user-role-label {
+          font-size: 0.875rem;
+          color: var(--text-muted);
+          font-weight: 500;
         }
 
         .notification {
@@ -608,6 +710,71 @@ export default function AdminPanel() {
           margin-bottom: 1rem;
           opacity: 0.3;
         }
+
+        .inactive-section {
+          margin-top: 2rem;
+          padding: 1.5rem;
+          background: linear-gradient(135deg, rgba(100, 116, 139, 0.05) 0%, rgba(100, 116, 139, 0.02) 100%);
+          border-radius: 12px;
+          border: 2px dashed var(--text-muted);
+        }
+
+        .inactive-title {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: var(--text-muted);
+          margin-bottom: 1rem;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .form-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1.5rem;
+          padding: 1.5rem;
+          background: var(--bg);
+          border-radius: 12px;
+          border: 2px dashed var(--border);
+          margin-bottom: 1.5rem;
+        }
+
+        .form-actions {
+          display: flex;
+          gap: 1rem;
+          justify-content: flex-end;
+          grid-column: 1 / -1;
+        }
+
+        .tabs {
+          display: flex;
+          gap: 0.5rem;
+          margin-bottom: 1.5rem;
+          border-bottom: 2px solid var(--border);
+        }
+
+        .tab {
+          padding: 0.75rem 1.5rem;
+          background: none;
+          border: none;
+          border-bottom: 3px solid transparent;
+          font-weight: 500;
+          color: var(--text-muted);
+          cursor: pointer;
+          transition: all 0.3s ease;
+          font-family: 'Poppins', sans-serif;
+          font-size: 1rem;
+        }
+
+        .tab:hover {
+          color: var(--primary);
+        }
+
+        .tab.active {
+          color: var(--primary);
+          border-bottom-color: var(--primary);
+        }
       `}</style>
 
       <div className="admin-panel">
@@ -626,11 +793,11 @@ export default function AdminPanel() {
             </div>
             <div className="stat-card">
               <div className="stat-label">Active Doctors</div>
-              <div className="stat-value">{doctors.filter(d => d.IsActive).length}</div>
+              <div className="stat-value">{activeDoctors.length}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">Unassigned Doctors</div>
-              <div className="stat-value">{unassignedDoctors.length}</div>
+              <div className="stat-label">Inactive Doctors</div>
+              <div className="stat-value">{inactiveDoctors.length}</div>
             </div>
             <div className="stat-card">
               <div className="stat-label">System Users</div>
@@ -638,6 +805,7 @@ export default function AdminPanel() {
             </div>
           </div>
 
+          {/* Department Management Section */}
           <div className="section">
             <div className="section-header">
               <h2 className="section-title">Department Management</h2>
@@ -665,41 +833,42 @@ export default function AdminPanel() {
             )}
 
             {departments.map((dept) => (
-              <div key={dept.DepartmentId} className="dept-card">
+              <div key={dept.departmentId} className="dept-card">
                 <div className="dept-header">
                   <div className="dept-info">
-                    <h3>{dept.Name}</h3>
+                    <h3>{dept.name}</h3>
                     <div className="dept-meta">
-                      <span className={`badge ${dept.IsActive ? 'badge-success' : 'badge-inactive'}`}>
-                        {dept.IsActive ? "● Active" : "○ Inactive"}
+                      <span className={`badge ${dept.isActive ? 'badge-success' : 'badge-inactive'}`}>
+                        {dept.isActive ? "● Active" : "○ Inactive"}
                       </span>
-                      <span>{getDoctorsByDepartment(dept.DepartmentId).length} Doctors</span>
+                      <span>{getDoctorsByDepartment(dept.departmentId).length} Doctors</span>
                     </div>
                   </div>
                   <div className="dept-actions">
                     <button
-                      className={`btn btn-sm ${dept.IsActive ? "btn-danger" : "btn-success"}`}
+                      className={`btn btn-sm ${dept.isActive ? "btn-danger" : "btn-success"}`}
+                      
                       onClick={() => toggleDepartmentStatus(dept)}
                     >
-                      {dept.IsActive ? "Deactivate" : "Activate"}
+                      {dept.isActive ? "Deactivate" : "Activate"}
                     </button>
                     <button
                       className="btn btn-sm btn-secondary"
-                      onClick={() => toggleExpand(dept.DepartmentId)}
+                      onClick={() => toggleExpand(dept.departmentId)}
                     >
-                      {expanded.has(dept.DepartmentId) ? "Hide Doctors ▲" : "Show Doctors ▼"}
+                      {expanded.has(dept.departmentId) ? "Hide Doctors ▲" : "Show Doctors ▼"}
                     </button>
                   </div>
                 </div>
 
-                {expanded.has(dept.DepartmentId) && (
+                {expanded.has(dept.departmentId) && (
                   <div className="doctor-list">
-                    {getDoctorsByDepartment(dept.DepartmentId).length === 0 ? (
+                    {getDoctorsByDepartment(dept.departmentId).length === 0 ? (
                       <div className="empty-state">
                         <p>No doctors assigned to this department</p>
                       </div>
                     ) : (
-                      getDoctorsByDepartment(dept.DepartmentId).map((doctor) => (
+                      getDoctorsByDepartment(dept.departmentId).map((doctor) => (
                         <div key={doctor.DoctorId} className="doctor-item">
                           <span className="doctor-name">{doctor.Name}</span>
                           <span className={`badge ${doctor.IsActive ? 'badge-success' : 'badge-inactive'}`}>
@@ -712,36 +881,174 @@ export default function AdminPanel() {
                 )}
               </div>
             ))}
+          </div>
 
-            {unassignedDoctors.length > 0 && (
-              <div className="unassigned-section">
-                <h3 className="unassigned-title">
-                  ⚠ Unassigned Doctors ({unassignedDoctors.length})
-                </h3>
-                {unassignedDoctors.map((doctor) => (
-                  <div key={doctor.DoctorId} className="doctor-item">
-                    <span className="doctor-name">{doctor.Name}</span>
+  {/* Doctor Management Section */}
+  <div className="section">
+    <div className="section-header">
+      <h2 className="section-title">Doctor Management</h2>
+      <button
+        className={showDoctorMgmt ? "btn btn-secondary" : "btn btn-primary"}
+        onClick={() => setShowDoctorMgmt(!showDoctorMgmt)}
+      >
+        {showDoctorMgmt ? "Hide Doctors" : "Manage Doctors"}
+      </button>
+    </div>
+
+    {showDoctorMgmt && (
+      <>
+        <button
+          className={showAddDoctor ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm"}
+          onClick={() => setShowAddDoctor(!showAddDoctor)}
+          style={{ marginBottom: '1.5rem' }}
+        >
+          {showAddDoctor ? "✕ Cancel" : "+ Create Doctor"}
+        </button>
+
+        {showAddDoctor && (
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label">Select User</label>
+              <select
+                className="input"
+                value={newDoctor.userId}
+                onChange={(e) => setNewDoctor({ ...newDoctor, userId: e.target.value })}
+              >
+                <option value="">Choose a user...</option>
+                {eligibleUsers.map((user) => (
+                  <option key={user.UserId} value={user.UserId}>
+                    {user.UserName} ({user.Role})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Select Department</label>
+              <select
+                className="input"
+                value={newDoctor.departmentId}
+                onChange={(e) => setNewDoctor({ ...newDoctor, departmentId: e.target.value })}
+              >
+                <option value="">Choose a department...</option>
+                {departments.filter(d => d.isActive).map((dept) => (
+                  <option key={dept.departmentId} value={dept.departmentId}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-actions">
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => {
+                  setShowAddDoctor(false);
+                  setNewDoctor({ userId: "", departmentId: "" });
+                }}
+              >
+                Cancel
+              </button>
+              <button className="btn btn-success" onClick={createDoctor}>
+                Create Doctor
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--primary)' }}>
+            Active Doctors ({activeDoctors.length})
+          </h3>
+          {activeDoctors.length === 0 ? (
+            <div className="empty-state">
+              <p>No active doctors</p>
+            </div>
+          ) : (
+            activeDoctors.map((doctor) => {
+              const dept = departments.find(d => d.departmentId === doctor.DeparmentId);
+              return (
+                <div key={doctor.DoctorId} className="doctor-item">
+                  <div className="doctor-info">
+                    <div className="doctor-name">{doctor.Name}</div>
+                    <div className="doctor-meta">
+                      <span>🏥 {dept?.name || 'Unassigned'}</span>
+                      <span className="badge badge-success">Active</span>
+                    </div>
+                  </div>
+                  <div className="doctor-actions">
                     <select
                       className="select"
+                      value={doctor.DeparmentId}
                       onChange={(e) => assignDoctor(doctor.DoctorId, parseInt(e.target.value))}
-                      defaultValue=""
                     >
-                      <option value="" disabled>
-                        Assign to department...
+                      <option value={doctor.DeparmentId}>
+                        {dept?.name || 'Select department...'}
                       </option>
-                      {departments.filter((d) => d.IsActive).map((dept) => (
-                        <option key={dept.DepartmentId} value={dept.DepartmentId}>
-                          {dept.Name}
+                      {departments.filter(d => d.isActive && d.departmentId !== doctor.DeparmentId).map((d) => (
+                        <option key={d.departmentId} value={d.departmentId}>
+                          {d.name}
                         </option>
                       ))}
                     </select>
+                    <button
+                      className="btn btn-sm btn-danger"
+                      onClick={() => toggleDoctorStatus(
+                        doctor.DoctorId, 
+                        doctor.IsActive,
+                        doctor.UserId,
+                        doctor.Name
+                      )}
+                    >
+                      Deactivate
+                    </button>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                </div>
+              );
+            })
+          )}
+        </div>
 
-             <div className="section">
+        {inactiveDoctors.length > 0 && (
+          <div className="inactive-section">
+            <h3 className="inactive-title">
+              ⊘ Inactive Doctors ({inactiveDoctors.length})
+            </h3>
+            {inactiveDoctors.map((doctor) => {
+              const dept = departments.find(d => d.departmentId === doctor.DeparmentId);
+              return (
+                <div key={doctor.DoctorId} className="doctor-item">
+                  <div className="doctor-info">
+                    <div className="doctor-name" style={{ opacity: 0.6 }}>{doctor.Name}</div>
+                    <div className="doctor-meta">
+                      <span>🏥 {dept?.name || 'Unassigned'}</span>
+                      <span className="badge badge-inactive">Inactive</span>
+                    </div>
+                  </div>
+                  <div className="doctor-actions">
+                    <button
+                      className="btn btn-sm btn-success"
+                      onClick={() => toggleDoctorStatus(
+                        doctor.DoctorId, 
+                        doctor.IsActive,
+                        doctor.UserId,
+                        doctor.Name
+                      )}
+                    >
+                      Activate
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </>
+    )}
+  </div>
+
+          {/* User Management Section */}
+          <div className="section">
             <div className="section-header">
               <h2 className="section-title">User Management</h2>
               <button
@@ -752,7 +1059,7 @@ export default function AdminPanel() {
               </button>
             </div>
 
-              {showUserMgmt && (
+            {showUserMgmt && (
               <div>
                 {users.length === 0 ? (
                   <div className="empty-state">
@@ -764,17 +1071,18 @@ export default function AdminPanel() {
                       <div className="user-info">
                         <span style={{ 
                           fontSize: '1.5rem', 
-                          marginRight: '0.75rem',
                           color: 'var(--primary)' 
                         }}>👤</span>
-                        <h4>
-                          {user.UserName || 
-                           (user as any).userName || 
-                           (user as any).username || 
-                           (user as any).name || 
-                           (user as any).Name || 
-                           `User #${user.UserId}`}
-                        </h4>
+                        <div>
+                          <h4>
+                            {user.UserName || 
+                             (user as any).userName || 
+                             (user as any).username || 
+                             (user as any).name || 
+                             (user as any).Name || 
+                             `User #${user.UserId}`}
+                          </h4>
+                        </div>
                       </div>
                       <div className="user-role-section">
                         <span className="user-role-label">Current Role:</span>

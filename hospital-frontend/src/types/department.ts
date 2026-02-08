@@ -21,9 +21,8 @@ export interface CreateDepartmentDto
     Name:string
 }
 
-export interface ViewDepartmentDto
-{
-    DepartmentId:number;
-    Name:string;
-    IsActive: boolean; 
+export interface ViewDepartmentDto {
+  departmentId: number;
+  name: string;
+  isActive: boolean;
 }

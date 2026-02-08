@@ -1,6 +1,6 @@
 
 import { UserRole } from "@/types/userRole";
-import type { ChangeRoleResultDto, ChangeRoleDto, UserDisplayDto, DoctorDisplayDto, ResetPasswordDto, ResetPasswordResultDto,CreateDoctorDto, CreateDoctorResultDto } from "../types/user";
+import type { ChangeRoleResultDto, ChangeRoleDto, UserDisplayDto, DoctorDisplayDto, ResetPasswordDto, ResetPasswordResultDto,CreateDoctorDto, CreateDoctorResultDto, ChangeDoctorsStatus, ChangeDoctorsStatusResult } from "../types/user";
 const Base_URL = "http://localhost:5272/api/Users";
 
 export async function ListDoctors() {
@@ -50,6 +50,27 @@ export async function ChangeRole(dto: ChangeRoleDto):Promise<ChangeRoleResultDto
       error: "Network error",
     };
   }
+}
+
+export async function ChangeDoctorStatus(dto:ChangeDoctorsStatus):Promise<ChangeDoctorsStatusResult> {
+  try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${Base_URL}/change-doctor-status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify(dto),
+      });
+      const data: ChangeDoctorsStatusResult = await response.json();
+      return data;
+    } catch (error) {
+      return {
+        isSuccess: false,
+        error: "Network error",
+      };
+    }
 }
 
 export async function CreateDoctor(dto: CreateDoctorDto):Promise<CreateDoctorResultDto> {

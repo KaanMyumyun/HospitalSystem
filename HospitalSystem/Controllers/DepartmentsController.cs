@@ -2,13 +2,16 @@ using HospitalSystem.Migrations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+
+
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(Roles = "Admin")]
 public class DepartmentController :ControllerBase
 {
 private readonly IDepartmentService _departmentService;
-public DepartmentController(IDepartmentService departmentService)
+
+public DepartmentController(IDepartmentService departmentService ,ApplicationDbContext context)
 {
     _departmentService = departmentService;
 }
@@ -57,11 +60,11 @@ public DepartmentController(IDepartmentService departmentService)
     [HttpPost("ChangeDepartmentStatus")]
     public async Task<IActionResult>ChangeDepartmentStatus([FromBody] ChangeDepartmentStatusDto dto)
     {
-        if (!ModelState.IsValid)
+       if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
         }
-        
+    
         DepartmentActionResultDto result = await _departmentService.ChangeDepartmentStatusAsync(dto);
         if(!result.IsSuccess)
         {

@@ -45,3 +45,16 @@ export interface CreateDoctorDto
     DeparmentId:number;
     NewRole:UserRole;
 }
+export interface ChangeDoctorsStatus
+{
+   UserId:number;
+   IsActive:boolean;
+   DoctorId:number;
+   UserName:string;
+}
+export interface ChangeDoctorsStatusResult
+{
+    isSuccess:boolean;
+    error?:string;
+    Name?:ChangeDoctorsStatus;
+}

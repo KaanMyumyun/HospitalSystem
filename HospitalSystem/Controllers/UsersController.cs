@@ -59,6 +59,22 @@ public class UsersController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("change-doctor-status")]
+    public async Task<IActionResult> ChangeDoctorStatus([FromBody] ChangeDoctorsStatus dto)
+    {
+         if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+        
+        ChangeDoctorsStatusResult result = await _userService.ChangeDoctorsStatusAsync(dto);
+        if(!result.IsSuccess)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);          
+    }
+
     [HttpGet("ListUsers")]
     public async Task<ActionResult<List<UserDisplayDto>>> ListUsersAsync()
     {
