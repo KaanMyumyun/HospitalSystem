@@ -1,422 +1,308 @@
-Hospital System 
+# Hospital System
 
-A full-stack Hospital Management System built with ASP.NET Core Web API and a React + TypeScript + Vite frontend. 
+A full-stack **Hospital Management System** built with **ASP.NET Core Web API** and a **React + TypeScript + Vite** frontend.
 
-The project focuses on secure authentication, role-based authorization, and clean API design, while remaining extensible for future improvements such as cloud hosting, containerization, testing, and UI enhancements. 
+The project focuses on secure authentication, role-based authorization, and clean API design, while remaining extensible for future improvements such as cloud hosting, containerization, testing, and UI enhancements.
 
- 
+---
 
-Overview 
+## Overview
 
-The Hospital System is designed to manage hospital operations including: 
+The Hospital System is designed to manage hospital operations including:
 
-User registration and authentication 
+* User registration and authentication
+* Role-based access control
+* Department management
+* Appointment scheduling and cancellation
+* Secure API access using JWT
 
-Role-based access control 
+The system is divided into two independent layers:
 
-Department management 
+* Backend – RESTful API built with ASP.NET Core
+* Frontend – React application built with TypeScript and Vite
 
-Appointment scheduling and cancellation 
+---
 
-Secure API access using JWT 
+## Tech Stack
 
-The system is divided into two independent layers: 
+### Backend
 
-Backend – RESTful API built with ASP.NET Core 
+* ASP.NET Core Web API
+* Entity Framework Core
+* PostgreSQL
+* JWT Authentication
+* Role-based Authorization
+* Swagger / OpenAPI
 
-Frontend – React application built with TypeScript and Vite 
+### Frontend
 
- 
+* React
+* TypeScript
+* Vite
 
-Tech Stack 
+### Tooling
 
-Backend 
+* .NET SDK 8+
+* Node.js 18+
+* npm
 
-ASP.NET Core Web API 
+---
 
-Entity Framework Core 
+## Project Structure
 
-PostgreSQL 
+```
+HospitalSystem
+├── HospitalSystem.Api/
+│   ├── Controllers
+│   ├── DTOs
+│   ├── Models
+│   ├── Services
+│   └── Program.cs
+│
+├── front-end/
+│   ├── src
+│   ├── public
+│   └── vite.config.ts
+│
+└── HospitalSystem.sln
+```
 
-JWT Authentication 
+---
 
-Role-based Authorization 
+## Getting Started
 
-Swagger / OpenAPI 
+### Prerequisites
 
-Frontend 
+* .NET SDK 8.0 or later
+* Node.js 18 or later
+* PostgreSQL
 
-React 
+---
 
-TypeScript 
+### Clone the Repository
 
-Vite 
+```bash
+git clone https://github.com/KaanMyumyun/HospitalSystem.git
+cd HospitalSystem
+```
 
-Tooling 
+---
 
-.NET SDK 8+ 
+## Backend Setup
 
-Node.js 18+ 
+```bash
+cd HospitalSystem.Api
+dotnet restore
+dotnet run
+```
 
-npm 
+API available at:
 
- 
+```
+http://localhost:5272
+```
 
-Project Structure 
+Swagger UI:
 
-HospitalSystem 
-├── HospitalSystem.Api/ 
-│   ├── Controllers 
-│   ├── DTOs 
-│   ├── Models 
-│   ├── Services 
-│   └── Program.cs 
-│ 
-├── front-end/ 
-│   ├── src 
-│   ├── public 
-│   └── vite.config.ts 
-│ 
-└── HospitalSystem.sln 
- 
+```
+http://localhost:5272/swagger
+```
 
- 
+---
 
-Getting Started 
+## Frontend Setup
 
-Prerequisites 
+```bash
+cd front-end
+npm install
+npm run dev
+```
 
-.NET SDK 8.0 or later 
+Frontend available at:
 
-Node.js 18 or later 
+```
+http://localhost:5173
+```
 
-PostgreSQL 
+---
 
- 
+## Authentication and Authorization
 
-Clone the Repository 
+* JWT-based authentication
+* Protected endpoints require a Bearer token
+* Role-based access restrictions
+* Swagger supports authenticated testing
 
-git clone https://github.com/KaanMyumyun/HospitalSystem.git 
-cd HospitalSystem 
- 
+---
 
- 
+## API Endpoints
 
-Backend Setup 
+### Authentication
 
-cd HospitalSystem.Api 
-dotnet restore 
-dotnet run 
- 
+| Method | Endpoint             | Description                      |
+| -----: | -------------------- | -------------------------------- |
+|   POST | /api/Auth/CreateUser | Register a new user              |
+|   POST | /api/Auth/login      | Authenticate user and return JWT |
 
-API available at: 
+---
 
-http://localhost:5272 
- 
+### Users
 
-Swagger UI: 
+| Method | Endpoint                  | Description         |
+| -----: | ------------------------- | ------------------- |
+|   POST | /api/Users/change-role    | Change user role    |
+|   POST | /api/Users/create-doctor  | Create doctor user  |
+|   POST | /api/Users/reset-password | Reset user password |
+|    GET | /api/Users/ListUsers      | List all users      |
+|    GET | /api/Users/ListDoctors    | List all doctors    |
 
-http://localhost:5272/swagger 
- 
+---
 
- 
+### Departments
 
-Frontend Setup 
+| Method | Endpoint                               | Description                  |
+| -----: | -------------------------------------- | ---------------------------- |
+|    GET | /api/Department/ViewDepartment         | View departments             |
+|   POST | /api/Department/CreateDepartment       | Create department            |
+|   POST | /api/Department/ChangeDoctorDepartment | Assign doctor to department  |
+|   POST | /api/Department/ChangeDepartmentStatus | Enable or disable department |
 
-cd front-end 
-npm install 
-npm run dev 
- 
+---
 
-Frontend available at: 
+### Appointments
 
-http://localhost:5173 
- 
+| Method | Endpoint                            | Description        |
+| -----: | ----------------------------------- | ------------------ |
+|   POST | /api/Appointments/CreateAppointment | Create appointment |
+|    GET | /api/Appointments/ListAppointments  | List appointments  |
+|   POST | /api/Appointments/CancelAppointment | Cancel appointment |
 
- 
+---
 
-Authentication and Authorization 
+## Example Request
 
-JWT-based authentication 
+### Change User Role
 
-Protected endpoints require a Bearer token 
+Endpoint:
 
-Role-based access restrictions 
+```
+POST /api/Users/change-role
+```
 
-Swagger supports authenticated testing 
+Headers:
 
- 
+```
+Authorization: Bearer <JWT_TOKEN>
+```
 
-API Endpoints 
+Request body:
 
-Authentication 
+```json
+{
+  "userId": 10,
+  "newRole": "Doctor"
+}
+```
 
-Method 
+Response:
 
-Endpoint 
+```json
+{
+  "isSuccess": true,
+  "error": null
+}
+```
 
-Description 
+---
 
-POST 
+## Error Handling
 
-/api/Auth/CreateUser 
+* 200 OK – Successful request
+* 400 Bad Request – Validation or business logic error
+* 401 Unauthorized – Missing or invalid JWT
+* 403 Forbidden – Insufficient permissions
+* 404 Not Found – Resource not found
+* 500 Internal Server Error – Unexpected server error
 
-Register a new user 
+---
 
-POST 
+## Database
 
-/api/Auth/login 
+The backend uses **PostgreSQL** with **Entity Framework Core**.
 
-Authenticate user and return JWT 
+Database name:
 
- 
+```
+HospitalSystemDb
+```
 
-Users 
+Create database:
 
-Method 
+```sql
+CREATE DATABASE "HospitalSystemDb";
+```
 
-Endpoint 
+---
 
-Description 
+## Security Considerations
 
-POST 
+* JWT-based authentication
+* Role-based authorization
+* Secure password hashing
+* Input validation on all endpoints
+* HTTPS recommended for production
 
-/api/Users/change-role 
+---
 
-Change user role 
+## Planned Cloud Hosting
 
-POST 
+* Dockerized backend and frontend
+* Managed PostgreSQL database
+* Environment-based configuration
+* Secure secrets management
+* HTTPS-enabled deployment
 
-/api/Users/create-doctor 
+---
 
-Create doctor user 
+## Containerization (Planned)
 
-POST 
+* Dockerfile for ASP.NET Core API
+* Dockerfile for React frontend
+* Docker Compose for local and cloud parity
 
-/api/Users/reset-password 
+---
 
-Reset user password 
+## Testing (Planned)
 
-GET 
+* Unit tests for business logic
+* Integration tests for API endpoints
+* Frontend component tests
 
-/api/Users/ListUsers 
+---
 
-List all users 
+## UI Improvements (Planned)
 
-GET 
+* Improved layout and styling
+* Enhanced form validation
+* Role-based UI behavior
+* Responsive design
 
-/api/Users/ListDoctors 
+---
 
-List all doctors 
+## Known Limitations
 
- 
+* No automated tests yet
+* UI still under development
+* No Docker deployment yet
 
-Departments 
+---
 
-Method 
+## Project Goals
 
-Endpoint 
+* Build a secure full-stack system
+* Apply authentication best practices
+* Design scalable backend architecture
+* Prepare for cloud deployment
 
-Description 
+---
 
-GET 
-
-/api/Department/ViewDepartment 
-
-View departments 
-
-POST 
-
-/api/Department/CreateDepartment 
-
-Create department 
-
-POST 
-
-/api/Department/ChangeDoctorDepartment 
-
-Assign doctor to department 
-
-POST 
-
-/api/Department/ChangeDepartmentStatus 
-
-Enable or disable department 
-
- 
-
-Appointments 
-
-Method 
-
-Endpoint 
-
-Description 
-
-POST 
-
-/api/Appointments/CreateAppointment 
-
-Create appointment 
-
-GET 
-
-/api/Appointments/ListAppointments 
-
-List appointments 
-
-POST 
-
-/api/Appointments/CancelAppointment 
-
-Cancel appointment 
-
- 
-
-Example Request 
-
-Change User Role 
-
-Endpoint: 
-
-POST /api/Users/change-role 
- 
-
-Headers: 
-
-Authorization: Bearer <JWT_TOKEN> 
- 
-
-Request body: 
-
-{ 
- "userId": 10, 
- "newRole": "Doctor" 
-} 
- 
-
-Response: 
-
-{ 
- "isSuccess": true, 
- "error": null 
-} 
- 
-
- 
-
-Error Handling 
-
-200 OK – Successful request 
-
-400 Bad Request – Validation or business logic error 
-
-401 Unauthorized – Missing or invalid JWT 
-
-403 Forbidden – Insufficient permissions 
-
-404 Not Found – Resource not found 
-
-500 Internal Server Error – Unexpected server error 
-
- 
-
-Database 
-
-The backend uses PostgreSQL with Entity Framework Core. 
-
-Database name: 
-
-HospitalSystemDb 
- 
-
-Create database: 
-
-CREATE DATABASE "HospitalSystemDb"; 
- 
-
- 
-
-Security Considerations 
-
-JWT-based authentication 
-
-Role-based authorization 
-
-Secure password hashing 
-
-Input validation on all endpoints 
-
-HTTPS recommended for production 
-
- 
-
-Planned Cloud Hosting 
-
-Dockerized backend and frontend 
-
-Managed PostgreSQL database 
-
-Environment-based configuration 
-
-Secure secrets management 
-
-HTTPS-enabled deployment 
-
- 
-
-Containerization (Planned) 
-
-Dockerfile for ASP.NET Core API 
-
-Dockerfile for React frontend 
-
-Docker Compose for local and cloud parity 
-
- 
-
-Testing (Planned) 
-
-Unit tests for business logic 
-
-Integration tests for API endpoints 
-
-Frontend component tests 
-
- 
-
-UI Improvements (Planned) 
-
-Improved layout and styling 
-
-Enhanced form validation 
-
-Role-based UI behavior 
-
-Responsive design 
-
- 
-
-Known Limitations 
-
-No automated tests yet 
-
-UI still under development 
-
-No Docker deployment yet 
-
- 
-
-Project Goals 
-
-Build a secure full-stack system 
-
-Apply authentication best practices 
-
-Design scalable backend architecture 
-
-Prepare for cloud deployment 
-
- 
-
- 
