@@ -254,6 +254,118 @@ CREATE DATABASE "HospitalSystemDb";
 
 ---
 
+# UserService Unit Tests
+
+This project contains unit tests for the `UserService` class in the **HospitalSystem** application.
+The tests validate business logic, role-based authorization, and database state changes using an in-memory database.
+
+---
+
+## Technologies Used
+
+* .NET / C#
+* xUnit (unit testing framework)
+* Moq (mocking dependencies)
+* Entity Framework Core InMemory (isolated test database)
+* ASP.NET Core Identity (password hashing used internally by the service)
+
+---
+
+## What Is Being Tested
+
+The current test suite covers the `ChangeDoctorsStatusAsync` method in `UserService`.
+
+### Covered Scenarios
+
+* Admin user can activate a doctor
+* Admin user can deactivate a doctor
+* Admin user can change doctor status successfully
+* Non-admin users cannot change doctor status
+* Attempting to set the same status fails
+* Attempting to change status for a non-existent doctor fails
+
+Each test verifies:
+
+* Authorization rules
+* Correct success or failure responses
+* Correct persistence of changes in the database
+
+---
+
+## Test Design
+
+### In-Memory Database
+
+Each test uses a fresh EF Core InMemory database instance:
+
+```csharp
+.UseInMemoryDatabase(Guid.NewGuid().ToString())
+```
+
+This ensures:
+
+* No shared state between tests
+* Deterministic and repeatable test results
+* No dependency on external infrastructure
+
+---
+
+### Mocked Dependencies
+
+`ICurrentUserService` is mocked using Moq to simulate different user roles:
+
+```csharp
+currentUserMock
+    .Setup(x => x.IsInRole(UserRole.Admin))
+    .Returns(true);
+```
+
+This allows testing authorization logic independently of authentication mechanisms.
+
+---
+
+## Example Test Flow
+
+1. Arrange
+
+   * Create the database context
+   * Seed required entities (users, doctors, departments)
+   * Configure mocked current user role
+
+2. Act
+
+   * Call `ChangeDoctorsStatusAsync`
+
+3. Assert
+
+   * Validate the returned result
+   * Verify the doctor’s status in the database
+
+---
+
+## Running the Tests
+
+From the solution root directory:
+
+dotnet test
+
+
+Alternatively, tests can be executed using Visual Studio Test Explorer.
+
+---
+
+## Future Test Coverage
+
+The following `UserService` methods are implemented but currently lack unit tests:
+
+* `ChangeRoleAsync`
+* `CreateDoctorAsync`
+* `ListDoctorsAsync`
+* `ListUsersAsync`
+* `ResetPasswordAsync`
+
+---
+
 ## Planned Cloud Hosting
 
 * Dockerized backend and frontend

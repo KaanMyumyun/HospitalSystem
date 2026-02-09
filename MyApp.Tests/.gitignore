@@ -1,0 +1,47 @@
+## Build results
+bin/
+obj/
+
+## User-specific files
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+## Visual Studio
+.vs/
+.vscode/
+
+## Rider / JetBrains
+.idea/
+*.sln.iml
+
+## OS files
+.DS_Store
+Thumbs.db
+
+## Logs
+*.log
+
+## NuGet
+.nuget/
+packages/
+
+## Publish output
+publish/
+
+## Coverage tools
+coverage/
+coveragereport/
+
+## Backup / temp files
+*.bak
+*.tmp
+*~
