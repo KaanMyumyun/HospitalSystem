@@ -93,13 +93,20 @@ public class DepartmentService : IDepartmentService
 
     }
 
-    public async Task<List<ViewDepartmentDto>> ListDepartmentsAsync()
+
+   public async Task<ServiceResult<List<ViewDepartmentDto>>> ListDepartmentsAsync()
+    { 
+          if (!_currentUser.IsInRole(UserRole.Admin))
     {
-        return await _context.Departments.Select(u => new ViewDepartmentDto
+        return ServiceResult<List<ViewDepartmentDto>>
+            .Fail("Not allowed to list deparments");
+    }
+        var departments = await _context.Departments.Select(u => new ViewDepartmentDto
         {
             Id = u.Id,
             Name = u.Department,
             IsActive = u.IsActive
         }).ToListAsync();
+       return ServiceResult<List<ViewDepartmentDto>>.Success(departments);
     }
 }

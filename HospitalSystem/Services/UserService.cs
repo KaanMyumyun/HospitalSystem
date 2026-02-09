@@ -17,6 +17,7 @@ public class UserService : IUserService
         _currentUser = currentUser;
     }
 
+//tested
     public async Task<ChangeDoctorsStatusResult> ChangeDoctorsStatusAsync(ChangeDoctorsStatus dto)
     {
         if (!_currentUser.IsInRole(UserRole.Admin))
@@ -44,7 +45,7 @@ public class UserService : IUserService
             IsActive = doctor.IsActive
         });
     }
-
+//needs a test
     public async Task<ChangeRoleResultDto> ChangeRoleAsync(ChangeRoleDto dto)
     {
         if (!_currentUser.IsInRole(UserRole.Admin))
@@ -72,6 +73,8 @@ public class UserService : IUserService
         return ChangeRoleResultDto.Success();
     }
 
+
+//needs a test
     public async Task<CreateDoctorResultDto> CreateDoctorAsync(CreateDoctorDto dto)
     {
          if (!_currentUser.IsInRole(UserRole.Admin))
@@ -112,6 +115,7 @@ public class UserService : IUserService
         return CreateDoctorResultDto.Success();
     }
 
+//needs a test
    public async Task<ServiceResult<List<DoctorDisplayDto>>> ListDoctorsAsync()
 {
     if (!_currentUser.IsInRole(UserRole.Admin))
@@ -134,7 +138,7 @@ public class UserService : IUserService
     return ServiceResult<List<DoctorDisplayDto>>.Success(doctors);
 }
 
-
+//needs a test
     public async Task<ServiceResult<List<UserDisplayDto>>> ListUsersAsync()
 {
     if (!_currentUser.IsInRole(UserRole.Admin))
@@ -155,6 +159,7 @@ public class UserService : IUserService
     return ServiceResult<List<UserDisplayDto>>.Success(users);
 }
 
+//needs a test
     public async Task<ResetPasswordResultDto> ResetPasswordAsync(ResetPasswordDto dto)
     {
          if (!_currentUser.IsInRole(UserRole.Admin))

@@ -1,7 +1,9 @@
+using HospitalSystem.Interface;
 using HospitalSystem.Migrations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+namespace HospitalSystem.Controllers;
 
 
 [ApiController]

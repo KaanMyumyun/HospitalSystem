@@ -14,7 +14,7 @@ public class AppointmentService : IAppointmentService
     }
     public async Task<CancelAppointmentResultDto> CancelAppointmentAsync(CancelAppointmentDto dto)
     {
-        if (!_currentUser.IsInRole(UserRole.Admin))
+        if (!_currentUser.IsInRole(UserRole.FrontDesk))
         {
             return CancelAppointmentResultDto.Fail("You are not allowed to reset password");
         }
@@ -44,7 +44,7 @@ public class AppointmentService : IAppointmentService
 
     public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppointmentDto dto, int frontDeskUserId)
     {
-        if (!_currentUser.IsInRole(UserRole.Admin))
+        if (!_currentUser.IsInRole(UserRole.FrontDesk))
         {
             return CreateAppointmentResultDto.Fail("You are not allowed to reset password");
         }
