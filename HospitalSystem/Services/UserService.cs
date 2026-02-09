@@ -1,8 +1,9 @@
+namespace HospitalSystem.Services;
 
-using Microsoft.AspNetCore.Http.HttpResults;
+using HospitalSystem.Interface;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+
 
 public class UserService : IUserService
 {
@@ -48,7 +49,7 @@ public class UserService : IUserService
     {
         if (!_currentUser.IsInRole(UserRole.Admin))
         {
-            return ChangeRoleResultDto.Fail("You are not allowed to change doctor status");
+            return ChangeRoleResultDto.Fail("You are not allowed to change user role");
         }
 
         if (!Enum.IsDefined(typeof(UserRole), dto.NewRole))
@@ -67,29 +68,6 @@ public class UserService : IUserService
 
         user.Role = dto.NewRole;
 
-        // if (dto.NewRole == UserRole.Doctor)
-        // {
-        //     if (user.Doctor == null)
-        //     {
-        //         _context.Doctors.Add(new DoctorEntity
-        //         {
-        //             UserId = user.Id,
-        //             IsActive = true
-        //         });
-        //     }
-        //     else
-        //     {
-        //         user.Doctor.IsActive = true;
-        //     }
-        // }
-        // else
-        // {
-        //     if (user.Doctor != null)
-        //     {
-        //         user.Doctor.IsActive = false;
-        //     }
-        // }
-
         await _context.SaveChangesAsync();
         return ChangeRoleResultDto.Success();
     }
@@ -98,7 +76,7 @@ public class UserService : IUserService
     {
          if (!_currentUser.IsInRole(UserRole.Admin))
         {
-            return CreateDoctorResultDto.Fail("You are not allowed to change doctor status");
+            return CreateDoctorResultDto.Fail("You are not allowed to create a doctor ");
         }
         
         if (!Enum.IsDefined(typeof(UserRole), dto.NewRole))
@@ -181,7 +159,7 @@ public class UserService : IUserService
     {
          if (!_currentUser.IsInRole(UserRole.Admin))
         {
-            return ResetPasswordResultDto.Fail("You are not allowed to change doctor status");
+            return ResetPasswordResultDto.Fail("You are not allowed to reset password");
         }
         if (string.IsNullOrWhiteSpace(dto.NewPassword))
         {

@@ -1,5 +1,6 @@
 using System.Security.Claims;
-
+using HospitalSystem.Interface;
+namespace HospitalSystem.Services;
 public class CurrentUserService : ICurrentUserService
 {
     private readonly IHttpContextAccessor _httpContextAccessor;

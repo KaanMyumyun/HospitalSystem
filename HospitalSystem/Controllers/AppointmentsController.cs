@@ -1,6 +1,9 @@
+using HospitalSystem.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+namespace HospitalSystem.Controllers;
 
+[Authorize(Roles = "FrontDesk")]
 [ApiController]
 [Route("api/[controller]")]
 public class AppointmentsController : ControllerBase

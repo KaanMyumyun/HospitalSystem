@@ -1,14 +1,23 @@
 using Microsoft.EntityFrameworkCore;
+using HospitalSystem.Interface;
+namespace HospitalSystem.Services;
 
 public class AppointmentService : IAppointmentService
 {
     private readonly ApplicationDbContext _context;
-    public AppointmentService(ApplicationDbContext context)
+    private readonly ICurrentUserService _currentUser;
+
+    public AppointmentService(ApplicationDbContext context, ICurrentUserService currentUser)
     {
         _context = context;
+        _currentUser = currentUser;
     }
     public async Task<CancelAppointmentResultDto> CancelAppointmentAsync(CancelAppointmentDto dto)
     {
+        if (!_currentUser.IsInRole(UserRole.Admin))
+        {
+            return CancelAppointmentResultDto.Fail("You are not allowed to reset password");
+        }
         var appointment = await _context.Appointments.SingleOrDefaultAsync(a => a.Id == dto.AppointmentId);
         if (appointment == null)
         {
@@ -23,7 +32,7 @@ public class AppointmentService : IAppointmentService
         appointment.Status = AppointmentStatus.Cancelled;
         appointment.CancellationReason = dto.Reason;
         appointment.CancelledAt = DateTime.UtcNow;
-       
+
         if (string.IsNullOrWhiteSpace(dto.Reason))
         {
             return CancelAppointmentResultDto.Fail("Cancellation reason is required");
@@ -35,6 +44,11 @@ public class AppointmentService : IAppointmentService
 
     public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppointmentDto dto, int frontDeskUserId)
     {
+        if (!_currentUser.IsInRole(UserRole.Admin))
+        {
+            return CreateAppointmentResultDto.Fail("You are not allowed to reset password");
+        }
+
         var doctorExist = await _context.Doctors.AnyAsync(u => u.Id == dto.DoctorId);
         if (!doctorExist)
         {
@@ -61,8 +75,6 @@ public class AppointmentService : IAppointmentService
             return CreateAppointmentResultDto.Fail("doctor already booked for that hour");
         }
 
-
-
         var Appointment = new AppointmentsEntity
         {
             DoctorId = dto.DoctorId,
@@ -78,20 +90,27 @@ public class AppointmentService : IAppointmentService
         return CreateAppointmentResultDto.Success();
     }
 
-    public async Task<List<ViewAppointmentDto>> GetAppointmentsAsync()
+    public async Task<ServiceResult<List<ViewAppointmentDto>>> GetAppointmentsAsync()
     {
-        return await _context.Appointments
-     .AsNoTracking()
-     .Select(u => new ViewAppointmentDto
-     {
-         AppointmentId = u.Id,
-         DoctorId = u.DoctorId,
-         DoctorName = u.Doctor != null && u.Doctor.User != null ? u.Doctor.User.Name : null,
-         PatientId = u.PatientId,
-         PatientName = u.Patient != null ? u.Patient.Name : null,
-         AppointmentTime = u.TimeOfAppointment,
-         Status = u.Status
-     })
-     .ToListAsync();
+        if (!_currentUser.IsInRole(UserRole.FrontDesk))
+        {
+            return ServiceResult<List<ViewAppointmentDto>>
+                .Fail("Not allowed to list deparments");
+        }
+        var appointment = await _context.Appointments
+      .AsNoTracking()
+      .Select(u => new ViewAppointmentDto
+      {
+          AppointmentId = u.Id,
+          DoctorId = u.DoctorId,
+          DoctorName = u.Doctor != null && u.Doctor.User != null ? u.Doctor.User.Name : null,
+          PatientId = u.PatientId,
+          PatientName = u.Patient != null ? u.Patient.Name : null,
+          AppointmentTime = u.TimeOfAppointment,
+          Status = u.Status
+      })
+      .ToListAsync();
+
+        return ServiceResult<List<ViewAppointmentDto>>.Success(appointment);
     }
 }

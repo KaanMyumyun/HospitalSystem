@@ -1,19 +1,25 @@
 
+namespace HospitalSystem.Services;
 
 using System.Runtime.CompilerServices;
+using HospitalSystem.Interface;
 using Microsoft.EntityFrameworkCore;
 
 public class DepartmentService : IDepartmentService
 {
     private readonly ApplicationDbContext _context;
-
-    public DepartmentService(ApplicationDbContext context)
+  private readonly ICurrentUserService _currentUser;
+    public DepartmentService(ApplicationDbContext context,ICurrentUserService currentUser)
     {
         _context = context;
-
+        _currentUser = currentUser;
     }
     public async Task<DepartmentActionResultDto> ChangeDepartmentStatusAsync(ChangeDepartmentStatusDto dto)
-    {
+    {   
+          if (!_currentUser.IsInRole(UserRole.Admin))
+        {
+            return DepartmentActionResultDto.Fail("You are not allowed to change doctor status");
+        }
        
         var department = await _context.Departments.FirstOrDefaultAsync(u => u.Id == dto.DepartmentId );
         if (department==null)
@@ -28,6 +34,10 @@ public class DepartmentService : IDepartmentService
 
     public async Task<DepartmentActionResultDto> ChangeDoctorDepartmentAsync(ChangeDoctorDepartmentDto dto)
     {
+          if (!_currentUser.IsInRole(UserRole.Admin))
+        {
+            return DepartmentActionResultDto.Fail("You are not allowed to change doctor status");
+        }
 
         var Doctor = await _context.Doctors.FirstOrDefaultAsync(u => u.Id == dto.DoctorId );
         if (Doctor==null)
@@ -61,6 +71,10 @@ public class DepartmentService : IDepartmentService
 
     public async Task<DepartmentActionResultDto> CreateDepartmentAsync(CreateDepartmentDto dto)
     {
+         if (!_currentUser.IsInRole(UserRole.Admin))
+        {
+            return DepartmentActionResultDto.Fail("You are not allowed to change doctor status");
+        }
         var exist = await _context.Departments.AnyAsync(u => u.Department == dto.Name);
 
         if (exist)
@@ -83,7 +97,7 @@ public class DepartmentService : IDepartmentService
     {
         return await _context.Departments.Select(u => new ViewDepartmentDto
         {
-            DepartmentId = u.Id,
+            Id = u.Id,
             Name = u.Department,
             IsActive = u.IsActive
         }).ToListAsync();
