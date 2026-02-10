@@ -78,20 +78,21 @@ public class UserService : IUserService
 //needs a test
     public async Task<CreateDoctorResultDto> CreateDoctorAsync(CreateDoctorDto dto)
     {
+        //done
          if (!_currentUser.IsInRole(UserRole.Admin))
         {
             return CreateDoctorResultDto.Fail("You are not allowed to create a doctor ");
         }
-        
+    
         if (!Enum.IsDefined(typeof(UserRole), dto.NewRole))
             return CreateDoctorResultDto.Fail("Role does not exist");
 
         var user = await _context.Users.FindAsync(dto.UserId);
-
+   
         if (user == null)
             return CreateDoctorResultDto.Fail("User not found");
 
-        if (user.Role == dto.NewRole)
+            if (user.Role == dto.NewRole)
             return CreateDoctorResultDto.Fail("User already has this role");
 
         if (dto.NewRole == UserRole.Pending)

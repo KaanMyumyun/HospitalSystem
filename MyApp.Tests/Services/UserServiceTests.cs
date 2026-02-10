@@ -406,7 +406,7 @@ public class UserServiceTests
     [Fact]
     public async Task ChangeRoleAsync_User_DoesntExist()
     {
-         var db = CreateDbContext();
+        var db = CreateDbContext();
 
         var currentUserMock = new Mock<ICurrentUserService>();
         currentUserMock
@@ -420,7 +420,7 @@ public class UserServiceTests
             UserId = 1000,
             NewRole = UserRole.Doctor
         };
-   // Act
+        // Act
         var result = await service.ChangeRoleAsync(dto);
 
         // Assert
@@ -431,7 +431,7 @@ public class UserServiceTests
     [Fact]
     public async Task ChangeRoleAsync_Enum_Invalid()
     {
-             var db = CreateDbContext();
+        var db = CreateDbContext();
 
         var currentUserMock = new Mock<ICurrentUserService>();
         currentUserMock
@@ -442,10 +442,10 @@ public class UserServiceTests
 
         var dto = new ChangeRoleDto
         {
-            UserId = 1000,
+            UserId = 1,
             NewRole = (UserRole)999
         };
-   // Act
+        // Act
         var result = await service.ChangeRoleAsync(dto);
 
         // Assert
@@ -454,40 +454,40 @@ public class UserServiceTests
     }
 
     //3 Pending role cannot be assigned
-[Fact]
-public async Task ChangeRoleAsync_Enum_PendingFail()
-{
-    var db = CreateDbContext();
-
-    var user = new UserEntity
+    [Fact]
+    public async Task ChangeRoleAsync_Enum_PendingFail()
     {
-        Id = 1,
-        Name = "Dr Test",
-        PasswordHash = "hashed",
-        Role = UserRole.Doctor
-    };
+        var db = CreateDbContext();
 
-    db.Users.Add(user);
-    await db.SaveChangesAsync();
+        var user = new UserEntity
+        {
+            Id = 1,
+            Name = "Dr Test",
+            PasswordHash = "hashed",
+            Role = UserRole.Doctor
+        };
 
-    var currentUserMock = new Mock<ICurrentUserService>();
-    currentUserMock
-        .Setup(x => x.IsInRole(UserRole.Admin))
-        .Returns(true);
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
 
-    var service = new UserService(db, currentUserMock.Object);
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock
+            .Setup(x => x.IsInRole(UserRole.Admin))
+            .Returns(true);
 
-    var dto = new ChangeRoleDto
-    {
-        UserId = 1,
-        NewRole = UserRole.Pending
-    };
+        var service = new UserService(db, currentUserMock.Object);
 
-    var result = await service.ChangeRoleAsync(dto);
+        var dto = new ChangeRoleDto
+        {
+            UserId = 1,
+            NewRole = UserRole.Pending
+        };
 
-    Assert.False(result.IsSuccess);
-    Assert.Equal("Cannot assign Pending role", result.Error);
-}
+        var result = await service.ChangeRoleAsync(dto);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Cannot assign Pending role", result.Error);
+    }
 
     [Fact]
     public async Task CreateDoctorAsync_NotAdmin_Fails()
@@ -505,7 +505,7 @@ public async Task ChangeRoleAsync_Enum_PendingFail()
         var result = await service.CreateDoctorAsync(
             new CreateDoctorDto
             {
-                UserId = 999,
+                UserId = 1,
                 NewRole = UserRole.FrontDesk
             });
 
@@ -516,6 +516,172 @@ public async Task ChangeRoleAsync_Enum_PendingFail()
 
     [Fact]
     public async Task CreateDoctorAsync_Admin_Succeeds()
+    {
+        // Arrange
+        var db = CreateDbContext();
+
+        var department = new DepartmentEntity
+        {
+            Id = 1,
+            Department = "Cardiology"
+        };
+
+        var user = new UserEntity
+        {
+            Id = 1,
+            Name = "Dr Test",
+            PasswordHash = "hashed",
+            Role = UserRole.FrontDesk
+        };
+
+
+
+        db.Departments.Add(department);
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock
+            .Setup(x => x.IsInRole(UserRole.Admin))
+            .Returns(true);
+
+        var service = new UserService(db, currentUserMock.Object);
+
+        var dto = new CreateDoctorDto
+        {
+            UserId = 1,
+            DeparmentId = 1,
+            NewRole = UserRole.Doctor
+        };
+
+        // Act
+        var result = await service.CreateDoctorAsync(dto);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        var createdDoctor = await db.Doctors.FirstOrDefaultAsync(d => d.UserId == 1);
+        Assert.NotNull(createdDoctor);
+        Assert.Equal(1, createdDoctor.DepartmentId);
+        Assert.True(createdDoctor.IsActive);
+
+        var updatedUser = await db.Users.FindAsync(1);
+        Assert.Equal(UserRole.Doctor, updatedUser.Role);
+    }
+
+    [Fact]
+    public async Task CreateDoctorAsync_Enum_Invalid()
+    {
+        var db = CreateDbContext();
+
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock
+            .Setup(x => x.IsInRole(UserRole.Admin))
+            .Returns(true);
+
+        var service = new UserService(db, currentUserMock.Object);
+
+        var dto = new CreateDoctorDto
+        {
+            UserId = 1,
+            DeparmentId = 1,
+            NewRole = (UserRole)999
+        };
+        // Act
+        var result = await service.CreateDoctorAsync(dto);
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Role does not exist", result.Error);
+    }
+
+     [Fact]
+    public async Task CreateDoctorAsync_Enum_PendingFail()
+    {
+        var db = CreateDbContext();
+
+        var user = new UserEntity
+        {
+            Id = 1,
+            Name = "Dr Test",
+            PasswordHash = "hashed",
+            Role = UserRole.Doctor
+        };
+
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock
+            .Setup(x => x.IsInRole(UserRole.Admin))
+            .Returns(true);
+
+        var service = new UserService(db, currentUserMock.Object);
+
+        var dto = new CreateDoctorDto
+        {
+            UserId = 1,
+            DeparmentId = 1,
+            NewRole = UserRole.Pending
+        };
+
+        var result = await service.CreateDoctorAsync(dto);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Cannot assign Pending role", result.Error);
+    }
+    
+    [Fact]
+    public async Task CreateDoctorAsync_User_DoesntExist()
+    {
+        var db = CreateDbContext();
+
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock
+            .Setup(x => x.IsInRole(UserRole.Admin))
+            .Returns(true);
+
+        var service = new UserService(db, currentUserMock.Object);
+
+        var dto = new CreateDoctorDto
+        {
+            UserId = 1000,            
+            DeparmentId = 1,
+            NewRole = UserRole.Doctor
+        };
+        // Act
+        var result = await service.CreateDoctorAsync(dto);
+
+        // Assert
+        Assert.False(result.IsSuccess);
+    }
+
+        [Fact]
+    public async Task CreateDoctorAsync_Deparment_DoesntExist()
+    {
+        var db = CreateDbContext();
+
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock
+            .Setup(x => x.IsInRole(UserRole.Admin))
+            .Returns(true);
+
+        var service = new UserService(db, currentUserMock.Object);
+
+        var dto = new CreateDoctorDto
+        {
+            UserId = 1,            
+            DeparmentId = 1000,
+            NewRole = UserRole.Doctor
+        };
+        // Act
+        var result = await service.CreateDoctorAsync(dto);
+
+        // Assert
+        Assert.False(result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task CreateDoctorAsync_SameRole_Fail()
     {
         // Arrange
         var db = CreateDbContext();
@@ -559,17 +725,17 @@ public async Task ChangeRoleAsync_Enum_PendingFail()
         var dto = new CreateDoctorDto
         {
             UserId = 1,
-            DeparmentId = 1,
-            NewRole = UserRole.FrontDesk
+            DeparmentId =1,
+            NewRole = UserRole.Doctor
         };
 
         // Act
         var result = await service.CreateDoctorAsync(dto);
 
         // Assert
-        Assert.True(result.IsSuccess);
-        var updatedUser = await db.Users.FindAsync(1);
-        Assert.Equal(UserRole.FrontDesk, updatedUser.Role);
+        Assert.False(result.IsSuccess);
+        var unchangedUser = await db.Users.FindAsync(1);
+        Assert.Equal(UserRole.Doctor, unchangedUser.Role);
     }
 
 

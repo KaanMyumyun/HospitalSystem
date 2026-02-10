@@ -291,6 +291,7 @@ The current test suite covers the `ChangeDoctorsStatusAsync` method in `UserServ
 * Correct persistence of changes in the database
 
 ---
+
 ## What Is Being Tested
 
 The current test suite covers the `ChangeRoleAsync` method in `UserService`.
@@ -310,6 +311,35 @@ The current test suite covers the `ChangeRoleAsync` method in `UserService`.
 * Business rule validation for role changes
 * Correct success or failure responses
 * Correct persistence (or non-persistence) of role changes in the database
+
+---
+
+## What Is Being Tested
+
+The current test suite covers the `CreateDoctorAsync` method in `UserService`.
+
+### Covered Scenarios
+
+* Non-admin users cannot create a doctor
+* Admin users can successfully create a doctor
+* Attempting to create a doctor for a non-existent user fails
+* Attempting to create a doctor with a non-existent department fails
+* Attempting to assign an invalid role enum value fails
+* Attempting to assign the Pending role fails
+* Attempting to create a doctor when the user already has the target role fails
+
+### Each test verifies:
+
+* Role-based authorization rules
+* Business rule validation during doctor creation
+* Correct success or failure responses
+* Correct persistence of changes in the database:
+
+  * User role is updated appropriately
+  * Doctor entity is created only on success
+  * No database changes occur on failure
+
+---
 
 ## Test Design
 
@@ -377,8 +407,6 @@ Alternatively, tests can be executed using Visual Studio Test Explorer.
 
 The following `UserService` methods are implemented but currently lack unit tests:
 
-* `ChangeRoleAsync`
-* `CreateDoctorAsync`
 * `ListDoctorsAsync`
 * `ListUsersAsync`
 * `ResetPasswordAsync`
