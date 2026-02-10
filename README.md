@@ -380,21 +380,22 @@ The current test suite covers the `ListDoctorsAsync` method in `UserService`.
 
 ## What Is Being Tested
 
-The current test suite covers the `ListDoctorsAsync` method in `UserService`.
+The current test suite covers the `ResetPasswordAsync` method in `UserService`.
 
 ### Covered Scenarios
 
-* Admin users can successfully retrieve a list of doctors
-* Non-admin users are not allowed to list doctors
+* Admin users can successfully reset a user’s password
+* Non-admin users are not allowed to reset passwords
+* Attempting to reset the password for a non-existent user fails
+* Attempting to reset the password with an empty password fails
 
 ### Each test verifies:
 
 * Role-based authorization rules
+* Validation of password input
 * Correct success or failure responses
-* Accurate mapping of doctor data to DoctorDisplayDto
-* Correct inclusion of department information
-* Correct inclusion of doctor active/inactive status
-* No modification of database state during the operation
+* Correct persistence of password changes in the database
+* No unintended side effects on unrelated entities
 
 ---
 
@@ -462,11 +463,7 @@ Alternatively, tests can be executed using Visual Studio Test Explorer.
 
 ## Future Test Coverage
 
-The following `UserService` methods are implemented but currently lack unit tests:
 
-* `ResetPasswordAsync`
-
----
 
 ## Planned Cloud Hosting
 
