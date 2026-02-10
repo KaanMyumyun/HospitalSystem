@@ -45,7 +45,8 @@ public class UserService : IUserService
             IsActive = doctor.IsActive
         });
     }
-//needs a test
+    
+    //tested
     public async Task<ChangeRoleResultDto> ChangeRoleAsync(ChangeRoleDto dto)
     {
         if (!_currentUser.IsInRole(UserRole.Admin))

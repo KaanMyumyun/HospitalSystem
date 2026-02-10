@@ -284,13 +284,32 @@ The current test suite covers the `ChangeDoctorsStatusAsync` method in `UserServ
 * Attempting to set the same status fails
 * Attempting to change status for a non-existent doctor fails
 
-Each test verifies:
+### Each test verifies:
 
 * Authorization rules
 * Correct success or failure responses
 * Correct persistence of changes in the database
 
 ---
+## What Is Being Tested
+
+The current test suite covers the `ChangeRoleAsync` method in `UserService`.
+
+### Covered Scenarios
+
+* Non-admin users cannot change a user’s role
+* Admin users can successfully change a user’s role
+* Attempting to assign the same role fails
+* Attempting to change the role of a non-existent user fails
+* Attempting to assign an invalid role enum value fails
+* Attempting to assign the Pending role fails
+
+### Each test verifies:
+
+* Role-based authorization rules
+* Business rule validation for role changes
+* Correct success or failure responses
+* Correct persistence (or non-persistence) of role changes in the database
 
 ## Test Design
 

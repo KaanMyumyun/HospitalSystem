@@ -18,12 +18,6 @@
 /home/kaan/HospitalSystem/MyApp.Tests/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Abstractions.dll
 /home/kaan/HospitalSystem/MyApp.Tests/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.InMemory.dll
 /home/kaan/HospitalSystem/MyApp.Tests/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Relational.dll
-/home/kaan/HospitalSystem/MyApp.Tests/bin/Debug/net8.0/Microsoft.Extensions.Caching.Memory.dll
-/home/kaan/HospitalSystem/MyApp.Tests/bin/Debug/net8.0/Microsoft.Extensions.DependencyInjection.dll
-/home/kaan/HospitalSystem/MyApp.Tests/bin/Debug/net8.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
-/home/kaan/HospitalSystem/MyApp.Tests/bin/Debug/net8.0/Microsoft.Extensions.Logging.dll
-/home/kaan/HospitalSystem/MyApp.Tests/bin/Debug/net8.0/Microsoft.Extensions.Logging.Abstractions.dll
-/home/kaan/HospitalSystem/MyApp.Tests/bin/Debug/net8.0/Microsoft.Extensions.Options.dll
 /home/kaan/HospitalSystem/MyApp.Tests/bin/Debug/net8.0/Microsoft.IdentityModel.Abstractions.dll
 /home/kaan/HospitalSystem/MyApp.Tests/bin/Debug/net8.0/Microsoft.IdentityModel.JsonWebTokens.dll
 /home/kaan/HospitalSystem/MyApp.Tests/bin/Debug/net8.0/Microsoft.IdentityModel.Logging.dll
