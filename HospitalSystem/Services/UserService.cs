@@ -75,10 +75,10 @@ public class UserService : IUserService
     }
 
 
-//needs a test
+//done
     public async Task<CreateDoctorResultDto> CreateDoctorAsync(CreateDoctorDto dto)
     {
-        //done
+        
          if (!_currentUser.IsInRole(UserRole.Admin))
         {
             return CreateDoctorResultDto.Fail("You are not allowed to create a doctor ");
@@ -117,7 +117,7 @@ public class UserService : IUserService
         return CreateDoctorResultDto.Success();
     }
 
-//needs a test
+//working on it
    public async Task<ServiceResult<List<DoctorDisplayDto>>> ListDoctorsAsync()
 {
     if (!_currentUser.IsInRole(UserRole.Admin))
@@ -140,7 +140,7 @@ public class UserService : IUserService
     return ServiceResult<List<DoctorDisplayDto>>.Success(doctors);
 }
 
-//needs a test
+//working on it
     public async Task<ServiceResult<List<UserDisplayDto>>> ListUsersAsync()
 {
     if (!_currentUser.IsInRole(UserRole.Admin))

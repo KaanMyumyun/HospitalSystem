@@ -335,11 +335,44 @@ The current test suite covers the `CreateDoctorAsync` method in `UserService`.
 * Correct success or failure responses
 * Correct persistence of changes in the database:
 
-  * User role is updated appropriately
-  * Doctor entity is created only on success
-  * No database changes occur on failure
+* User role is updated appropriately
+* Doctor entity is created only on success
+* No database changes occur on failure
 
 ---
+
+## What Is Being Tested
+
+The current test suite covers the `ListUsersAsync` method in `UserService`.
+
+### Covered Scenarios
+
+* Admin users can successfully retrieve a list of users
+* Non-admin users are not allowed to list users
+
+### Each test verifies:
+
+* Role-based authorization rules
+* Correct success or failure responses
+* Accurate mapping of user entities to user display DTOs
+* No modification of database state during the operation
+
+---
+
+## What Is Being Tested
+
+The current test suite covers the `ListDoctorsAsync` method in `UserService`.
+
+### Covered Scenarios
+
+* Admin users can successfully retrieve a list of doctors
+* Non-admin users are not allowed to list doctors
+* Each test verifies:
+* Role-based authorization rules
+* Correct success or failure responses
+* Accurate mapping of doctor-related data to doctor display DTOs
+* Correct inclusion of doctor status (active/inactive)
+* No modification of database state during the operation
 
 ## Test Design
 

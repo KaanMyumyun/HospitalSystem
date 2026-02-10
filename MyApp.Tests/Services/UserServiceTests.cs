@@ -594,7 +594,7 @@ public class UserServiceTests
         Assert.Equal("Role does not exist", result.Error);
     }
 
-     [Fact]
+    [Fact]
     public async Task CreateDoctorAsync_Enum_PendingFail()
     {
         var db = CreateDbContext();
@@ -629,7 +629,7 @@ public class UserServiceTests
         Assert.False(result.IsSuccess);
         Assert.Equal("Cannot assign Pending role", result.Error);
     }
-    
+
     [Fact]
     public async Task CreateDoctorAsync_User_DoesntExist()
     {
@@ -644,7 +644,7 @@ public class UserServiceTests
 
         var dto = new CreateDoctorDto
         {
-            UserId = 1000,            
+            UserId = 1000,
             DeparmentId = 1,
             NewRole = UserRole.Doctor
         };
@@ -655,7 +655,7 @@ public class UserServiceTests
         Assert.False(result.IsSuccess);
     }
 
-        [Fact]
+    [Fact]
     public async Task CreateDoctorAsync_Deparment_DoesntExist()
     {
         var db = CreateDbContext();
@@ -669,7 +669,7 @@ public class UserServiceTests
 
         var dto = new CreateDoctorDto
         {
-            UserId = 1,            
+            UserId = 1,
             DeparmentId = 1000,
             NewRole = UserRole.Doctor
         };
@@ -725,7 +725,7 @@ public class UserServiceTests
         var dto = new CreateDoctorDto
         {
             UserId = 1,
-            DeparmentId =1,
+            DeparmentId = 1,
             NewRole = UserRole.Doctor
         };
 
@@ -737,6 +737,193 @@ public class UserServiceTests
         var unchangedUser = await db.Users.FindAsync(1);
         Assert.Equal(UserRole.Doctor, unchangedUser.Role);
     }
+
+
+    [Fact]
+    public async Task ListUsersAsync_Admin_Succeeds()
+    {
+        // Arrange
+        var db = CreateDbContext();
+
+        db.Users.AddRange(
+            new UserEntity
+            {
+                Id = 1,
+                Name = "Alice",
+                Role = UserRole.Doctor,
+                PasswordHash = "hashed"
+            },
+            new UserEntity
+            {
+                Id = 2,
+                Name = "Bob",
+                Role = UserRole.FrontDesk,
+                PasswordHash = "hashed"
+            }
+        );
+
+        await db.SaveChangesAsync();
+
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock
+            .Setup(x => x.IsInRole(UserRole.Admin))
+            .Returns(true);
+
+        var service = new UserService(db, currentUserMock.Object);
+
+        // Act
+        var result = await service.ListUsersAsync();
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
+        Assert.Equal(2, result.Data.Count);
+
+        Assert.Contains(result.Data, u =>
+            u.UserId == 1 &&
+            u.UserName == "Alice" &&
+            u.Role == UserRole.Doctor);
+
+        Assert.Contains(result.Data, u =>
+            u.UserId == 2 &&
+            u.UserName == "Bob" &&
+            u.Role == UserRole.FrontDesk);
+    }
+
+
+
+    [Fact]
+    public async Task ListUsersAsync_NotAdmin_Fails()
+    {
+        // Arrange
+        var db = CreateDbContext();
+
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock
+            .Setup(x => x.IsInRole(UserRole.Admin))
+            .Returns(false);
+
+        var service = new UserService(db, currentUserMock.Object);
+
+        // Act
+        var result = await service.ListUsersAsync();
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Not allowed to list users", result.Error);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task ListDoctorsAsync_Admin_Succeeds()
+    {
+        // Arrange
+        var db = CreateDbContext();
+
+        var department1 = new DepartmentEntity
+        {
+            Id = 1,
+            Department = "Cardiology"
+        };
+
+        var department2 = new DepartmentEntity
+        {
+            Id = 2,
+            Department = "Neurology"
+        };
+
+        var user1 = new UserEntity
+        {
+            Id = 1,
+            Name = "Alice",
+            Role = UserRole.Doctor,
+            PasswordHash = "hashed"
+        };
+
+        var user2 = new UserEntity
+        {
+            Id = 2,
+            Name = "Bob",
+            Role = UserRole.FrontDesk,
+            PasswordHash = "hashed"
+        };
+
+        var doctor1 = new DoctorEntity
+        {
+            Id = 1,
+            UserId = 1,
+            DepartmentId = 1,
+            IsActive = true
+        };
+
+        var doctor2 = new DoctorEntity
+        {
+            Id = 2,
+            UserId = 2,
+            DepartmentId = 2,
+            IsActive = false
+        };
+
+        db.Departments.AddRange(department1, department2);
+        db.Users.AddRange(user1, user2);
+        db.Doctors.AddRange(doctor1, doctor2);
+
+        await db.SaveChangesAsync();
+
+
+
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock
+            .Setup(x => x.IsInRole(UserRole.Admin))
+            .Returns(true);
+
+        var service = new UserService(db, currentUserMock.Object);
+
+        // Act
+        var result = await service.ListDoctorsAsync();
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
+        Assert.Equal(2, result.Data.Count);
+
+        Assert.Contains(result.Data, u =>
+            u.UserId == 1 &&
+            u.DeparmentId == 1 &&
+            u.DoctorId == 1 &&
+            u.Name == "Alice" &&
+            u.IsActive == true);
+
+        Assert.Contains(result.Data, u =>
+            u.UserId == 2 &&
+            u.DeparmentId == 2 &&
+            u.DoctorId == 2 &&
+            u.Name == "Bob" &&
+            u.IsActive == false);
+    }
+
+    [Fact]
+    public async Task ListDoctorsAsync_NotAdmin_Fails()
+    {
+        // Arrange
+        var db = CreateDbContext();
+
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock
+            .Setup(x => x.IsInRole(UserRole.Admin))
+            .Returns(false);
+
+        var service = new UserService(db, currentUserMock.Object);
+
+        // Act
+        var result = await service.ListDoctorsAsync();
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Equal("You are not allowed to list doctors", result.Error);
+        Assert.Null(result.Data);
+    }
+
 
 
 }
