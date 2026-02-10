@@ -367,12 +367,36 @@ The current test suite covers the `ListDoctorsAsync` method in `UserService`.
 
 * Admin users can successfully retrieve a list of doctors
 * Non-admin users are not allowed to list doctors
-* Each test verifies:
+
+### Each test verifies:
+
 * Role-based authorization rules
 * Correct success or failure responses
 * Accurate mapping of doctor-related data to doctor display DTOs
 * Correct inclusion of doctor status (active/inactive)
 * No modification of database state during the operation
+
+---
+
+## What Is Being Tested
+
+The current test suite covers the `ListDoctorsAsync` method in `UserService`.
+
+### Covered Scenarios
+
+* Admin users can successfully retrieve a list of doctors
+* Non-admin users are not allowed to list doctors
+
+### Each test verifies:
+
+* Role-based authorization rules
+* Correct success or failure responses
+* Accurate mapping of doctor data to DoctorDisplayDto
+* Correct inclusion of department information
+* Correct inclusion of doctor active/inactive status
+* No modification of database state during the operation
+
+---
 
 ## Test Design
 
@@ -440,8 +464,6 @@ Alternatively, tests can be executed using Visual Studio Test Explorer.
 
 The following `UserService` methods are implemented but currently lack unit tests:
 
-* `ListDoctorsAsync`
-* `ListUsersAsync`
 * `ResetPasswordAsync`
 
 ---

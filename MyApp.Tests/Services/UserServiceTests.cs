@@ -924,6 +924,54 @@ public class UserServiceTests
         Assert.Null(result.Data);
     }
 
+     
+    [Fact]
+    public async Task ResetPasswordAsync_User_DoesntExist()
+    {
+        var db = CreateDbContext();
+
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock
+            .Setup(x => x.IsInRole(UserRole.Admin))
+            .Returns(true);
+
+        var service = new UserService(db, currentUserMock.Object);
+
+        var dto = new ResetPasswordDto
+        {
+            UserId = 1000,
+            NewPassword = "true"
+        };
+        // Act
+        var result = await service.ResetPasswordAsync(dto);
+
+        // Assert
+        Assert.False(result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_EmptyPassword_Fails()
+    {
+          var db = CreateDbContext();
+
+        var currentUserMock = new Mock<ICurrentUserService>();
+        currentUserMock
+            .Setup(x => x.IsInRole(UserRole.Admin))
+            .Returns(true);
+
+        var service = new UserService(db, currentUserMock.Object);
+
+        var dto = new ResetPasswordDto
+        {
+            UserId = 1,
+            NewPassword = ""
+        };
+        // Act
+        var result = await service.ResetPasswordAsync(dto);
+
+        // Assert
+        Assert.False(result.IsSuccess);
+    }
 
 
 }
