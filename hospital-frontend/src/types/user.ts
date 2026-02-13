@@ -42,8 +42,7 @@ export interface CreateDoctorResultDto
 export interface CreateDoctorDto
 {
     UserId:number;
-    DeparmentId:number;
-    NewRole:UserRole;
+    DepartmentId:number;
 }
 export interface ChangeDoctorsStatus
 {

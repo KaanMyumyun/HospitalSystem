@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: hospital-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: HospitalSystemDb
+      POSTGRES_USER: hospitaluser
+      POSTGRES_PASSWORD: strongpassword
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build:
+      context: .
+      dockerfile: HospitalSystem/Dockerfile
+    container_name: hospital-backend
+    depends_on:
+      - postgres
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: >
+        Host=postgres;
+        Port=5432;
+        Database=HospitalSystemDb;
+        Username=hospitaluser;
+        Password=strongpassword
+      JwtSettings__SecretKey: THIS_SHOULD_BE_LONG_AND_SECRET_123456789
+      JwtSettings__Issuer: HospitalSystem
+      JwtSettings__Audience: HospitalSystemUsers
+    ports:
+      - "5000:8080"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: hospital-frontend/Dockerfile
+    container_name: hospital-frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  postgres_data:

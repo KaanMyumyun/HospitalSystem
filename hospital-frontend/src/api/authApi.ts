@@ -25,11 +25,13 @@ export async function login(dto: LoginDto): Promise<LoginResultDto> {
 
 export async function CreateUser(dto: CreateUserDto): Promise<CreateUserResultDto> {
     try {
+            const token = localStorage.getItem("token");
         const response = await fetch(`${Base_URL}/CreateUser`,
             {
                 method: "POST",
                 headers:
                 {
+                            Authorization: `Bearer ${token}`,
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify(dto),

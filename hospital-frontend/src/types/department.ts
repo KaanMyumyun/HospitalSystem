@@ -22,7 +22,7 @@ export interface CreateDepartmentDto
 }
 
 export interface ViewDepartmentDto {
-  departmentId: number;
+  id: number;
   name: string;
   isActive: boolean;
 }

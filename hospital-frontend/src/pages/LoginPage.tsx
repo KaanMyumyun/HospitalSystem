@@ -159,28 +159,6 @@ const Login = () => {
         >
           Login
         </Button>
-
-        <Button
-          type="button"
-          fullWidth
-          variant="contained"
-          onClick={createUser}
-          sx={{
-            padding: "12px",
-            fontSize: "15px",
-            fontWeight: 500,
-            textTransform: "uppercase",
-            backgroundColor: "#1976D2",
-            marginBottom: 2,
-            "&:hover": {
-              backgroundColor: "#1565C0",
-            },
-          }}
-        >
-          Create User
-        </Button>
-
-
          
       </Box>
     </Box>

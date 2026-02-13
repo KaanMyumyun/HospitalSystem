@@ -1,6 +1,5 @@
-using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
     [ApiController]
     [Route("api/[controller]")]
@@ -12,6 +11,8 @@ using Microsoft.EntityFrameworkCore;
         _authService = authService;
     }
 
+
+    [Authorize(Roles = "Admin")]
     [HttpPost("CreateUser")]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
     {

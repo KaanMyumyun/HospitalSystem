@@ -9,12 +9,12 @@ import {
   ListDoctors, 
   ListUsers, 
   ChangeRole,
-  CreateDoctor,
-   ChangeDoctorStatus
+  ChangeDoctorStatus
 } from "../api/userApi";
 import type { UserRole } from "../types/userRole";
 import type { ViewDepartmentDto } from "../types/department";
 import type { DoctorDisplayDto, UserDisplayDto } from "../types/user";
+import { CreateUser } from "../api/authApi";
 
 export default function AdminPanel() {
   const [departments, setDepartments] = useState<ViewDepartmentDto[]>([]);
@@ -24,16 +24,14 @@ export default function AdminPanel() {
   const [deptName, setDeptName] = useState("");
   const [loading, setLoading] = useState(true);
   const [showAddDept, setShowAddDept] = useState(false);
-  const [showUserMgmt, setShowUserMgmt] = useState(false);
+  const [showDeptList, setShowDeptList] = useState(false);
   const [showDoctorMgmt, setShowDoctorMgmt] = useState(false);
-  const [showAddDoctor, setShowAddDoctor] = useState(false);
+  const [showUserMgmt, setShowUserMgmt] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
-  
-  // New doctor form state
-  const [newDoctor, setNewDoctor] = useState({
-    userId: "",
-    departmentId: "",
-  });
+  const [assigningDept, setAssigningDept] = useState<number | null>(null);
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
 
   useEffect(() => {
     loadData();
@@ -45,9 +43,21 @@ export default function AdminPanel() {
       ListDoctors(),
       ListUsers(),
     ]);
+    
+    const normalizedUsers = userData.map((user: any) => ({
+      UserId: user.UserId ?? user.userId ?? user.id ?? user.Id,
+      UserName: user.UserName ?? user.userName ?? user.name ?? user.Name,
+      Role: user.Role ?? user.role,
+    }));
+    
+    console.log('=== DEBUGGING DOCTOR DATA ===');
+    console.log('Raw doctors from API:', doctorData);
+    console.log('Normalized users:', normalizedUsers);
+    console.log('Users with Doctor role:', normalizedUsers.filter((u: any) => u.Role === "Doctor"));
+    
     setDepartments(deptData);
     setDoctors(doctorData);
-    setUsers(userData);
+    setUsers(normalizedUsers as UserDisplayDto[]);
     setLoading(false);
   };
 
@@ -69,27 +79,50 @@ export default function AdminPanel() {
     }
   };
 
+  const createUser = async () => {
+    if (!newUserName.trim() || !newUserPassword.trim()) {
+      showNotification('error', 'Please enter both username and password');
+      return;
+    }
+    
+    try {
+      const result = await CreateUser({ name: newUserName, password: newUserPassword });
+      if (result.isSuccess) {
+        setNewUserName("");
+        setNewUserPassword("");
+        setShowCreateUser(false);
+        await loadData();
+        showNotification('success', 'User created successfully');
+      } else {
+        showNotification('error', result.error || 'Failed to create user');
+      }
+    } catch (error) {
+      console.error("Create user failed:", error);
+      showNotification('error', 'Failed to create user');
+    }
+  };
+
   const toggleDepartmentStatus = async (dept: ViewDepartmentDto) => {
-  const result = await ChangeDepartmentStatus({
-    DepartmentId: (dept as any).Id ?? dept.departmentId,
-    IsActive: !dept.isActive,
-  });
+    const result = await ChangeDepartmentStatus({
+      DepartmentId: (dept as any).Id ?? dept.id,
+      IsActive: !dept.isActive,
+    });
 
-  if (result.isSuccess) {
-    loadData();
-    showNotification(
-      'success',
-      `Department ${dept.isActive ? 'deactivated' : 'activated'}`
-    );
-  } else {
-    showNotification('error', result.error || 'Failed to update department');
-  }
-};
-
+    if (result.isSuccess) {
+      loadData();
+      showNotification(
+        'success',
+        `Department ${dept.isActive ? 'deactivated' : 'activated'}`
+      );
+    } else {
+      showNotification('error', result.error || 'Failed to update department');
+    }
+  };
 
   const assignDoctor = async (doctorId: number, departmentId: number) => {
     const result = await ChangeDoctorDepartment({ DoctorId: doctorId, DepartmentId: departmentId });
     if (result.isSuccess) {
+      setAssigningDept(null);
       loadData();
       showNotification('success', 'Doctor assigned successfully');
     } else {
@@ -99,56 +132,36 @@ export default function AdminPanel() {
 
   const changeRole = async (userId: number, role: UserRole) => {
     const result = await ChangeRole({ UserId: userId, NewRole: role });
+
     if (!result.isSuccess) {
       showNotification('error', result.error || 'Failed to change role');
       return;
     }
-    loadData();
+
+    await loadData();
     showNotification('success', 'User role updated');
   };
 
-  const createDoctor = async () => {
-    if (!newDoctor.userId || !newDoctor.departmentId) {
-      showNotification('error', 'Please select both user and department');
-      return;
-    }
-
-    const result = await CreateDoctor({
-      UserId: parseInt(newDoctor.userId),
-      DeparmentId: parseInt(newDoctor.departmentId),
-      NewRole: "Doctor" as UserRole
+  const toggleDoctorStatus = async (
+    doctorId: number, 
+    currentStatus: boolean,
+    userId: number,      
+    userName: string      
+  ) => {
+    const result = await ChangeDoctorStatus({
+      DoctorId: doctorId,
+      IsActive: !currentStatus,
+      UserId: userId,       
+      UserName: userName     
     });
 
     if (result.isSuccess) {
-      setNewDoctor({ userId: "", departmentId: "" });
-      setShowAddDoctor(false);
       loadData();
-      showNotification('success', 'Doctor created successfully');
+      showNotification('success', `Doctor ${currentStatus ? 'deactivated' : 'activated'}`);
     } else {
-      showNotification('error', result.error || 'Failed to create doctor');
+      showNotification('error', result.error || 'Failed to update doctor status');
     }
   };
-
- const toggleDoctorStatus = async (
-  doctorId: number, 
-  currentStatus: boolean,
-  userId: number,      
-  userName: string      
-) => {
-  const result = await ChangeDoctorStatus({
-    DoctorId: doctorId,
-    IsActive: !currentStatus,
-    UserId: userId,       
-    UserName: userName     
-  });
-
-  if (result.isSuccess) {
-    loadData();
-    showNotification('success', `Doctor ${currentStatus ? 'deactivated' : 'activated'}`);
-  } else {
-    showNotification('error', result.error || 'Failed to update doctor status');
-  }
-};
 
   const toggleExpand = (id: number) => {
     setExpanded((prev) => {
@@ -162,16 +175,68 @@ export default function AdminPanel() {
     });
   };
 
+  const buildCurrentDoctors = () => {
+    if (users.length === 0) {
+      console.warn('⚠️ Users array is empty! Returning empty array.');
+      return [];
+    }
+    
+    const doctorUsers = users.filter(u => u.Role === "Doctor");
+    
+    console.log('Doctor users found:', doctorUsers);
+    console.log('Raw doctors array:', doctors);
+    
+    if (doctorUsers.length === 0) {
+      console.warn('⚠️ No users with Doctor role found!');
+      return [];
+    }
+    
+    return doctorUsers.map(user => {
+      const doctorRecord = doctors.find(d => {
+        const dUserId = (d as any).UserId ?? (d as any).userId ?? d.UserId;
+        return String(dUserId) === String(user.UserId);
+      });
+      
+      console.log(`User ${user.UserName} (ID: ${user.UserId}):`, doctorRecord);
+      
+      if (doctorRecord) {
+        const normalized = {
+          DoctorId: (doctorRecord as any).DoctorId ?? (doctorRecord as any).doctorId ?? doctorRecord.DoctorId,
+          UserId: (doctorRecord as any).UserId ?? (doctorRecord as any).userId ?? doctorRecord.UserId,
+          Name: user.UserName || (doctorRecord as any).Name || (doctorRecord as any).name || doctorRecord.Name,
+          DeparmentId: (doctorRecord as any).DeparmentId ?? (doctorRecord as any).deparmentId ?? (doctorRecord as any).departmentId ?? doctorRecord.DeparmentId ?? 0,
+          IsActive: (doctorRecord as any).IsActive ?? (doctorRecord as any).isActive ?? doctorRecord.IsActive ?? false,
+          user
+        };
+        
+        console.log(`  → Normalized:`, normalized);
+        return normalized as DoctorDisplayDto & { user: UserDisplayDto };
+      } else {
+        const virtual = {
+          DoctorId: user.UserId,
+          UserId: user.UserId,
+          Name: user.UserName,
+          DeparmentId: 0,
+          IsActive: false,
+          user
+        };
+        console.log(`  → Virtual record created:`, virtual);
+        return virtual as DoctorDisplayDto & { user: UserDisplayDto };
+      }
+    });
+  };
+
+  const currentDoctors = buildCurrentDoctors();
+  const activeDoctors = currentDoctors.filter(d => d.IsActive === true);
+  const inactiveDoctors = currentDoctors.filter(d => d.IsActive === false);
+
+  console.log('=== FINAL RENDERING DATA ===');
+  console.log('currentDoctors:', currentDoctors);
+  console.log('activeDoctors:', activeDoctors);
+  console.log('inactiveDoctors:', inactiveDoctors);
+
   const getDoctorsByDepartment = (id: number) =>
-    doctors.filter((d) => d.DeparmentId === id);
-  
-  const activeDoctors = doctors.filter((d) => d.IsActive);
-  const inactiveDoctors = doctors.filter((d) => !d.IsActive);
-  
-  // Get users who are not yet doctors
-  const eligibleUsers = users.filter(
-    user => !doctors.some(doc => doc.UserId === user.UserId)
-  );
+    currentDoctors.filter(d => d.DeparmentId === id && d.IsActive);
 
   if (loading) {
     return (
@@ -385,6 +450,14 @@ export default function AdminPanel() {
           font-weight: 400;
         }
 
+        .section-subtitle {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: var(--text);
+          margin-bottom: 1rem;
+          margin-top: 1.5rem;
+        }
+
         .btn {
           padding: 0.75rem 1.5rem;
           border: none;
@@ -437,6 +510,15 @@ export default function AdminPanel() {
 
         .btn-danger:hover {
           background: #ff3838;
+        }
+
+        .btn-warning {
+          background: var(--warning);
+          color: white;
+        }
+
+        .btn-warning:hover {
+          background: #ff9800;
         }
 
         .btn-sm {
@@ -540,6 +622,11 @@ export default function AdminPanel() {
           color: var(--text-muted);
         }
 
+        .badge-secondary {
+          background: rgba(8, 131, 149, 0.15);
+          color: var(--secondary);
+        }
+
         .dept-actions {
           display: flex;
           gap: 0.75rem;
@@ -598,6 +685,7 @@ export default function AdminPanel() {
           display: flex;
           gap: 0.75rem;
           align-items: center;
+          flex-wrap: wrap;
         }
 
         .select {
@@ -729,51 +817,57 @@ export default function AdminPanel() {
           gap: 0.5rem;
         }
 
-        .form-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 1.5rem;
-          padding: 1.5rem;
-          background: var(--bg);
-          border-radius: 12px;
-          border: 2px dashed var(--border);
-          margin-bottom: 1.5rem;
+        .dept-assignment-dropdown {
+          position: relative;
+          display: inline-block;
         }
 
-        .form-actions {
-          display: flex;
-          gap: 1rem;
-          justify-content: flex-end;
-          grid-column: 1 / -1;
+        .dept-dropdown-content {
+          position: absolute;
+          top: 100%;
+          right: 0;
+          background: white;
+          border: 2px solid var(--border);
+          border-radius: 8px;
+          box-shadow: 0 4px 12px var(--shadow);
+          min-width: 200px;
+          margin-top: 0.5rem;
+          z-index: 100;
+          max-height: 300px;
+          overflow-y: auto;
         }
 
-        .tabs {
-          display: flex;
-          gap: 0.5rem;
-          margin-bottom: 1.5rem;
-          border-bottom: 2px solid var(--border);
-        }
-
-        .tab {
-          padding: 0.75rem 1.5rem;
-          background: none;
-          border: none;
-          border-bottom: 3px solid transparent;
-          font-weight: 500;
-          color: var(--text-muted);
+        .dept-dropdown-item {
+          padding: 0.75rem 1rem;
           cursor: pointer;
-          transition: all 0.3s ease;
-          font-family: 'Poppins', sans-serif;
-          font-size: 1rem;
+          transition: all 0.2s ease;
+          border-bottom: 1px solid var(--border);
         }
 
-        .tab:hover {
+        .dept-dropdown-item:last-child {
+          border-bottom: none;
+        }
+
+        .dept-dropdown-item:hover {
+          background: var(--bg);
           color: var(--primary);
         }
 
-        .tab.active {
+        .dept-dropdown-item.selected {
+          background: rgba(5, 191, 219, 0.1);
           color: var(--primary);
-          border-bottom-color: var(--primary);
+          font-weight: 600;
+        }
+
+        .warning-badge {
+          background: rgba(255, 167, 38, 0.15);
+          color: var(--warning);
+          padding: 0.5rem 1rem;
+          border-radius: 8px;
+          font-size: 0.875rem;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
         }
       `}</style>
 
@@ -809,12 +903,25 @@ export default function AdminPanel() {
           <div className="section">
             <div className="section-header">
               <h2 className="section-title">Department Management</h2>
-              <button
-                className={showAddDept ? "btn btn-secondary" : "btn btn-primary"}
-                onClick={() => setShowAddDept(!showAddDept)}
-              >
-                {showAddDept ? "✕ Cancel" : "+ Add Department"}
-              </button>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button
+                  className={showAddDept ? "btn btn-secondary" : "btn btn-primary"}
+                  onClick={() => {
+                    setShowAddDept(!showAddDept);
+                    if (!showAddDept) {
+                      setShowDeptList(false);
+                    }
+                  }}
+                >
+                  {showAddDept ? "✕ Cancel" : "+ Add Department"}
+                </button>
+                <button
+                  className={showDeptList ? "btn btn-secondary" : "btn btn-primary"}
+                  onClick={() => setShowDeptList(!showDeptList)}
+                >
+                  {showDeptList ? "Hide Departments" : "View Departments"}
+                </button>
+              </div>
             </div>
 
             {showAddDept && (
@@ -832,8 +939,15 @@ export default function AdminPanel() {
               </div>
             )}
 
-            {departments.map((dept) => (
-              <div key={dept.departmentId} className="dept-card">
+            {showDeptList && (
+              <>
+                {departments.length === 0 ? (
+                  <div className="empty-state">
+                    <p>No departments found</p>
+                  </div>
+                ) : (
+                  departments.map((dept) => (
+              <div key={dept.id} className="dept-card">
                 <div className="dept-header">
                   <div className="dept-info">
                     <h3>{dept.name}</h3>
@@ -841,34 +955,33 @@ export default function AdminPanel() {
                       <span className={`badge ${dept.isActive ? 'badge-success' : 'badge-inactive'}`}>
                         {dept.isActive ? "● Active" : "○ Inactive"}
                       </span>
-                      <span>{getDoctorsByDepartment(dept.departmentId).length} Doctors</span>
+                      <span>{getDoctorsByDepartment(dept.id).length} Doctors</span>
                     </div>
                   </div>
                   <div className="dept-actions">
                     <button
                       className={`btn btn-sm ${dept.isActive ? "btn-danger" : "btn-success"}`}
-                      
                       onClick={() => toggleDepartmentStatus(dept)}
                     >
                       {dept.isActive ? "Deactivate" : "Activate"}
                     </button>
                     <button
                       className="btn btn-sm btn-secondary"
-                      onClick={() => toggleExpand(dept.departmentId)}
+                      onClick={() => toggleExpand(dept.id)}
                     >
-                      {expanded.has(dept.departmentId) ? "Hide Doctors ▲" : "Show Doctors ▼"}
+                      {expanded.has(dept.id) ? "Hide Doctors ▲" : "Show Doctors ▼"}
                     </button>
                   </div>
                 </div>
 
-                {expanded.has(dept.departmentId) && (
+                {expanded.has(dept.id) && (
                   <div className="doctor-list">
-                    {getDoctorsByDepartment(dept.departmentId).length === 0 ? (
+                    {getDoctorsByDepartment(dept.id).length === 0 ? (
                       <div className="empty-state">
                         <p>No doctors assigned to this department</p>
                       </div>
                     ) : (
-                      getDoctorsByDepartment(dept.departmentId).map((doctor) => (
+                      getDoctorsByDepartment(dept.id).map((doctor) => (
                         <div key={doctor.DoctorId} className="doctor-item">
                           <span className="doctor-name">{doctor.Name}</span>
                           <span className={`badge ${doctor.IsActive ? 'badge-success' : 'badge-inactive'}`}>
@@ -880,184 +993,206 @@ export default function AdminPanel() {
                   </div>
                 )}
               </div>
-            ))}
+                  ))
+                )}
+              </>
+            )}
           </div>
 
-  {/* Doctor Management Section */}
-  <div className="section">
-    <div className="section-header">
-      <h2 className="section-title">Doctor Management</h2>
-      <button
-        className={showDoctorMgmt ? "btn btn-secondary" : "btn btn-primary"}
-        onClick={() => setShowDoctorMgmt(!showDoctorMgmt)}
-      >
-        {showDoctorMgmt ? "Hide Doctors" : "Manage Doctors"}
-      </button>
-    </div>
-
-    {showDoctorMgmt && (
-      <>
-        <button
-          className={showAddDoctor ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm"}
-          onClick={() => setShowAddDoctor(!showAddDoctor)}
-          style={{ marginBottom: '1.5rem' }}
-        >
-          {showAddDoctor ? "✕ Cancel" : "+ Create Doctor"}
-        </button>
-
-        {showAddDoctor && (
-          <div className="form-grid">
-            <div className="form-group">
-              <label className="form-label">Select User</label>
-              <select
-                className="input"
-                value={newDoctor.userId}
-                onChange={(e) => setNewDoctor({ ...newDoctor, userId: e.target.value })}
-              >
-                <option value="">Choose a user...</option>
-                {eligibleUsers.map((user) => (
-                  <option key={user.UserId} value={user.UserId}>
-                    {user.UserName} ({user.Role})
-                  </option>
-                ))}
-              </select>
+          {/* Doctor Management Section */}
+          <div className="section">
+            <div className="section-header">
+              <h2 className="section-title">Doctor Management</h2>
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                <span className="badge badge-secondary">
+                  Total: {currentDoctors.length}
+                </span>
+                <button
+                  className={showDoctorMgmt ? "btn btn-secondary" : "btn btn-primary"}
+                  onClick={() => setShowDoctorMgmt(!showDoctorMgmt)}
+                >
+                  {showDoctorMgmt ? "Hide Doctors" : "View Doctors"}
+                </button>
+              </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Select Department</label>
-              <select
-                className="input"
-                value={newDoctor.departmentId}
-                onChange={(e) => setNewDoctor({ ...newDoctor, departmentId: e.target.value })}
-              >
-                <option value="">Choose a department...</option>
-                {departments.filter(d => d.isActive).map((dept) => (
-                  <option key={dept.departmentId} value={dept.departmentId}>
-                    {dept.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {showDoctorMgmt && (
+              <>
+                {/* ===== Active Doctors ===== */}
+                <h3 className="section-subtitle">
+                  Active Doctors ({activeDoctors.length})
+                </h3>
 
-            <div className="form-actions">
-              <button 
-                className="btn btn-secondary" 
-                onClick={() => {
-                  setShowAddDoctor(false);
-                  setNewDoctor({ userId: "", departmentId: "" });
-                }}
-              >
-                Cancel
-              </button>
-              <button className="btn btn-success" onClick={createDoctor}>
-                Create Doctor
-              </button>
-            </div>
-          </div>
-        )}
+            {activeDoctors.length === 0 ? (
+              <div className="empty-state">
+                <p>No active doctors</p>
+              </div>
+            ) : (
+              activeDoctors.map((doctor) => {
+                const dept = departments.find(d => d.id === doctor.DeparmentId);
 
-        <div>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--primary)' }}>
-            Active Doctors ({activeDoctors.length})
-          </h3>
-          {activeDoctors.length === 0 ? (
-            <div className="empty-state">
-              <p>No active doctors</p>
-            </div>
-          ) : (
-            activeDoctors.map((doctor) => {
-              const dept = departments.find(d => d.departmentId === doctor.DeparmentId);
-              return (
-                <div key={doctor.DoctorId} className="doctor-item">
-                  <div className="doctor-info">
-                    <div className="doctor-name">{doctor.Name}</div>
-                    <div className="doctor-meta">
-                      <span>🏥 {dept?.name || 'Unassigned'}</span>
-                      <span className="badge badge-success">Active</span>
+                return (
+                  <div key={doctor.DoctorId} className="doctor-item">
+                    <div className="doctor-info">
+                      <h4 className="doctor-name">{doctor.Name}</h4>
+                      <div className="doctor-meta">
+                        <span className="badge badge-success">● Active</span>
+                        <span>🏥 {dept?.name || "Unassigned"}</span>
+                      </div>
+                    </div>
+
+                    <div className="doctor-actions">
+                      <div className="dept-assignment-dropdown">
+                        <button
+                          className="btn btn-sm btn-warning"
+                          onClick={() => setAssigningDept(
+                            assigningDept === doctor.DoctorId ? null : doctor.DoctorId
+                          )}
+                        >
+                          📋 Assign Department
+                        </button>
+                        
+                        {assigningDept === doctor.DoctorId && (
+                          <div className="dept-dropdown-content">
+                            {departments
+                              .filter(d => d.isActive)
+                              .map(d => (
+                                <div
+                                  key={d.id}
+                                  className={`dept-dropdown-item ${
+                                    d.id === doctor.DeparmentId ? 'selected' : ''
+                                  }`}
+                                  onClick={() => assignDoctor(doctor.DoctorId, d.id)}
+                                >
+                                  {d.name}
+                                  {d.id === doctor.DeparmentId && ' ✓'}
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        className="btn btn-sm btn-danger"
+                        onClick={() =>
+                          toggleDoctorStatus(
+                            doctor.DoctorId,
+                            doctor.IsActive,
+                            doctor.UserId,
+                            doctor.Name
+                          )
+                        }
+                      >
+                        Deactivate
+                      </button>
                     </div>
                   </div>
-                  <div className="doctor-actions">
-                    <select
-                      className="select"
-                      value={doctor.DeparmentId}
-                      onChange={(e) => assignDoctor(doctor.DoctorId, parseInt(e.target.value))}
-                    >
-                      <option value={doctor.DeparmentId}>
-                        {dept?.name || 'Select department...'}
-                      </option>
-                      {departments.filter(d => d.isActive && d.departmentId !== doctor.DeparmentId).map((d) => (
-                        <option key={d.departmentId} value={d.departmentId}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      className="btn btn-sm btn-danger"
-                      onClick={() => toggleDoctorStatus(
-                        doctor.DoctorId, 
-                        doctor.IsActive,
-                        doctor.UserId,
-                        doctor.Name
-                      )}
-                    >
-                      Deactivate
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+                );
+              })
+            )}
 
-        {inactiveDoctors.length > 0 && (
-          <div className="inactive-section">
-            <h3 className="inactive-title">
-              ⊘ Inactive Doctors ({inactiveDoctors.length})
-            </h3>
-            {inactiveDoctors.map((doctor) => {
-              const dept = departments.find(d => d.departmentId === doctor.DeparmentId);
-              return (
-                <div key={doctor.DoctorId} className="doctor-item">
-                  <div className="doctor-info">
-                    <div className="doctor-name" style={{ opacity: 0.6 }}>{doctor.Name}</div>
-                    <div className="doctor-meta">
-                      <span>🏥 {dept?.name || 'Unassigned'}</span>
-                      <span className="badge badge-inactive">Inactive</span>
+            {/* ===== Inactive Doctors ===== */}
+            {inactiveDoctors.length > 0 && (
+              <div className="inactive-section">
+                <h3 className="inactive-title">
+                  ⊘ Inactive Doctors ({inactiveDoctors.length})
+                </h3>
+
+                {inactiveDoctors.map((doctor) => {
+                  const dept = departments.find(d => d.id === doctor.DeparmentId);
+                  const hasNoDoctorRecord = doctors.findIndex(d => String(d.UserId) === String(doctor.UserId)) === -1;
+                  
+                  return (
+                    <div key={doctor.DoctorId} className="doctor-item">
+                      <div className="doctor-info">
+                        <h4 className="doctor-name" style={{ opacity: 0.6 }}>
+                          {doctor.Name}
+                          {hasNoDoctorRecord && (
+                            <span className="warning-badge" style={{ marginLeft: '0.5rem' }}>
+                              ⚠️ New - Needs Activation
+                            </span>
+                          )}
+                        </h4>
+                        <div className="doctor-meta">
+                          <span className="badge badge-inactive">○ Inactive</span>
+                          <span>🏥 {dept?.name || "Unassigned"}</span>
+                        </div>
+                      </div>
+
+                      <div className="doctor-actions">
+                        <button
+                          className="btn btn-sm btn-success"
+                          onClick={() =>
+                            toggleDoctorStatus(
+                              doctor.DoctorId,
+                              doctor.IsActive,
+                              doctor.UserId,
+                              doctor.Name
+                            )
+                          }
+                        >
+                          Activate
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="doctor-actions">
-                    <button
-                      className="btn btn-sm btn-success"
-                      onClick={() => toggleDoctorStatus(
-                        doctor.DoctorId, 
-                        doctor.IsActive,
-                        doctor.UserId,
-                        doctor.Name
-                      )}
-                    >
-                      Activate
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
-      </>
-    )}
-  </div>
+          </div>
 
           {/* User Management Section */}
           <div className="section">
             <div className="section-header">
               <h2 className="section-title">User Management</h2>
-              <button
-                className={showUserMgmt ? "btn btn-secondary" : "btn btn-primary"}
-                onClick={() => setShowUserMgmt(!showUserMgmt)}
-              >
-                {showUserMgmt ? "Hide Users" : "Manage Users"}
-              </button>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button
+                  className={showCreateUser ? "btn btn-secondary" : "btn btn-primary"}
+                  onClick={() => {
+                    setShowCreateUser(!showCreateUser);
+                    if (showUserMgmt && !showCreateUser) {
+                      // If we're showing the create form, also show the user list
+                    } else if (!showCreateUser) {
+                      setShowUserMgmt(false);
+                    }
+                  }}
+                >
+                  {showCreateUser ? "✕ Cancel" : "+ Create User"}
+                </button>
+                <button
+                  className={showUserMgmt ? "btn btn-secondary" : "btn btn-primary"}
+                  onClick={() => setShowUserMgmt(!showUserMgmt)}
+                >
+                  {showUserMgmt ? "Hide Users" : "View All Users"}
+                </button>
+              </div>
             </div>
+
+            {showCreateUser && (
+              <div className="input-group">
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="Username..."
+                  value={newUserName}
+                  onChange={(e) => setNewUserName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && newUserPassword && createUser()}
+                />
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="Password..."
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && newUserName && createUser()}
+                />
+                <button className="btn btn-success" onClick={createUser}>
+                  Create User
+                </button>
+              </div>
+            )}
 
             {showUserMgmt && (
               <div>
@@ -1095,7 +1230,7 @@ export default function AdminPanel() {
                             "Pending"
                           }
                           onChange={(e) => changeRole(user.UserId, e.target.value as UserRole)}
-                        >
+                        > 
                           <option value="Pending">Pending</option>
                           <option value="Admin">Admin</option>
                           <option value="Doctor">Doctor</option>

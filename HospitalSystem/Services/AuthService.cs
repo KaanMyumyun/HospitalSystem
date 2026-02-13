@@ -6,15 +6,19 @@ using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.Options;
+using HospitalSystem.Interface;
 
 
 public class AuthService : IAuthService
 {
+        private readonly ICurrentUserService _currentUser;
+
     private readonly PasswordHasher<UserEntity> _hasher;
     private readonly ApplicationDbContext _context;
     private readonly JwtSettings _jwtSettings;
-   public AuthService(ApplicationDbContext context,IOptions<JwtSettings> jwtOptions)
+   public AuthService(ApplicationDbContext context,IOptions<JwtSettings> jwtOptions,ICurrentUserService currentUser)
 {
+    _currentUser = currentUser;
     _context = context;
     _hasher = new PasswordHasher<UserEntity>();
     _jwtSettings = jwtOptions.Value;
@@ -78,6 +82,9 @@ public class AuthService : IAuthService
 
     public async Task<CreateUserResultDto> CreateUser(CreateUserDto dto)
     {
+         if (!_currentUser.IsInRole(UserRole.Admin))
+        return CreateUserResultDto.Fail("You are not allowed to create a doctor");
+
         
         if(string.IsNullOrWhiteSpace(dto.Name)||string.IsNullOrWhiteSpace(dto.Password))
         {

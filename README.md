@@ -271,131 +271,42 @@ The tests validate business logic, role-based authorization, and database state 
 
 ---
 
-## What Is Being Tested
+## Testing
 
-The current test suite covers the `ChangeDoctorsStatusAsync` method in `UserService`.
-
-### Covered Scenarios
-
-* Admin user can activate a doctor
-* Admin user can deactivate a doctor
-* Admin user can change doctor status successfully
-* Non-admin users cannot change doctor status
-* Attempting to set the same status fails
-* Attempting to change status for a non-existent doctor fails
-
-### Each test verifies:
-
-* Authorization rules
-* Correct success or failure responses
-* Correct persistence of changes in the database
+Unit tests are implemented for the `UserService`, focusing on service-layer business logic
+and role-based authorization. Tests are written using xUnit and validate both
+successful flows and failure scenarios.
 
 ---
 
-## What Is Being Tested
+### Covered Methods
 
-The current test suite covers the `ChangeRoleAsync` method in `UserService`.
-
-### Covered Scenarios
-
-* Non-admin users cannot change a user’s role
-* Admin users can successfully change a user’s role
-* Attempting to assign the same role fails
-* Attempting to change the role of a non-existent user fails
-* Attempting to assign an invalid role enum value fails
-* Attempting to assign the Pending role fails
-
-### Each test verifies:
-
-* Role-based authorization rules
-* Business rule validation for role changes
-* Correct success or failure responses
-* Correct persistence (or non-persistence) of role changes in the database
+- ChangeDoctorsStatusAsync
+- ChangeRoleAsync
+- CreateDoctorAsync
+- ListUsersAsync
+- ListDoctorsAsync
+- ResetPasswordAsync
 
 ---
 
-## What Is Being Tested
+### Tested Scenarios Include
 
-The current test suite covers the `CreateDoctorAsync` method in `UserService`.
-
-### Covered Scenarios
-
-* Non-admin users cannot create a doctor
-* Admin users can successfully create a doctor
-* Attempting to create a doctor for a non-existent user fails
-* Attempting to create a doctor with a non-existent department fails
-* Attempting to assign an invalid role enum value fails
-* Attempting to assign the Pending role fails
-* Attempting to create a doctor when the user already has the target role fails
-
-### Each test verifies:
-
-* Role-based authorization rules
-* Business rule validation during doctor creation
-* Correct success or failure responses
-* Correct persistence of changes in the database:
-
-* User role is updated appropriately
-* Doctor entity is created only on success
-* No database changes occur on failure
+- Admin vs non-admin authorization rules
+- Validation of business rules and input data
+- Handling of non-existent entities
+- Prevention of invalid state changes
+- Correct success and failure responses
+- Correct persistence or non-persistence of database changes
 
 ---
 
-## What Is Being Tested
+### What the Tests Verify
 
-The current test suite covers the `ListUsersAsync` method in `UserService`.
-
-### Covered Scenarios
-
-* Admin users can successfully retrieve a list of users
-* Non-admin users are not allowed to list users
-
-### Each test verifies:
-
-* Role-based authorization rules
-* Correct success or failure responses
-* Accurate mapping of user entities to user display DTOs
-* No modification of database state during the operation
-
----
-
-## What Is Being Tested
-
-The current test suite covers the `ListDoctorsAsync` method in `UserService`.
-
-### Covered Scenarios
-
-* Admin users can successfully retrieve a list of doctors
-* Non-admin users are not allowed to list doctors
-
-### Each test verifies:
-
-* Role-based authorization rules
-* Correct success or failure responses
-* Accurate mapping of doctor-related data to doctor display DTOs
-* Correct inclusion of doctor status (active/inactive)
-* No modification of database state during the operation
-
----
-
-## What Is Being Tested
-
-The current test suite covers the `ResetPasswordAsync` method in `UserService`.
-
-### Covered Scenarios
-
-* Admin users can successfully reset a user’s password
-* Non-admin users are not allowed to reset passwords
-* Attempting to reset the password for a non-existent user fails
-* Attempting to reset the password with an empty password fails
-
-### Each test verifies:
-
-* Role-based authorization rules
-* Validation of password input
-* Correct success or failure responses
-* Correct persistence of password changes in the database
-* No unintended side effects on unrelated entities
+- Role-based authorization is enforced
+- Business logic behaves as expected in edge cases
+- Database state is modified only on successful operations
+- No unintended side effects occur during read-only operations
 
 ---
 
@@ -463,7 +374,12 @@ Alternatively, tests can be executed using Visual Studio Test Explorer.
 
 ## Future Test Coverage
 
+* DepartmentService
+* AuthService
+* AppointmentService
+* CurrentUserService (authorization edge cases)
 
+--- 
 
 ## Planned Cloud Hosting
 
@@ -475,19 +391,30 @@ Alternatively, tests can be executed using Visual Studio Test Explorer.
 
 ---
 
-## Containerization (Planned)
+## Containerization
 
-* Dockerfile for ASP.NET Core API
-* Dockerfile for React frontend
-* Docker Compose for local and cloud parity
+The project supports full containerization using Docker.
 
----
+* Multi-stage Dockerfile for ASP.NET Core Web API
+* Dockerfile for React + Vite frontend (served via Nginx)
+* PostgreSQL container with persistent volume
+* Docker Compose for local development and deployment parity
 
-## Testing (Planned)
+## Running with Docker
 
-* Unit tests for business logic
-* Integration tests for API endpoints
-* Frontend component tests
+The application can be run fully containerized using Docker Compose.
+
+### Prerequisites
+
+* Docker
+* Docker Compose
+
+### Start the application
+
+From the project root:
+
+```bash
+docker compose up --build
 
 ---
 
@@ -502,9 +429,10 @@ Alternatively, tests can be executed using Visual Studio Test Explorer.
 
 ## Known Limitations
 
-* No automated tests yet
 * UI still under development
-* No Docker deployment yet
+* Limited unit test coverage (currently focused on DeparmentServices)
+* No production deployment yet
+
 
 ---
 
