@@ -47,6 +47,9 @@ The system is divided into two independent layers:
 * npm
 
 ---
+
+## Project Structure
+
 .
 ├── hospital-frontend/              # Frontend (React + TypeScript + Vite)
 │   ├── public/
