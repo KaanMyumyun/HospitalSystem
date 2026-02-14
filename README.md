@@ -47,27 +47,91 @@ The system is divided into two independent layers:
 * npm
 
 ---
-
-## Project Structure
-
-```
-HospitalSystem
-├── HospitalSystem.Api/
-│   ├── Controllers
-│   ├── DTOs
-│   ├── Models
-│   ├── Services
-│   └── Program.cs
+.
+├── hospital-frontend/              # Frontend (React + TypeScript + Vite)
+│   ├── public/
+│   ├── src/
+│   │   ├── api/                    # API communication layer
+│   │   │   ├── appointmentApi.ts
+│   │   │   ├── authApi.ts
+│   │   │   ├── departmentApi.ts
+│   │   │   ├── http.ts
+│   │   │   ├── unwrapServiceResult.ts
+│   │   │   └── userApi.ts
+│   │   ├── components/             # Reusable UI components
+│   │   ├── lib/                    # Shared utilities/helpers
+│   │   ├── pages/                  # Application pages
+│   │   │   ├── AdminPanel.tsx
+│   │   │   ├── Appointmentbooking.tsx
+│   │   │   ├── LoginPage.tsx
+│   │   │   └── ReceptionDashboard.tsx
+│   │   ├── types/                  # TypeScript type definitions
+│   │   │   ├── appointment.ts
+│   │   │   ├── appointmentStatus.ts
+│   │   │   ├── auth.ts
+│   │   │   ├── department.ts
+│   │   │   ├── serviceResult.ts
+│   │   │   ├── user.ts
+│   │   │   └── userRole.ts
+│   │   ├── App.tsx
+│   │   ├── main.tsx
+│   │   └── index.css
+│   ├── Dockerfile
+│   ├── vite.config.ts
+│   ├── tailwind.config.js
+│   ├── package.json
+│   └── README.md
 │
-├── front-end/
-│   ├── src
-│   ├── public
-│   └── vite.config.ts
+├── HospitalSystem/                 # Backend (ASP.NET Core Web API)
+│   ├── Controllers/
+│   │   ├── AppointmentsController.cs
+│   │   ├── AuthController.cs
+│   │   ├── DepartmentsController.cs
+│   │   └── UsersController.cs
+│   ├── Entities/                   # Database entities
+│   │   ├── ApointmentsEntity.cs
+│   │   ├── DepartmentEntity.cs
+│   │   ├── DoctorEntity.cs
+│   │   ├── PatiensEntity.cs
+│   │   ├── RoleEntity.cs
+│   │   └── UserEntity.cs
+│   ├── Enums/
+│   │   ├── AppointmentStatus.cs
+│   │   ├── JwtSettings.cs
+│   │   └── UserRole.cs
+│   ├── Interface/                  # Service interfaces
+│   │   ├── IAppointmentService.cs
+│   │   ├── IAuthService.cs
+│   │   ├── ICurrentUserService.cs
+│   │   ├── IDepartmentService.cs
+│   │   └── IUserService.cs
+│   ├── Services/                   # Business logic
+│   │   ├── AppointmentService.cs
+│   │   ├── AuthService.cs
+│   │   ├── CurrentUserService.cs
+│   │   ├── DepartmentService.cs
+│   │   └── UserService.cs
+│   ├── Migrations/
+│   ├── Data/                       # Database context/config
+│   ├── Program.cs
+│   ├── appsettings.json
+│   ├── appsettings.Development.json
+│   ├── Dockerfile
+│   └── HospitalSystem.csproj
 │
-└── HospitalSystem.sln
-```
+├── MyApp.Tests/                    # Unit Tests
+│   ├── Services/
+│   │   ├── AppointmentServiceTests.cs
+│   │   └── UserServiceTests.cs
+│   ├── Controllers/
+│   ├── GlobalUsings.cs
+│   └── MyApp.Tests.csproj
+│
+├── docker-compose.yml              # Docker orchestration
+├── HospitalSystem.sln              # Solution file
+├── .dockerignore
+└── README.md
 
----
 
 ## Getting Started
 
