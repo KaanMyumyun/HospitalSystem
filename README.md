@@ -47,6 +47,7 @@ The system is divided into two independent layers:
 * npm
 
 ---
+
 .
 ├── hospital-frontend/              # Frontend (React + TypeScript + Vite)
 │   ├── public/
@@ -132,6 +133,7 @@ The system is divided into two independent layers:
 ├── .dockerignore
 └── README.md
 
+---
 
 ## Getting Started
 
