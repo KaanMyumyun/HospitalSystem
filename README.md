@@ -50,6 +50,7 @@ The system is divided into two independent layers:
 
 ## Project Structure
 
+```text
 .
 ├── hospital-frontend/              # Frontend (React + TypeScript + Vite)
 │   ├── public/
@@ -115,7 +116,7 @@ The system is divided into two independent layers:
 │   │   ├── DepartmentService.cs
 │   │   └── UserService.cs
 │   ├── Migrations/
-│   ├── Data/                       # Database context & configuration
+│   ├── Data/
 │   ├── Program.cs
 │   ├── appsettings.json
 │   ├── appsettings.Development.json
@@ -130,11 +131,12 @@ The system is divided into two independent layers:
 │   ├── GlobalUsings.cs
 │   └── MyApp.Tests.csproj
 │
-├── docker-compose.yml              # Docker orchestration
-├── HospitalSystem.sln              # Solution file
+├── docker-compose.yml
+├── HospitalSystem.sln
 ├── .dockerignore
 └── README.md
 
+```
 
 ---
 
