@@ -47,7 +47,6 @@ The system is divided into two independent layers:
 * npm
 
 ---
-
 .
 ├── hospital-frontend/              # Frontend (React + TypeScript + Vite)
 │   ├── public/
@@ -113,7 +112,7 @@ The system is divided into two independent layers:
 │   │   ├── DepartmentService.cs
 │   │   └── UserService.cs
 │   ├── Migrations/
-│   ├── Data/                       # Database context/config
+│   ├── Data/                       # Database context & configuration
 │   ├── Program.cs
 │   ├── appsettings.json
 │   ├── appsettings.Development.json
@@ -132,6 +131,7 @@ The system is divided into two independent layers:
 ├── HospitalSystem.sln              # Solution file
 ├── .dockerignore
 └── README.md
+
 
 ---
 
