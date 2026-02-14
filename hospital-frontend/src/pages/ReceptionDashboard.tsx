@@ -1,104 +1,178 @@
 import { useState, useEffect } from "react";
-import { ViewAppointment, CreateAppointment, CancelAppointment } from "@/api/appointmentApi";
-import type { AppointmentStatus } from "@/types/appointmentStatus";
-import type { ViewAppointmentDto } from "@/types/appointment";
+import { ViewDepartment } from "@/api/departmentApi";
+import { ListDoctors, ListUsers } from "@/api/userApi";
+import { CreateAppointment } from "@/api/appointmentApi";
+import type { ViewDepartmentDto } from "@/types/department";
+import { DoctorDisplayDto, UserDisplayDto } from "@/types/user";
 
-export default function ReceptionDashboard() {
-  const [appointments, setAppointments] = useState<ViewAppointmentDto[]>([]);
-  const [filteredAppointments, setFilteredAppointments] = useState<ViewAppointmentDto[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [searchTerm, setSearchTerm] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<AppointmentStatus | "All">("All");
-  const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
-  const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
-  const [selectedAppointment, setSelectedAppointment] = useState<ViewAppointmentDto | null>(null);
+export default function SimpleAppointmentBooking() {
+  const [departments, setDepartments] = useState<ViewDepartmentDto[]>([]);
+  const [doctors, setDoctors] = useState<DoctorDisplayDto[]>([]);
+  const [users, setUsers] = useState<UserDisplayDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  const [showDeptList, setShowDeptList] = useState(false);
+  const [expandedDepts, setExpandedDepts] = useState<Set<number>>(new Set());
+  const [selectedDoctor, setSelectedDoctor] = useState<DoctorDisplayDto | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<{ doctorId: number; dateTime: string } | null>(null);
+  const [patientId, setPatientId] = useState("");
+  
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  const [createForm, setCreateForm] = useState({
-    DoctorId: "",
-    PatientId: "",
-    AppointmentTime: "",
-  });
-
-  const [cancelForm, setCancelForm] = useState({
-    Reason: "",
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
+    const today = new Date();
+    const day = today.getDay();
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(today.setDate(diff));
   });
 
   useEffect(() => {
-    loadAppointments();
+    loadData();
   }, []);
 
-  useEffect(() => {
-    filterAppointments();
-  }, [appointments, searchTerm, statusFilter]);
-
-  const loadAppointments = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const data = await ViewAppointment({} as ViewAppointmentDto);
-      setAppointments(data);
+      const [deptData, doctorData, userData] = await Promise.all([
+        ViewDepartment(),
+        ListDoctors(),
+        ListUsers()
+      ]);
+      
+      const normalizedUsers = userData.map((user: any) => ({
+        UserId: user.UserId ?? user.userId ?? user.id ?? user.Id,
+        UserName: user.UserName ?? user.userName ?? user.name ?? user.Name,
+        Role: user.Role ?? user.role,
+      }));
+      
+      setDepartments(deptData.filter(d => d.isActive));
+      setDoctors(doctorData);
+      setUsers(normalizedUsers as UserDisplayDto[]);
     } catch (error) {
-      showNotification("error", "Failed to load appointments");
+      showNotification("error", "Failed to load data");
     } finally {
       setLoading(false);
     }
   };
 
-  const filterAppointments = () => {
-    let filtered = appointments;
-
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (apt) =>
-          apt.DoctorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          apt.PatientName?.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
-          apt.AppointmentId.toString().includes(searchTerm)
-      );
+  const buildCurrentDoctors = () => {
+    if (users.length === 0) {
+      return [];
     }
-
-    if (statusFilter !== "All") {
-      filtered = filtered.filter((apt) => apt.Status === statusFilter);
+    
+    const doctorUsers = users.filter(u => u.Role === "Doctor");
+    
+    if (doctorUsers.length === 0) {
+      return [];
     }
-
-    setFilteredAppointments(filtered);
+    
+    return doctorUsers.map(user => {
+      const doctorRecord = doctors.find(d => {
+        const dUserId = (d as any).UserId ?? (d as any).userId ?? d.UserId;
+        return String(dUserId) === String(user.UserId);
+      });
+      
+      if (doctorRecord) {
+        return {
+          DoctorId: (doctorRecord as any).DoctorId ?? (doctorRecord as any).doctorId ?? doctorRecord.DoctorId,
+          UserId: (doctorRecord as any).UserId ?? (doctorRecord as any).userId ?? doctorRecord.UserId,
+          Name: user.UserName || (doctorRecord as any).Name || (doctorRecord as any).name || doctorRecord.Name,
+          DeparmentId: (doctorRecord as any).DeparmentId ?? (doctorRecord as any).deparmentId ?? (doctorRecord as any).departmentId ?? doctorRecord.DeparmentId ?? 0,
+          IsActive: (doctorRecord as any).IsActive ?? (doctorRecord as any).isActive ?? doctorRecord.IsActive ?? false,
+        } as DoctorDisplayDto;
+      } else {
+        return {
+          DoctorId: user.UserId,
+          UserId: user.UserId,
+          Name: user.UserName,
+          DeparmentId: 0,
+          IsActive: false,
+        } as DoctorDisplayDto;
+      }
+    });
   };
 
-  const handleCreateAppointment = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const currentDoctors = buildCurrentDoctors();
+
+  const getDoctorsByDepartment = (deptId: number) => {
+    return currentDoctors.filter(d => d.DeparmentId === deptId && d.IsActive);
+  };
+
+  const toggleExpand = (deptId: number) => {
+    const newExpanded = new Set(expandedDepts);
+    if (newExpanded.has(deptId)) {
+      newExpanded.delete(deptId);
+    } else {
+      newExpanded.add(deptId);
+    }
+    setExpandedDepts(newExpanded);
+  };
+
+  const handleDoctorClick = (doctor: DoctorDisplayDto) => {
+    setSelectedDoctor(doctor);
+  };
+
+  const generateWeekDays = () => {
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(currentWeekStart);
+      date.setDate(currentWeekStart.getDate() + i);
+      days.push(date);
+    }
+    return days;
+  };
+
+  const generateTimeSlots = () => {
+    return ['14:30', '14:50', '15:10', '15:30', '15:50', '16:10', '16:30', '16:50'];
+  };
+
+  const formatDate = (date: Date) => {
+    const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
+    const dateStr = date.toLocaleDateString('en-US', { day: '2-digit', month: '2-digit' });
+    return `${weekday}, ${dateStr}`;
+  };
+
+  const goToPreviousWeek = () => {
+    const newDate = new Date(currentWeekStart);
+    newDate.setDate(newDate.getDate() - 7);
+    setCurrentWeekStart(newDate);
+  };
+
+  const goToNextWeek = () => {
+    const newDate = new Date(currentWeekStart);
+    newDate.setDate(newDate.getDate() + 7);
+    setCurrentWeekStart(newDate);
+  };
+
+  const handleSlotClick = (doctorId: number, date: Date, time: string) => {
+    const [hours, minutes] = time.split(':');
+    const dateTime = new Date(date);
+    dateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    setSelectedSlot({ doctorId, dateTime: dateTime.toISOString() });
+    setShowConfirmModal(true);
+  };
+
+  const handleCreateAppointment = async () => {
+    if (!selectedSlot || !patientId) {
+      showNotification("error", "Please enter patient ID");
+      return;
+    }
+
     const result = await CreateAppointment({
-      DoctorId: parseInt(createForm.DoctorId),
-      PatientId: parseInt(createForm.PatientId),
-      AppointmentTime: createForm.AppointmentTime,
+      DoctorId: selectedSlot.doctorId,
+      PatientId: parseInt(patientId),
+      AppointmentTime: selectedSlot.dateTime,
     });
 
     if (result.isSuccess) {
       showNotification("success", "Appointment created successfully");
-      setShowCreateModal(false);
-      setCreateForm({ DoctorId: "", PatientId: "", AppointmentTime: "" });
-      loadAppointments();
+      setShowConfirmModal(false);
+      setSelectedSlot(null);
+      setPatientId("");
+      loadData();
     } else {
       showNotification("error", result.error || "Failed to create appointment");
-    }
-  };
-
-  const handleCancelAppointment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedAppointment) return;
-
-    const result = await CancelAppointment({
-      AppointmentId: selectedAppointment.AppointmentId,
-      Status: "Cancelled" as AppointmentStatus,
-      Reason: cancelForm.Reason,
-    });
-
-    if (result.isSuccess) {
-      showNotification("success", "Appointment cancelled successfully");
-      setShowCancelModal(false);
-      setCancelForm({ Reason: "" });
-      setSelectedAppointment(null);
-      loadAppointments();
-    } else {
-      showNotification("error", result.error || "Failed to cancel appointment");
     }
   };
 
@@ -107,31 +181,18 @@ export default function ReceptionDashboard() {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  const getStatusColor = (status: AppointmentStatus): string => {
-    const colors: Record<AppointmentStatus, string> = {
-      Scheduled: "badge-scheduled",
-      Completed: "badge-success",
-      Cancelled: "badge-cancelled",
-      NoShow: "badge-inactive",
-    };
-    return colors[status] || "badge-inactive";
+  const getDepartmentName = (deptId: number) => {
+    return departments.find(d => d.id === deptId)?.name || '';
   };
 
-  const formatDateTime = (dateTime: string) => {
-    const date = new Date(dateTime);
-    return {
-      date: date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      time: date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-    };
-  };
-
-  const statusOptions: (AppointmentStatus | "All")[] = ["All", "Scheduled", "Completed", "Cancelled", "NoShow"];
+  const weekDays = generateWeekDays();
+  const timeSlots = generateTimeSlots();
 
   if (loading) {
     return (
       <div className="loading-container">
         <div className="loading-spinner"></div>
-        <p>Loading Appointments...</p>
+        <p>Loading...</p>
         <style>{`
           .loading-container {
             min-height: 100vh;
@@ -167,13 +228,10 @@ export default function ReceptionDashboard() {
         
         :root {
           --primary: #0a4d68;
-          --primary-dark: #05334a;
           --secondary: #088395;
           --accent: #05bfdb;
           --success: #00d9a5;
-          --warning: #ffa726;
           --danger: #ff5252;
-          --scheduled: #3b82f6;
           --bg: #f8fafc;
           --surface: #ffffff;
           --text: #1e293b;
@@ -196,7 +254,7 @@ export default function ReceptionDashboard() {
           line-height: 1.6;
         }
 
-        .reception-dashboard {
+        .booking-page {
           min-height: 100vh;
           background: linear-gradient(135deg, #f8fafc 0%, #e0f2f7 100%);
         }
@@ -222,7 +280,7 @@ export default function ReceptionDashboard() {
         }
 
         .header-content {
-          max-width: 1400px;
+          max-width: 1200px;
           margin: 0 auto;
           position: relative;
           z-index: 1;
@@ -243,70 +301,9 @@ export default function ReceptionDashboard() {
         }
 
         .container {
-          max-width: 1400px;
+          max-width: 1200px;
           margin: 0 auto;
           padding: 2rem;
-        }
-
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-          gap: 1.5rem;
-          margin-bottom: 3rem;
-          animation: slideUp 0.6s ease-out;
-        }
-
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .stat-card {
-          background: var(--surface);
-          padding: 1.75rem;
-          border-radius: 16px;
-          box-shadow: 0 2px 12px var(--shadow);
-          border: 1px solid var(--border);
-          transition: all 0.3s ease;
-          position: relative;
-          overflow: hidden;
-        }
-
-        .stat-card::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 4px;
-          height: 100%;
-          background: linear-gradient(to bottom, var(--accent), var(--secondary));
-        }
-
-        .stat-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 8px 24px var(--shadow-lg);
-        }
-
-        .stat-label {
-          font-size: 0.875rem;
-          color: var(--text-muted);
-          font-weight: 500;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          margin-bottom: 0.5rem;
-        }
-
-        .stat-value {
-          font-size: 2.5rem;
-          font-weight: 700;
-          color: var(--primary);
-          line-height: 1;
         }
 
         .section {
@@ -317,7 +314,6 @@ export default function ReceptionDashboard() {
           box-shadow: 0 2px 16px var(--shadow);
           border: 1px solid var(--border);
           animation: slideUp 0.6s ease-out;
-          animation-fill-mode: both;
         }
 
         .section-header {
@@ -327,6 +323,8 @@ export default function ReceptionDashboard() {
           margin-bottom: 2rem;
           padding-bottom: 1rem;
           border-bottom: 2px solid var(--border);
+          flex-wrap: wrap;
+          gap: 1rem;
         }
 
         .section-title {
@@ -340,6 +338,138 @@ export default function ReceptionDashboard() {
           font-size: 0.95rem;
           color: var(--text-muted);
           margin-top: 0.25rem;
+        }
+
+        .dept-card {
+          background: white;
+          border: 2px solid var(--border);
+          border-radius: 16px;
+          padding: 1.5rem;
+          margin-bottom: 1rem;
+          transition: all 0.3s ease;
+        }
+
+        .dept-card:hover {
+          border-color: var(--accent);
+          box-shadow: 0 4px 16px var(--shadow);
+        }
+
+        .dept-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 1rem;
+        }
+
+        .dept-info h3 {
+          font-size: 1.5rem;
+          color: var(--primary);
+          margin-bottom: 0.5rem;
+          font-weight: 600;
+        }
+
+        .dept-meta {
+          display: flex;
+          gap: 1rem;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+
+        .dept-actions {
+          display: flex;
+          gap: 0.5rem;
+        }
+
+        .doctor-list {
+          margin-top: 1.5rem;
+          padding-top: 1.5rem;
+          border-top: 2px solid var(--border);
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+
+        .doctor-item {
+          background: var(--bg);
+          padding: 1rem 1.5rem;
+          border-radius: 12px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          border: 2px solid transparent;
+        }
+
+        .doctor-item:hover {
+          background: white;
+          border-color: var(--accent);
+          transform: translateX(4px);
+          box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .doctor-item.selected {
+          background: linear-gradient(135deg, rgba(10, 77, 104, 0.1) 0%, rgba(8, 131, 149, 0.1) 100%);
+          border-color: var(--primary);
+          box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .doctor-item-content {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .doctor-avatar-small {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 1.125rem;
+          font-weight: 700;
+          box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .doctor-name {
+          font-weight: 600;
+          color: var(--text);
+          font-size: 1rem;
+        }
+
+        .badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 0.375rem 0.875rem;
+          border-radius: 20px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .badge-success {
+          background: rgba(0, 217, 165, 0.15);
+          color: var(--success);
+        }
+
+        .badge-scheduled {
+          background: rgba(59, 130, 246, 0.15);
+          color: #3b82f6;
+        }
+
+        .badge-cancelled {
+          background: rgba(255, 82, 82, 0.15);
+          color: var(--danger);
+        }
+
+        .badge-inactive {
+          background: rgba(100, 116, 139, 0.15);
+          color: var(--text-muted);
         }
 
         .btn {
@@ -378,166 +508,201 @@ export default function ReceptionDashboard() {
           border-color: var(--primary);
         }
 
-        .btn-danger {
-          background: var(--danger);
-          color: white;
-        }
-
-        .btn-danger:hover {
-          background: #ff3838;
-        }
-
         .btn-sm {
           padding: 0.5rem 1rem;
           font-size: 0.875rem;
         }
 
-        .search-filter-bar {
-          display: flex;
-          gap: 1rem;
-          margin-bottom: 2rem;
-          padding: 1.5rem;
-          background: var(--bg);
-          border-radius: 12px;
-          border: 2px dashed var(--border);
-          flex-wrap: wrap;
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
-        .search-box {
-          flex: 1;
-          min-width: 250px;
-          position: relative;
-        }
-
-        .search-icon {
-          position: absolute;
-          left: 1rem;
-          top: 50%;
-          transform: translateY(-50%);
-          color: var(--text-muted);
-          font-size: 1.2rem;
-        }
-
-        .input {
-          width: 100%;
-          padding: 0.875rem 1.25rem 0.875rem 2.75rem;
-          border: 2px solid var(--border);
-          border-radius: 10px;
-          font-size: 1rem;
-          font-family: 'Poppins', sans-serif;
-          transition: all 0.3s ease;
-          background: white;
-        }
-
-        .input:focus {
-          outline: none;
-          border-color: var(--accent);
-          box-shadow: 0 0 0 3px rgba(5, 191, 219, 0.1);
-        }
-
-        .select {
-          padding: 0.875rem 1.25rem;
-          border: 2px solid var(--border);
-          border-radius: 10px;
-          font-family: 'Poppins', sans-serif;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          background: white;
-          font-size: 1rem;
-          font-weight: 500;
-        }
-
-        .select:focus {
-          outline: none;
-          border-color: var(--accent);
-          box-shadow: 0 0 0 3px rgba(5, 191, 219, 0.1);
-        }
-
-        .appointment-card {
-          background: white;
-          border: 2px solid var(--border);
+        .schedule-section {
+          background: var(--surface);
           border-radius: 16px;
-          padding: 1.5rem;
-          margin-bottom: 1rem;
-          transition: all 0.3s ease;
+          padding: 0;
+          box-shadow: none;
+          border: none;
         }
 
-        .appointment-card:hover {
-          border-color: var(--accent);
-          box-shadow: 0 4px 16px var(--shadow);
-        }
-
-        .appointment-header {
+        .schedule-header {
           display: flex;
           justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 1rem;
+          align-items: center;
+          margin-bottom: 2rem;
+          padding-bottom: 1.5rem;
+          border-bottom: 2px solid var(--border);
           flex-wrap: wrap;
           gap: 1rem;
         }
 
-        .appointment-id {
-          font-size: 1.5rem;
+        .doctor-info {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .doctor-avatar {
+          width: 60px;
+          height: 60px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 1.75rem;
           font-weight: 700;
+          box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .doctor-details h3 {
+          font-size: 1.5rem;
           color: var(--primary);
+          font-weight: 600;
+          margin-bottom: 0.25rem;
         }
 
-        .appointment-grid {
+        .doctor-details p {
+          color: var(--text-muted);
+          font-size: 0.95rem;
+        }
+
+        .week-nav {
+          display: flex;
+          gap: 0.75rem;
+          align-items: center;
+        }
+
+        .nav-btn {
+          background: white;
+          border: 2px solid var(--border);
+          padding: 0.75rem 1.5rem;
+          border-radius: 10px;
+          cursor: pointer;
+          font-weight: 600;
+          color: var(--primary);
+          transition: all 0.2s;
+          font-family: 'Poppins', sans-serif;
+          font-size: 0.95rem;
+        }
+
+        .nav-btn:hover {
+          border-color: var(--accent);
+          background: #f0fdff;
+        }
+
+        .calendar-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 1.5rem;
-          margin-top: 1rem;
+          grid-template-columns: repeat(7, 1fr);
+          gap: 0.75rem;
+          margin-bottom: 1.5rem;
         }
 
-        .appointment-field {
+        .day-header {
+          text-align: center;
+          padding: 1rem;
+          background: linear-gradient(135deg, rgba(10, 77, 104, 0.05) 0%, rgba(8, 131, 149, 0.05) 100%);
+          border-radius: 12px;
+          border: 2px solid var(--border);
+        }
+
+        .day-name {
+          font-weight: 600;
+          color: var(--primary);
+          font-size: 0.875rem;
+          text-transform: uppercase;
+          margin-bottom: 0.25rem;
+        }
+
+        .day-date {
+          font-size: 0.8rem;
+          color: var(--text-muted);
+        }
+
+        .slots-grid {
+          display: grid;
+          grid-template-columns: repeat(7, 1fr);
+          gap: 0.75rem;
+        }
+
+        .day-column {
           display: flex;
           flex-direction: column;
-          gap: 0.25rem;
+          gap: 0.75rem;
         }
 
-        .appointment-label {
-          font-size: 0.75rem;
-          color: var(--text-muted);
-          font-weight: 500;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-
-        .appointment-value {
-          font-size: 1rem;
+        .time-slot {
+          background: white;
+          border: 2px solid var(--accent);
+          border-radius: 10px;
+          padding: 1rem 0.5rem;
+          text-align: center;
+          cursor: pointer;
+          transition: all 0.2s ease;
           font-weight: 600;
-          color: var(--text);
+          color: var(--primary);
+          font-size: 0.875rem;
+          position: relative;
+          box-shadow: 0 2px 4px rgba(5, 191, 219, 0.1);
         }
 
-        .badge {
-          display: inline-flex;
-          align-items: center;
-          padding: 0.375rem 0.875rem;
-          border-radius: 20px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
+        .time-slot:hover {
+          background: #f0fdff;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(5, 191, 219, 0.2);
+          border-color: var(--secondary);
         }
 
-        .badge-success {
-          background: rgba(0, 217, 165, 0.15);
+        .time-slot::before {
+          content: '✓';
+          position: absolute;
+          left: 0.5rem;
+          top: 0.5rem;
           color: var(--success);
+          font-size: 0.75rem;
         }
 
-        .badge-scheduled {
-          background: rgba(59, 130, 246, 0.15);
-          color: var(--scheduled);
+        .empty-slot {
+          min-height: 65px;
+          background: var(--bg);
+          border: 2px dashed var(--border);
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #cbd5e1;
+          font-size: 1.5rem;
         }
 
-        .badge-cancelled {
-          background: rgba(255, 82, 82, 0.15);
-          color: var(--danger);
-        }
-
-        .badge-inactive {
-          background: rgba(100, 116, 139, 0.15);
+        .empty-state {
+          text-align: center;
+          padding: 4rem 2rem;
           color: var(--text-muted);
+        }
+
+        .empty-state-icon {
+          font-size: 5rem;
+          margin-bottom: 1.5rem;
+          opacity: 0.3;
+        }
+
+        .empty-state h3 {
+          font-size: 1.5rem;
+          color: var(--text);
+          margin-bottom: 0.5rem;
+          font-weight: 600;
+        }
+
+        .empty-state p {
+          font-size: 1.05rem;
         }
 
         .modal-overlay {
@@ -562,7 +727,7 @@ export default function ReceptionDashboard() {
           background: white;
           border-radius: 20px;
           box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-          max-width: 600px;
+          max-width: 500px;
           width: 100%;
           overflow: hidden;
           animation: scaleIn 0.3s ease-out;
@@ -585,10 +750,6 @@ export default function ReceptionDashboard() {
           padding: 2rem;
           position: relative;
           overflow: hidden;
-        }
-
-        .modal-header.danger {
-          background: linear-gradient(135deg, var(--danger) 0%, #ff3838 100%);
         }
 
         .modal-header::before {
@@ -654,60 +815,90 @@ export default function ReceptionDashboard() {
           letter-spacing: 0.5px;
         }
 
-        .form-input,
-        .form-textarea {
-          width: 100%;
-          padding: 0.875rem 1.25rem;
+        .appointment-info {
+          background: var(--bg);
+          border-radius: 12px;
+          padding: 1.5rem;
+          margin-bottom: 1.5rem;
           border: 2px solid var(--border);
-          border-radius: 10px;
+        }
+
+        .info-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 0.75rem 0;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .info-row:last-child {
+          border-bottom: none;
+        }
+
+        .info-label {
+          color: var(--text-muted);
+          font-size: 0.875rem;
+          font-weight: 500;
+        }
+
+        .info-value {
+          font-weight: 600;
+          color: var(--primary);
+        }
+
+        .form-input {
+          width: 100%;
+          padding: 1rem 1.25rem;
+          border: 2px solid var(--border);
+          border-radius: 12px;
           font-size: 1rem;
           font-family: 'Poppins', sans-serif;
           transition: all 0.3s ease;
         }
 
-        .form-input:focus,
-        .form-textarea:focus {
+        .form-input:focus {
           outline: none;
           border-color: var(--accent);
           box-shadow: 0 0 0 3px rgba(5, 191, 219, 0.1);
         }
 
-        .form-textarea {
-          resize: none;
-          min-height: 120px;
-        }
-
-        .cancel-info {
-          background: var(--bg);
-          border-radius: 12px;
-          padding: 1.25rem;
-          margin-bottom: 1.5rem;
-          border: 2px solid var(--border);
-        }
-
-        .cancel-info-label {
-          font-size: 0.875rem;
-          color: var(--text-muted);
-          margin-bottom: 0.5rem;
-          font-weight: 500;
-        }
-
-        .cancel-info-value {
-          font-weight: 700;
-          color: var(--primary);
-          font-size: 1.25rem;
-        }
-
-        .cancel-info-subvalue {
-          font-size: 0.95rem;
-          color: var(--text);
-          margin-top: 0.5rem;
-        }
-
         .modal-actions {
           display: flex;
           gap: 1rem;
-          padding-top: 1rem;
+          margin-top: 1.5rem;
+        }
+
+        .btn {
+          padding: 1rem 2rem;
+          border: none;
+          border-radius: 12px;
+          font-weight: 600;
+          font-size: 1rem;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          font-family: 'Poppins', sans-serif;
+          flex: 1;
+        }
+
+        .btn-primary {
+          background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+          color: white;
+          box-shadow: 0 4px 12px rgba(8, 131, 149, 0.3);
+        }
+
+        .btn-primary:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(8, 131, 149, 0.4);
+        }
+
+        .btn-secondary {
+          background: var(--bg);
+          color: var(--primary);
+          border: 2px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+          background: white;
+          border-color: var(--primary);
         }
 
         .notification {
@@ -747,16 +938,11 @@ export default function ReceptionDashboard() {
           color: white;
         }
 
-        .empty-state {
-          text-align: center;
-          padding: 3rem;
-          color: var(--text-muted);
-        }
-
-        .empty-state-icon {
-          font-size: 4rem;
-          margin-bottom: 1rem;
-          opacity: 0.3;
+        @media (max-width: 1024px) {
+          .calendar-grid,
+          .slots-grid {
+            grid-template-columns: repeat(4, 1fr);
+          }
         }
 
         @media (max-width: 768px) {
@@ -764,209 +950,186 @@ export default function ReceptionDashboard() {
             font-size: 2rem;
           }
 
-          .appointment-grid {
-            grid-template-columns: 1fr;
+          .calendar-grid,
+          .slots-grid {
+            grid-template-columns: repeat(3, 1fr);
           }
 
-          .search-filter-bar {
+          .schedule-header {
             flex-direction: column;
+            align-items: flex-start;
           }
+        }
 
-          .appointment-header {
-            flex-direction: column;
+        @media (max-width: 480px) {
+          .calendar-grid,
+          .slots-grid {
+            grid-template-columns: repeat(2, 1fr);
           }
         }
       `}</style>
 
-      <div className="reception-dashboard">
+      <div className="booking-page">
         <div className="header">
           <div className="header-content">
-            <h1>Reception Dashboard</h1>
-            <p>Manage appointments and patient scheduling</p>
+            <h1>Book Appointment</h1>
+            <p>Select department and doctor to book an appointment</p>
           </div>
         </div>
 
         <div className="container">
-          <div className="stats-grid">
-            <div className="stat-card">
-              <div className="stat-label">Total Appointments</div>
-              <div className="stat-value">{appointments.length}</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Scheduled</div>
-              <div className="stat-value">{appointments.filter((a) => a.Status === "Scheduled").length}</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Completed</div>
-              <div className="stat-value">{appointments.filter((a) => a.Status === "Completed").length}</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Cancelled</div>
-              <div className="stat-value">
-                {appointments.filter((a) => a.Status === "Cancelled" || a.Status === "NoShow").length}
-              </div>
-            </div>
-          </div>
-
+          {/* Department Selection Section */}
           <div className="section">
             <div className="section-header">
               <div>
-                <h2 className="section-title">Appointment Management</h2>
-                <p className="section-subtitle">{filteredAppointments.length} appointments found</p>
+                <h2 className="section-title">Select Doctor</h2>
+                <p className="section-subtitle">Browse departments and choose a doctor</p>
               </div>
-              <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-                + New Appointment
+              <button
+                className={showDeptList ? "btn btn-secondary" : "btn btn-primary"}
+                onClick={() => setShowDeptList(!showDeptList)}
+              >
+                {showDeptList ? "Hide Departments" : "Show Departments"}
               </button>
             </div>
 
-            <div className="search-filter-bar">
-              <div className="search-box">
-                <span className="search-icon">🔍</span>
-                <input
-                  type="text"
-                  className="input"
-                  placeholder="Search by doctor, patient, or ID..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <select className="select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as AppointmentStatus | "All")}>
-                {statusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {status === "All" ? "All Status" : status === "NoShow" ? "No Show" : status}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {filteredAppointments.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-state-icon">📅</div>
-                <p>No appointments found</p>
-              </div>
-            ) : (
-              filteredAppointments.map((appointment) => {
-                const { date, time } = formatDateTime(appointment.AppointmentTime);
-                return (
-                  <div key={appointment.AppointmentId} className="appointment-card">
-                    <div className="appointment-header">
-                      <div>
-                        <div className="appointment-id">#{appointment.AppointmentId}</div>
-                        <span className={`badge ${getStatusColor(appointment.Status)}`}>
-                          {appointment.Status === "NoShow" ? "No Show" : appointment.Status}
-                        </span>
+            {showDeptList && (
+              <>
+                {departments.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-state-icon">🏥</div>
+                    <p>No departments found</p>
+                  </div>
+                ) : (
+                  departments.map((dept) => (
+                    <div key={dept.id} className="dept-card">
+                      <div className="dept-header">
+                        <div className="dept-info">
+                          <h3>{dept.name}</h3>
+                          <div className="dept-meta">
+                            <span className="badge badge-success">
+                              ● Active
+                            </span>
+                            <span>{getDoctorsByDepartment(dept.id).length} Doctors</span>
+                          </div>
+                        </div>
+                        <div className="dept-actions">
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => toggleExpand(dept.id)}
+                          >
+                            {expandedDepts.has(dept.id) ? "Hide Doctors ▲" : "Show Doctors ▼"}
+                          </button>
+                        </div>
                       </div>
-                      {appointment.Status === "Scheduled" && (
-                        <button
-                          className="btn btn-sm btn-danger"
-                          onClick={() => {
-                            setSelectedAppointment(appointment);
-                            setShowCancelModal(true);
-                          }}
-                        >
-                          Cancel Appointment
-                        </button>
+
+                      {expandedDepts.has(dept.id) && (
+                        <div className="doctor-list">
+                          {getDoctorsByDepartment(dept.id).length === 0 ? (
+                            <div className="empty-state">
+                              <p>No doctors in this department</p>
+                            </div>
+                          ) : (
+                            getDoctorsByDepartment(dept.id).map((doctor) => (
+                              <div
+                                key={doctor.DoctorId}
+                                className={`doctor-item ${selectedDoctor?.DoctorId === doctor.DoctorId ? 'selected' : ''}`}
+                                onClick={() => handleDoctorClick(doctor)}
+                              >
+                                <div className="doctor-item-content">
+                                  <div className="doctor-avatar-small">
+                                    {doctor.Name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className="doctor-name">Dr. {doctor.Name}</span>
+                                </div>
+                                <span className="badge badge-success">
+                                  Active
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
                       )}
                     </div>
-
-                    <div className="appointment-grid">
-                      <div className="appointment-field">
-                        <span className="appointment-label">Doctor</span>
-                        <span className="appointment-value">{appointment.DoctorName}</span>
-                      </div>
-                      <div className="appointment-field">
-                        <span className="appointment-label">Patient</span>
-                        <span className="appointment-value">{appointment.PatientName}</span>
-                      </div>
-                      <div className="appointment-field">
-                        <span className="appointment-label">Date</span>
-                        <span className="appointment-value">{date}</span>
-                      </div>
-                      <div className="appointment-field">
-                        <span className="appointment-label">Time</span>
-                        <span className="appointment-value">{time}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
+                  ))
+                )}
+              </>
             )}
           </div>
+
+          {/* Doctor Schedule Section */}
+          {selectedDoctor && (
+            <div className="section">
+              <div className="schedule-section">
+                <div className="schedule-header">
+                  <div className="doctor-info">
+                    <div className="doctor-avatar">
+                      {selectedDoctor.Name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="doctor-details">
+                      <h3>Dr. {selectedDoctor.Name}</h3>
+                      <p>{getDepartmentName(selectedDoctor.DeparmentId)}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="week-nav">
+                    <button onClick={goToPreviousWeek} className="nav-btn">
+                      ← Previous Week
+                    </button>
+                    <button onClick={goToNextWeek} className="nav-btn">
+                      Next Week →
+                    </button>
+                  </div>
+                </div>
+
+                {/* Calendar Header */}
+                <div className="calendar-grid">
+                  {weekDays.map((day, idx) => (
+                    <div key={idx} className="day-header">
+                      <div className="day-name">{formatDate(day).split(',')[0]}</div>
+                      <div className="day-date">{formatDate(day).split(',')[1]}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Time Slots */}
+                <div className="slots-grid">
+                  {weekDays.map((day, dayIdx) => (
+                    <div key={dayIdx} className="day-column">
+                      {/* Show slots only for Monday, Tuesday, and Sunday */}
+                      {(dayIdx === 0 || dayIdx === 1 || dayIdx === 6) ? (
+                        timeSlots.map((time, timeIdx) => (
+                          <div
+                            key={timeIdx}
+                            className="time-slot"
+                            onClick={() => handleSlotClick(selectedDoctor.DoctorId, day, time)}
+                          >
+                            {time}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="empty-slot">⚊</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {notification && (
-          <div className={`notification notification-${notification.type}`}>
-            {notification.type === "success" ? "✓" : "✕"} {notification.message}
-          </div>
-        )}
-
-        {showCreateModal && (
+        {/* Confirmation Modal */}
+        {showConfirmModal && selectedSlot && selectedDoctor && (
           <div className="modal-overlay">
             <div className="modal-content">
               <div className="modal-header">
                 <div className="modal-header-content">
-                  <h3 className="modal-title">Create New Appointment</h3>
-                  <button onClick={() => setShowCreateModal(false)} className="btn-close">
-                    ✕
-                  </button>
-                </div>
-              </div>
-              <form onSubmit={handleCreateAppointment} className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">Doctor ID</label>
-                  <input
-                    type="number"
-                    required
-                    className="form-input"
-                    value={createForm.DoctorId}
-                    onChange={(e) => setCreateForm({ ...createForm, DoctorId: e.target.value })}
-                    placeholder="Enter doctor ID"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Patient ID</label>
-                  <input
-                    type="number"
-                    required
-                    className="form-input"
-                    value={createForm.PatientId}
-                    onChange={(e) => setCreateForm({ ...createForm, PatientId: e.target.value })}
-                    placeholder="Enter patient ID"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Appointment Date & Time</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    className="form-input"
-                    value={createForm.AppointmentTime}
-                    onChange={(e) => setCreateForm({ ...createForm, AppointmentTime: e.target.value })}
-                  />
-                </div>
-                <div className="modal-actions">
-                  <button type="button" onClick={() => setShowCreateModal(false)} className="btn btn-secondary" style={{ flex: 1 }}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                    Create Appointment
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {showCancelModal && selectedAppointment && (
-          <div className="modal-overlay">
-            <div className="modal-content">
-              <div className="modal-header danger">
-                <div className="modal-header-content">
-                  <h3 className="modal-title">Cancel Appointment</h3>
+                  <h3 className="modal-title">Confirm Appointment</h3>
                   <button
                     onClick={() => {
-                      setShowCancelModal(false);
-                      setSelectedAppointment(null);
+                      setShowConfirmModal(false);
+                      setSelectedSlot(null);
+                      setPatientId("");
                     }}
                     className="btn-close"
                   >
@@ -975,43 +1138,67 @@ export default function ReceptionDashboard() {
                 </div>
               </div>
               <div className="modal-body">
-                <div className="cancel-info">
-                  <p className="cancel-info-label">You are canceling:</p>
-                  <p className="cancel-info-value">Appointment #{selectedAppointment.AppointmentId}</p>
-                  <p className="cancel-info-subvalue">
-                    Dr. {selectedAppointment.DoctorName} • {selectedAppointment.PatientName}
-                  </p>
+                <div className="appointment-info">
+                  <div className="info-row">
+                    <span className="info-label">Doctor</span>
+                    <span className="info-value">Dr. {selectedDoctor.Name}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Department</span>
+                    <span className="info-value">{getDepartmentName(selectedDoctor.DeparmentId)}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Date & Time</span>
+                    <span className="info-value">
+                      {new Date(selectedSlot.dateTime).toLocaleString('en-US', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
                 </div>
-                <form onSubmit={handleCancelAppointment}>
-                  <div className="form-group">
-                    <label className="form-label">Cancellation Reason</label>
-                    <textarea
-                      required
-                      className="form-textarea"
-                      value={cancelForm.Reason}
-                      onChange={(e) => setCancelForm({ ...cancelForm, Reason: e.target.value })}
-                      placeholder="Please provide a reason for cancellation..."
-                    />
-                  </div>
-                  <div className="modal-actions">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCancelModal(false);
-                        setSelectedAppointment(null);
-                      }}
-                      className="btn btn-secondary"
-                      style={{ flex: 1 }}
-                    >
-                      Keep Appointment
-                    </button>
-                    <button type="submit" className="btn btn-danger" style={{ flex: 1 }}>
-                      Cancel Appointment
-                    </button>
-                  </div>
-                </form>
+
+                <div className="form-group">
+                  <label className="form-label">Patient ID</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    placeholder="Enter patient ID..."
+                    value={patientId}
+                    onChange={(e) => setPatientId(e.target.value)}
+                  />
+                </div>
+
+                <div className="modal-actions">
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setShowConfirmModal(false);
+                      setSelectedSlot(null);
+                      setPatientId("");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleCreateAppointment}
+                  >
+                    Book Appointment
+                  </button>
+                </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Notification */}
+        {notification && (
+          <div className={`notification notification-${notification.type}`}>
+            {notification.type === "success" ? "✓" : "✕"} {notification.message}
           </div>
         )}
       </div>

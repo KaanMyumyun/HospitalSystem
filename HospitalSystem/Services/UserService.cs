@@ -142,7 +142,7 @@ return CreateDoctorResultDto.Success();
 
  public async Task<ServiceResult<List<DoctorDisplayDto>>> ListDoctorsAsync()
 {
-    if (!_currentUser.IsInRole(UserRole.Admin))
+    if (!_currentUser.IsInRole(UserRole.Admin)&&!_currentUser.IsInRole(UserRole.FrontDesk))
     {
         return ServiceResult<List<DoctorDisplayDto>>
             .Fail("You are not allowed to list doctors");

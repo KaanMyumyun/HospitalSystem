@@ -549,7 +549,7 @@ public class UserServiceTests
         var dto = new CreateDoctorDto
         {
             UserId = 1,
-            DeparmentId = 1,
+            DepartmentId = 1,
         };
 
         // Act
@@ -581,7 +581,7 @@ public class UserServiceTests
         var dto = new CreateDoctorDto
         {
             UserId = 1000,
-            DeparmentId = 1,
+            DepartmentId = 1,
        
         };
         // Act
@@ -606,7 +606,7 @@ public class UserServiceTests
         var dto = new CreateDoctorDto
         {
             UserId = 1,
-            DeparmentId = 1000,
+            DepartmentId = 1000,
       
         };
         // Act

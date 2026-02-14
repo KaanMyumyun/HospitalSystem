@@ -6,7 +6,6 @@ namespace HospitalSystem.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin")]
 public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
@@ -15,7 +14,7 @@ public class UsersController : ControllerBase
     {
         _userService = userService;
     }
-
+    [Authorize(Roles = "Admin")]
     [HttpPost("change-role")]
     public async Task<IActionResult> ChangeRole([FromBody] ChangeRoleDto dto)
     {
@@ -31,6 +30,7 @@ public class UsersController : ControllerBase
         return Ok(result);
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPost("create-doctor")]
     public async Task<IActionResult>CreateDoctor([FromBody]CreateDoctorDto dto)
     {
@@ -83,6 +83,8 @@ public class UsersController : ControllerBase
         var users = await _userService.ListUsersAsync();
         return Ok(users);
     }
+
+    [Authorize(Roles = "FrontDesk,Admin")]
     [HttpGet("ListDoctors")]
     public async Task<ActionResult<List<DoctorDisplayDto>>> ListDoctorsAsync()
     {

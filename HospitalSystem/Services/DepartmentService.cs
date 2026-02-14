@@ -96,7 +96,7 @@ public class DepartmentService : IDepartmentService
 
    public async Task<ServiceResult<List<ViewDepartmentDto>>> ListDepartmentsAsync()
     { 
-          if (!_currentUser.IsInRole(UserRole.Admin))
+          if (!_currentUser.IsInRole(UserRole.Admin)&&!_currentUser.IsInRole(UserRole.FrontDesk) )
     {
         return ServiceResult<List<ViewDepartmentDto>>
             .Fail("Not allowed to list deparments");

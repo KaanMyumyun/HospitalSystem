@@ -118,56 +118,56 @@ export async function ChangeDoctorStatus(
   }
 }
 
-export async function CreateDoctor(
-  dto: CreateDoctorDto
-): Promise<CreateDoctorResultDto> {
-  try {
-    const token = localStorage.getItem("token");
+// export async function CreateDoctor(
+//   dto: CreateDoctorDto
+// ): Promise<CreateDoctorResultDto> {
+//   try {
+//     const token = localStorage.getItem("token");
 
-    if (!token) {
-      return {
-        isSuccess: false,
-        error: "Not authenticated",
-      };
-    }
+//     if (!token) {
+//       return {
+//         isSuccess: false,
+//         error: "Not authenticated",
+//       };
+//     }
 
-    const response = await fetch(`${Base_URL}/create-doctor`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(dto),
-    });
+//     const response = await fetch(`${Base_URL}/create-doctor`, {
+//       method: "POST",
+//       headers: {
+//         "Content-Type": "application/json",
+//         Authorization: `Bearer ${token}`,
+//       },
+//       body: JSON.stringify(dto),
+//     });
 
-    // Read response as text first (handles non-JSON errors)
-    const text = await response.text();
+//     // Read response as text first (handles non-JSON errors)
+//     const text = await response.text();
 
-    // If HTTP status is not OK, return server error message
-    if (!response.ok) {
-      return {
-        isSuccess: false,
-        error: text || `HTTP ${response.status}`,
-      };
-    }
+//     // If HTTP status is not OK, return server error message
+//     if (!response.ok) {
+//       return {
+//         isSuccess: false,
+//         error: text || `HTTP ${response.status}`,
+//       };
+//     }
 
-    // Try parsing JSON safely
-    try {
-      return JSON.parse(text) as CreateDoctorResultDto;
-    } catch {
-      return {
-        isSuccess: false,
-        error: "Invalid JSON response from server",
-      };
-    }
-  } catch (err) {
-    console.error("CreateDoctor failed:", err);
-    return {
-      isSuccess: false,
-      error: "Network error",
-    };
-  }
-}
+//     // Try parsing JSON safely
+//     try {
+//       return JSON.parse(text) as CreateDoctorResultDto;
+//     } catch {
+//       return {
+//         isSuccess: false,
+//         error: "Invalid JSON response from server",
+//       };
+//     }
+//   } catch (err) {
+//     console.error("CreateDoctor failed:", err);
+//     return {
+//       isSuccess: false,
+//       error: "Network error",
+//     };
+//   }
+// }
 
 
 export async function ResetPassword(

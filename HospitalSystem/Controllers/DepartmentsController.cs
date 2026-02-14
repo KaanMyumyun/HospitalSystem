@@ -8,15 +8,16 @@ namespace HospitalSystem.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin")]
 public class DepartmentController :ControllerBase
 {
 private readonly IDepartmentService _departmentService;
 
-public DepartmentController(IDepartmentService departmentService ,ApplicationDbContext context)
+public DepartmentController(IDepartmentService departmentService )
 {
     _departmentService = departmentService;
 }
+
+    [Authorize(Roles = "FrontDesk,Admin")]
     [HttpGet("ViewDepartment")]
     public async Task<ActionResult<List<ViewDepartmentDto>>> ListDeparments()
     {
@@ -24,7 +25,7 @@ public DepartmentController(IDepartmentService departmentService ,ApplicationDbC
         return Ok(departments);
     }
 
-
+    [Authorize(Roles = "Admin")]
     [HttpPost("CreateDepartment")]
     public async Task<IActionResult>CreateDepartment([FromBody] CreateDepartmentDto dto)
     {
@@ -42,6 +43,7 @@ public DepartmentController(IDepartmentService departmentService ,ApplicationDbC
 
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPost("ChangeDoctorDepartment")]
     public async Task<IActionResult>ChangeDoctorDepartment([FromBody] ChangeDoctorDepartmentDto dto)
     {
@@ -59,6 +61,7 @@ public DepartmentController(IDepartmentService departmentService ,ApplicationDbC
 
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPost("ChangeDepartmentStatus")]
     public async Task<IActionResult>ChangeDepartmentStatus([FromBody] ChangeDepartmentStatusDto dto)
     {
