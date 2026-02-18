@@ -1,28 +1,35 @@
 import { useState, useEffect } from "react";
 import { ViewDepartment } from "@/api/departmentApi";
 import { ListDoctors, ListUsers } from "@/api/userApi";
-import { CreateAppointment } from "@/api/appointmentApi";
+import { CreateAppointment, ViewAppointment, CancelAppointment } from "@/api/appointmentApi";
 import { ViewSchedule } from "@/api/scheduleApi"; 
 import type { ViewDepartmentDto } from "@/types/department";
 import type { DoctorDisplayDto, UserDisplayDto } from "@/types/user";
 import type { ViewSchedule as ViewScheduleDto } from "@/types/schedule"; 
+import type { ViewAppointmentDto } from "@/types/appointment";
 
 export default function SimpleAppointmentBooking() {
   const [departments, setDepartments] = useState<ViewDepartmentDto[]>([]);
   const [doctors, setDoctors] = useState<DoctorDisplayDto[]>([]);
   const [users, setUsers] = useState<UserDisplayDto[]>([]);
-  const [schedules, setSchedules] = useState<ViewScheduleDto[]>([]);
+  const [schedules, setSchedules] = useState<ViewScheduleDto[]>([]); 
+  const [appointments, setAppointments] = useState<ViewAppointmentDto[]>([]); 
   const [loading, setLoading] = useState(true);
   
   const [showDeptList, setShowDeptList] = useState(false);
   const [expandedDepts, setExpandedDepts] = useState<Set<number>>(new Set());
   const [selectedDoctor, setSelectedDoctor] = useState<DoctorDisplayDto | null>(null);
+  
   const [selectedSlot, setSelectedSlot] = useState<{ doctorId: number; dateTime: string } | null>(null);
   const [patientName, setPatientName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
-  
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [appointmentToCancel, setAppointmentToCancel] = useState<ViewAppointmentDto | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
@@ -39,11 +46,12 @@ export default function SimpleAppointmentBooking() {
   const loadData = async () => {
     try {
       setLoading(true);
-    const [deptData, doctorData, userData, scheduleData] = await Promise.all([
+      const [deptData, doctorData, userData, scheduleData, appointmentData] = await Promise.all([
         ViewDepartment(),
         ListDoctors(),
         ListUsers(),
-        ViewSchedule() 
+        ViewSchedule(),
+        ViewAppointment() 
       ]);
       
       const normalizedUsers = userData.map((user: any) => ({
@@ -52,7 +60,6 @@ export default function SimpleAppointmentBooking() {
         Role: user.Role ?? user.role,
       }));
 
-      // NEW: Map and normalize schedule data safely
       const normalizedSchedules = (scheduleData || []).map((s: any, index: number) => ({
         ScheduleId: s.ScheduleId ?? s.scheduleId ?? s.id ?? `fallback-${index}`,
         DoctorId: s.DoctorId ?? s.doctorId,
@@ -61,10 +68,35 @@ export default function SimpleAppointmentBooking() {
         SlotDurationMin: s.SlotDurationMin ?? s.slotDurationMin ?? 30,
       }));
       
+      // FIX: Normalize appointments to ensure PascalCase matches our DTO exactly!
+      if (appointmentData && Array.isArray(appointmentData)) {
+        const normalizedAppointments = appointmentData.map((app: any) => {
+          // Fix potentially lowercased status from backend
+          let rawStatus = app.Status ?? app.status ?? "Scheduled";
+          if (typeof rawStatus === 'string' && rawStatus.length > 0) {
+            rawStatus = rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1);
+          }
+
+          return {
+            AppointmentId: app.AppointmentId ?? app.appointmentId ?? app.id,
+            DoctorId: app.DoctorId ?? app.doctorId,
+            DoctorName: app.DoctorName ?? app.doctorName ?? "",
+            PatientId: app.PatientId ?? app.patientId ?? 0,
+            PatientName: app.PatientName ?? app.patientName ?? "",
+            AppointmentTime: app.AppointmentTime ?? app.appointmentTime ?? app.timeOfAppointment ?? app.TimeOfAppointment,
+            Status: rawStatus
+          } as ViewAppointmentDto;
+        });
+        setAppointments(normalizedAppointments);
+      } else {
+        setAppointments([]);
+      }
+
       setDepartments(deptData.filter(d => d.isActive));
       setDoctors(doctorData);
       setUsers(normalizedUsers as UserDisplayDto[]);
-      setSchedules(normalizedSchedules as ViewScheduleDto[]); // Save schedules
+      setSchedules(normalizedSchedules as ViewScheduleDto[]); 
+      
     } catch (error) {
       showNotification("error", "Failed to load data");
     } finally {
@@ -134,24 +166,24 @@ export default function SimpleAppointmentBooking() {
     return days;
   };
 
- const generateTimeSlots = (doctorId: number) => {
+  const generateTimeSlots = (doctorId: number) => {
     const schedule = schedules.find(s => s.DoctorId === doctorId);
     if (!schedule) return []; 
 
     const startDate = new Date(schedule.StartTime);
     const endDate = new Date(schedule.EndTime);
     
-   if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return [];
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return [];
 
     const startHour = startDate.getUTCHours();
     const endHour = endDate.getUTCHours();
-    const slotDuration = schedule.SlotDurationMin || 30;
+    const slotDuration = schedule.SlotDurationMin || 30; 
 
     const slots: string[] = [];
     let currentMinutes = startHour * 60; 
-    const endMinutes = endHour * 60;    
+    const endMinutes = endHour * 60;     
 
-   while (currentMinutes < endMinutes) {
+    while (currentMinutes < endMinutes) {
       const h = Math.floor(currentMinutes / 60);
       const m = currentMinutes % 60;
       const timeString = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
@@ -188,6 +220,11 @@ export default function SimpleAppointmentBooking() {
     setShowConfirmModal(true);
   };
 
+  const handleBookedSlotClick = (appointment: ViewAppointmentDto) => {
+    setAppointmentToCancel(appointment);
+    setShowCancelModal(true);
+  };
+
   const handleCreateAppointment = async () => {
     if (!selectedSlot || !patientName || !phoneNumber || !dateOfBirth) {
       showNotification("error", "Please fill in all patient details");
@@ -202,16 +239,40 @@ export default function SimpleAppointmentBooking() {
       AppointmentTime: selectedSlot.dateTime,
     });
 
-    if (result.isSuccess) {
+    if (result.isSuccess || (result as any).IsSuccess) {
       showNotification("success", "Appointment created successfully");
       setShowConfirmModal(false);
       setSelectedSlot(null);
       setPatientName("");
       setPhoneNumber("");
       setDateOfBirth("");
-      loadData();
+      loadData(); 
     } else {
-      showNotification("error", result.error || "Failed to create appointment");
+      showNotification("error", result.error || (result as any).Error || "Failed to create appointment");
+    }
+  };
+
+  const handleCancelAppointment = async () => {
+    if (!appointmentToCancel) return;
+    if (!cancelReason.trim()) {
+      showNotification("error", "Please enter a cancellation reason.");
+      return;
+    }
+
+    const result = await CancelAppointment({
+      AppointmentId: appointmentToCancel.AppointmentId,
+      Status: "Cancelled",
+      Reason: cancelReason
+    });
+
+    if (result.isSuccess || (result as any).IsSuccess) {
+      showNotification("success", "Appointment cancelled successfully");
+      setShowCancelModal(false);
+      setAppointmentToCancel(null);
+      setCancelReason("");
+      loadData(); 
+    } else {
+      showNotification("error", result.error || (result as any).Error || "Failed to cancel appointment");
     }
   };
 
@@ -501,21 +562,6 @@ export default function SimpleAppointmentBooking() {
           color: var(--success);
         }
 
-        .badge-scheduled {
-          background: rgba(59, 130, 246, 0.15);
-          color: #3b82f6;
-        }
-
-        .badge-cancelled {
-          background: rgba(255, 82, 82, 0.15);
-          color: var(--danger);
-        }
-
-        .badge-inactive {
-          background: rgba(100, 116, 139, 0.15);
-          color: var(--text-muted);
-        }
-
         .btn {
           padding: 0.75rem 1.5rem;
           border: none;
@@ -552,20 +598,25 @@ export default function SimpleAppointmentBooking() {
           border-color: var(--primary);
         }
 
+        .btn-danger {
+          background: var(--danger);
+          color: white;
+        }
+
+        .btn-danger:hover {
+          background: #e53935;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(255, 82, 82, 0.4);
+        }
+
         .btn-sm {
           padding: 0.5rem 1rem;
           font-size: 0.875rem;
         }
 
         @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
         }
 
         .schedule-section {
@@ -714,6 +765,40 @@ export default function SimpleAppointmentBooking() {
           font-size: 0.75rem;
         }
 
+        .time-slot-booked {
+          background: var(--bg);
+          border: 2px solid var(--border);
+          border-radius: 10px;
+          padding: 1rem 0.5rem;
+          text-align: center;
+          cursor: pointer;
+          font-weight: 500;
+          color: var(--text-muted);
+          font-size: 0.875rem;
+          position: relative;
+          transition: all 0.2s ease;
+        }
+        
+        .time-slot-booked:hover {
+          border-color: var(--danger);
+          color: var(--danger);
+          background: rgba(255, 82, 82, 0.05);
+        }
+        
+        .time-slot-booked::before {
+          content: '✕';
+          position: absolute;
+          left: 0.5rem;
+          top: 0.5rem;
+          color: var(--text-muted);
+          font-size: 0.75rem;
+          transition: color 0.2s ease;
+        }
+        
+        .time-slot-booked:hover::before {
+          color: var(--danger);
+        }
+
         .empty-slot {
           min-height: 65px;
           background: var(--bg);
@@ -778,14 +863,8 @@ export default function SimpleAppointmentBooking() {
         }
 
         @keyframes scaleIn {
-          from {
-            transform: scale(0.9);
-            opacity: 0;
-          }
-          to {
-            transform: scale(1);
-            opacity: 1;
-          }
+          from { transform: scale(0.9); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
         }
 
         .modal-header {
@@ -794,6 +873,10 @@ export default function SimpleAppointmentBooking() {
           padding: 2rem;
           position: relative;
           overflow: hidden;
+        }
+
+        .modal-header.danger {
+          background: linear-gradient(135deg, #d32f2f 0%, #ff5252 100%);
         }
 
         .modal-header::before {
@@ -905,44 +988,15 @@ export default function SimpleAppointmentBooking() {
           box-shadow: 0 0 0 3px rgba(5, 191, 219, 0.1);
         }
 
+        textarea.form-input {
+          resize: vertical;
+          min-height: 100px;
+        }
+
         .modal-actions {
           display: flex;
           gap: 1rem;
           margin-top: 1.5rem;
-        }
-
-        .btn {
-          padding: 1rem 2rem;
-          border: none;
-          border-radius: 12px;
-          font-weight: 600;
-          font-size: 1rem;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          font-family: 'Poppins', sans-serif;
-          flex: 1;
-        }
-
-        .btn-primary {
-          background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-          color: white;
-          box-shadow: 0 4px 12px rgba(8, 131, 149, 0.3);
-        }
-
-        .btn-primary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(8, 131, 149, 0.4);
-        }
-
-        .btn-secondary {
-          background: var(--bg);
-          color: var(--primary);
-          border: 2px solid var(--border);
-        }
-
-        .btn-secondary:hover {
-          background: white;
-          border-color: var(--primary);
         }
 
         .notification {
@@ -962,14 +1016,8 @@ export default function SimpleAppointmentBooking() {
         }
 
         @keyframes slideInRight {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
         }
 
         .notification-success {
@@ -983,33 +1031,17 @@ export default function SimpleAppointmentBooking() {
         }
 
         @media (max-width: 1024px) {
-          .calendar-grid,
-          .slots-grid {
-            grid-template-columns: repeat(4, 1fr);
-          }
+          .calendar-grid, .slots-grid { grid-template-columns: repeat(4, 1fr); }
         }
 
         @media (max-width: 768px) {
-          .header h1 {
-            font-size: 2rem;
-          }
-
-          .calendar-grid,
-          .slots-grid {
-            grid-template-columns: repeat(3, 1fr);
-          }
-
-          .schedule-header {
-            flex-direction: column;
-            align-items: flex-start;
-          }
+          .header h1 { font-size: 2rem; }
+          .calendar-grid, .slots-grid { grid-template-columns: repeat(3, 1fr); }
+          .schedule-header { flex-direction: column; align-items: flex-start; }
         }
 
         @media (max-width: 480px) {
-          .calendar-grid,
-          .slots-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
+          .calendar-grid, .slots-grid { grid-template-columns: repeat(2, 1fr); }
         }
         
         .btn-logout {
@@ -1040,13 +1072,11 @@ export default function SimpleAppointmentBooking() {
       `}</style>
 
     <div className="booking-page">
-        {/* --- BOOKING PAGE HEADER --- */}
         <div className="header">
           <div className="header-content">
-            
             <div className="header-text">
-              <h1>Book Appointment</h1>
-              <p>Select department and doctor to book an appointment</p>
+              <h1>Reception Dashboard</h1>
+              <p>Book and manage patient appointments easily</p>
             </div>
             
             <button
@@ -1059,7 +1089,6 @@ export default function SimpleAppointmentBooking() {
             >
               ↩ Logout
             </button>
-
           </div>
         </div>
 
@@ -1168,7 +1197,6 @@ export default function SimpleAppointmentBooking() {
                   </div>
                 </div>
 
-                {/* Calendar Header */}
                 <div className="calendar-grid">
                   {weekDays.map((day, idx) => (
                     <div key={idx} className="day-header">
@@ -1185,15 +1213,45 @@ export default function SimpleAppointmentBooking() {
                       {/* Show slots Monday through Friday (0-4) */}
                       {dayIdx >= 0 && dayIdx <= 4 ? (
                         timeSlots.length > 0 ? (
-                          timeSlots.map((time, timeIdx) => (
-                            <div
-                              key={timeIdx}
-                              className="time-slot"
-                              onClick={() => handleSlotClick(selectedDoctor.DoctorId, day, time)}
-                            >
-                              {time}
-                            </div>
-                          ))
+                          timeSlots.map((time, timeIdx) => {
+                            const [hours, minutes] = time.split(':');
+                            
+                            const slotDateTime = new Date(day);
+                            slotDateTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+                            
+                            // USING NORMALIZED DATA: Match exact values
+                            const bookedAppointment = appointments.find(app => {
+                                if (app.DoctorId !== selectedDoctor.DoctorId) return false;
+                                if (app.Status === 'Cancelled') return false;
+                                
+                                const bookedTime = new Date(app.AppointmentTime);
+                                return bookedTime.getTime() === slotDateTime.getTime();
+                            });
+
+                            if (bookedAppointment) {
+                                return (
+                                  <div 
+                                    key={timeIdx} 
+                                    className="time-slot-booked"
+                                    onClick={() => handleBookedSlotClick(bookedAppointment)}
+                                    title={`Booked by ${bookedAppointment.PatientName}. Click to cancel.`}
+                                  >
+                                    {time}
+                                  </div>
+                                );
+                            }
+
+                            // If not booked, render normal clickable slot to book
+                            return (
+                              <div
+                                key={timeIdx}
+                                className="time-slot"
+                                onClick={() => handleSlotClick(selectedDoctor.DoctorId, day, time)}
+                              >
+                                {time}
+                              </div>
+                            );
+                          })
                         ) : (
                           <div className="empty-slot" style={{ fontSize: '0.85rem' }}>No Schedule</div>
                         )
@@ -1208,13 +1266,13 @@ export default function SimpleAppointmentBooking() {
           )}
         </div>
 
-        {/* Confirmation Modal */}
+        {/* --- BOOK APPOINTMENT MODAL --- */}
         {showConfirmModal && selectedSlot && selectedDoctor && (
           <div className="modal-overlay">
             <div className="modal-content">
               <div className="modal-header">
                 <div className="modal-header-content">
-                  <h3 className="modal-title">Confirm Appointment</h3>
+                  <h3 className="modal-title">Book Appointment</h3>
                   <button
                     onClick={() => {
                       setShowConfirmModal(false);
@@ -1239,11 +1297,8 @@ export default function SimpleAppointmentBooking() {
                     <span className="info-label">Date & Time</span>
                     <span className="info-value">
                       {new Date(selectedSlot.dateTime).toLocaleString('en-US', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
                       })}
                     </span>
                   </div>
@@ -1292,15 +1347,90 @@ export default function SimpleAppointmentBooking() {
                       setDateOfBirth("");
                     }}
                   >
-                    Cancel
+                    Close
                   </button>
                   <button
                     className="btn btn-primary"
                     onClick={handleCreateAppointment}
                   >
-                    Book Appointment
+                    Confirm Booking
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- CANCEL APPOINTMENT MODAL --- */}
+        {showCancelModal && appointmentToCancel && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header danger">
+                <div className="modal-header-content">
+                  <h3 className="modal-title">Cancel Appointment</h3>
+                  <button
+                    onClick={() => {
+                      setShowCancelModal(false);
+                      setAppointmentToCancel(null);
+                      setCancelReason("");
+                    }}
+                    className="btn-close"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <div className="modal-body">
+                
+                <div className="appointment-info" style={{ borderColor: 'var(--danger)' }}>
+                  <div className="info-row">
+                    <span className="info-label">Patient</span>
+                    <span className="info-value">{appointmentToCancel.PatientName || "Unknown Patient"}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Doctor</span>
+                    <span className="info-value">Dr. {appointmentToCancel.DoctorName || selectedDoctor?.Name}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Date & Time</span>
+                    <span className="info-value">
+                      {new Date(appointmentToCancel.AppointmentTime).toLocaleString('en-US', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ color: 'var(--danger)' }}>Cancellation Reason *</label>
+                  <textarea
+                    className="form-input"
+                    placeholder="Why is this appointment being cancelled?"
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                  />
+                </div>
+
+                <div className="modal-actions">
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setShowCancelModal(false);
+                      setAppointmentToCancel(null);
+                      setCancelReason("");
+                    }}
+                  >
+                    Keep Appointment
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={handleCancelAppointment}
+                  >
+                    Confirm Cancellation
+                  </button>
+                </div>
+
               </div>
             </div>
           </div>

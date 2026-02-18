@@ -91,9 +91,7 @@ export async function ViewDepartment(): Promise<ViewDepartmentDto[]> {
     });
 
     const result = (await response.json()) as any;
-
-    // If backend returns a ServiceResult<T> object, unwrap it.
-    if (result && typeof result === "object" && "isSuccess" in result) {
+   if (result && typeof result === "object" && "isSuccess" in result) {
       if (!result.isSuccess) {
         console.error("ViewDepartment error:", result.error);
         return [];
@@ -101,13 +99,10 @@ export async function ViewDepartment(): Promise<ViewDepartmentDto[]> {
       return result.data ?? [];
     }
 
-    // Fallback: if backend returned the raw array (older contract), return it directly
-    if (Array.isArray(result)) {
+   if (Array.isArray(result)) {
       return result as ViewDepartmentDto[];
     }
-
-    // Unknown shape
-    console.error("Unexpected ViewDepartment response:", result);
+     console.error("Unexpected ViewDepartment response:", result);
     return [];
   } catch (error) {
     console.error("Network error while fetching departments:", error);
