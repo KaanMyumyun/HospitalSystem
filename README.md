@@ -353,104 +353,49 @@
 
    ## Testing
 
-   Unit tests are implemented for the `UserService`, focusing on service-layer business logic
-   and role-based authorization. Tests are written using xUnit and validate both
-   successful flows and failure scenarios.
+Unit tests are implemented for the `UserService`, focusing on service-layer business logic and role-based authorization. Tests are written using xUnit and validate both successful "happy paths" and complex edge-case failure scenarios.
 
-   ---
+---
 
-   ### Covered Methods
+### Covered Methods
 
-   - ChangeDoctorsStatusAsync
-   - ChangeRoleAsync
-   - CreateDoctorAsync
-   - ListUsersAsync
-   - ListDoctorsAsync
-   - ResetPasswordAsync
+- `ChangeDoctorsStatusAsync`
+- `ChangeRoleAsync`
+- `CreateDoctorAsync`
+- `ListUsersAsync`
+- `ListDoctorsAsync`
+- `ResetPasswordAsync`
 
-   ---
+---
 
-   ### Tested Scenarios Include
+### Tested Scenarios Include
 
-   - Admin vs non-admin authorization rules
-   - Validation of business rules and input data
-   - Handling of non-existent entities
-   - Prevention of invalid state changes
-   - Correct success and failure responses
-   - Correct persistence or non-persistence of database changes
+- **Role-Based Access Control (RBAC):** Admin vs. non-admin authorization rules, as well as specific Front Desk permissions.
+- **Entity State Management:** Dynamic entity management, such as automatically creating or deactivating Doctor profiles when a user's role is changed.
+- **Edge Cases:** Handling of non-existent entities, invalid Enum states, and reactivating/updating existing profiles instead of creating duplicates.
+- **Validation:** Prevention of invalid state changes and verification of business rules.
 
-   ---
+---
 
-   ### What the Tests Verify
+### What the Tests Verify
 
-   - Role-based authorization is enforced
-   - Business logic behaves as expected in edge cases
-   - Database state is modified only on successful operations
-   - No unintended side effects occur during read-only operations
+- Role-based authorization is strictly enforced.
+- Business logic behaves correctly during complex edge cases.
+- Database state is modified *only* on successful operations.
+- Unintended side effects do not occur during read-only or failed operations.
 
-   ---
+---
 
-   ## Test Design
+## Test Design
 
-   ### In-Memory Database
+### In-Memory Database
 
-   Each test uses a fresh EF Core InMemory database instance:
+Each test uses a fresh EF Core InMemory database instance:
+```csharp
+.UseInMemoryDatabase(Guid.NewGuid().ToString())
+```
 
-   ```csharp
-   .UseInMemoryDatabase(Guid.NewGuid().ToString())
-   ```
-
-   This ensures:
-
-   * No shared state between tests
-   * Deterministic and repeatable test results
-   * No dependency on external infrastructure
-
-   ---
-
-   ### Mocked Dependencies
-
-   `ICurrentUserService` is mocked using Moq to simulate different user roles:
-
-   ```csharp
-   currentUserMock
-      .Setup(x => x.IsInRole(UserRole.Admin))
-      .Returns(true);
-   ```
-
-   This allows testing authorization logic independently of authentication mechanisms.
-
-   ---
-
-   ## Example Test Flow
-
-   1. Arrange
-
-      * Create the database context
-      * Seed required entities (users, doctors, departments)
-      * Configure mocked current user role
-
-   2. Act
-
-      * Call `ChangeDoctorsStatusAsync`
-
-   3. Assert
-
-      * Validate the returned result
-      * Verify the doctor’s status in the database
-
-   ---
-
-   ## Running the Tests
-
-   From the solution root directory:
-
-   dotnet test
-
-
-   Alternatively, tests can be executed using Visual Studio Test Explorer.
-
-   ---
+---
 
    ## Future Test Coverage
 
