@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -10,9 +11,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace HospitalSystem.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260215172700_MakeCancellationFieldsNullable")]
+    partial class MakeCancellationFieldsNullable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -64,33 +67,6 @@ namespace HospitalSystem.Migrations
                     b.HasIndex("PatientId");
 
                     b.ToTable("Appointments");
-                });
-
-            modelBuilder.Entity("CalendarEntity", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("DoctorId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("EndTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("SlotDurationMin")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("StartTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DoctorId");
-
-                    b.ToTable("Calendars");
                 });
 
             modelBuilder.Entity("DepartmentEntity", b =>
@@ -229,17 +205,6 @@ namespace HospitalSystem.Migrations
                     b.Navigation("Patient");
                 });
 
-            modelBuilder.Entity("CalendarEntity", b =>
-                {
-                    b.HasOne("DoctorEntity", "Doctor")
-                        .WithMany("Calendars")
-                        .HasForeignKey("DoctorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Doctor");
-                });
-
             modelBuilder.Entity("DoctorEntity", b =>
                 {
                     b.HasOne("DepartmentEntity", "Department")
@@ -267,8 +232,6 @@ namespace HospitalSystem.Migrations
             modelBuilder.Entity("DoctorEntity", b =>
                 {
                     b.Navigation("Appointments");
-
-                    b.Navigation("Calendars");
                 });
 
             modelBuilder.Entity("PatientEntity", b =>

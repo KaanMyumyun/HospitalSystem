@@ -42,53 +42,83 @@ public class AppointmentService : IAppointmentService
         return CancelAppointmentResultDto.Success();
     }
 
-    public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppointmentDto dto, int frontDeskUserId)
+public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppointmentDto dto, int frontDeskUserId)
+{
+    if (!_currentUser.IsInRole(UserRole.FrontDesk))
     {
-        if (!_currentUser.IsInRole(UserRole.FrontDesk))
-        {
-            return CreateAppointmentResultDto.Fail("You are not allowed to reset password");
-        }
-
-        var doctorExist = await _context.Doctors.AnyAsync(u => u.Id == dto.DoctorId);
-        if (!doctorExist)
-        {
-            return CreateAppointmentResultDto.Fail("Doctor not found");
-        }
-
-        var patientExist = await _context.Patients.AnyAsync(u => u.Id == dto.PatientId);
-        if (!patientExist)
-        {
-            return CreateAppointmentResultDto.Fail("Patient not found");
-        }
-
-        var duration = TimeSpan.FromMinutes(15);
-        var appointmentEnd = dto.AppointmentTime.Add(duration);
-
-        var overlap = await _context.Appointments.AnyAsync(a => a.DoctorId == dto.DoctorId &&
-         a.Status == AppointmentStatus.Scheduled &&
-        dto.AppointmentTime < a.TimeOfAppointment.Add(duration) &&
-        appointmentEnd > a.TimeOfAppointment
-        );
-
-        if (overlap)
-        {
-            return CreateAppointmentResultDto.Fail("doctor already booked for that hour");
-        }
-
-        var Appointment = new AppointmentsEntity
-        {
-            DoctorId = dto.DoctorId,
-            PatientId = dto.PatientId,
-            TimeOfAppointment = dto.AppointmentTime,
-            CreatedAt = DateTime.UtcNow,
-            CreatedByTheFrontDeskId = frontDeskUserId,
-            Status = AppointmentStatus.Scheduled
-        };
-
-        _context.Appointments.Add(Appointment);
-        await _context.SaveChangesAsync();
-        return CreateAppointmentResultDto.Success();
+        return CreateAppointmentResultDto.Fail("You are not allowed to create appointments");
     }
+
+    var doctorExist = await _context.Doctors.AnyAsync(u => u.Id == dto.DoctorId);
+    if (!doctorExist)
+    {
+        return CreateAppointmentResultDto.Fail("Doctor not found");
+    }
+
+    // Find or create patient
+    var existingPatient = await _context.Patients
+        .FirstOrDefaultAsync(p => p.PhoneNumber == dto.PhoneNumber);
+    
+    int patientId;
+    
+    if (existingPatient != null)
+    {
+        patientId = existingPatient.Id;
+    }
+    else
+    {
+        var newPatient = new PatientEntity
+        {
+            Name = dto.PatientName,
+            PhoneNumber = dto.PhoneNumber,
+            DateOfBirth = DateTime.SpecifyKind(dto.DateOfBirth, DateTimeKind.Utc)
+        };
+        _context.Patients.Add(newPatient);
+        await _context.SaveChangesAsync();
+        patientId = newPatient.Id;
+    }
+
+    var appointmentTime = DateTime.SpecifyKind(dto.AppointmentTime, DateTimeKind.Utc);
+    var duration = TimeSpan.FromMinutes(15);
+    var appointmentEnd = appointmentTime.Add(duration);
+    
+    var existingAppointments = await _context.Appointments
+        .Where(a => 
+            a.DoctorId == dto.DoctorId &&
+            a.Status == AppointmentStatus.Scheduled &&
+            a.TimeOfAppointment.Date == appointmentTime.Date 
+        )
+        .Select(a => new { a.TimeOfAppointment })
+        .ToListAsync(); 
+    
+    // Check overlap in memory
+    var overlap = existingAppointments.Any(a =>
+    {
+        var existingEnd = a.TimeOfAppointment.Add(duration);
+        return appointmentTime < existingEnd && appointmentEnd > a.TimeOfAppointment;
+    });
+    
+    if (overlap)
+    {
+        return CreateAppointmentResultDto.Fail("Doctor already booked for that time slot");
+    }
+
+    // Create the appointment
+    var appointment = new AppointmentsEntity
+    {
+        DoctorId = dto.DoctorId,
+        PatientId = patientId,
+        TimeOfAppointment = appointmentTime,
+        CreatedAt = DateTime.UtcNow,
+        CreatedByTheFrontDeskId = frontDeskUserId,
+        Status = AppointmentStatus.Scheduled
+    };
+
+    _context.Appointments.Add(appointment);
+    await _context.SaveChangesAsync();
+
+    return CreateAppointmentResultDto.Success();
+}
 
     public async Task<ServiceResult<List<ViewAppointmentDto>>> GetAppointmentsAsync()
     {

@@ -45,6 +45,7 @@ public class UsersController : ControllerBase
         return Ok();
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
     {
@@ -60,6 +61,7 @@ public class UsersController : ControllerBase
         return Ok(result);
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPost("change-doctor-status")]
     public async Task<IActionResult> ChangeDoctorStatus([FromBody] ChangeDoctorsStatus dto)
     {
@@ -76,7 +78,7 @@ public class UsersController : ControllerBase
         
         return Ok(result);          
     }
-
+    [Authorize(Roles = "FrontDesk,Admin")]
     [HttpGet("ListUsers")]
     public async Task<ActionResult<List<UserDisplayDto>>> ListUsersAsync()
     {

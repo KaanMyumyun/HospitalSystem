@@ -6,6 +6,7 @@ public class DoctorEntity
     public bool IsActive { get; set; } = true;
     public int UserId { get; set; }
     public UserEntity User { get; set; }
+    public ICollection<CalendarEntity> Calendars { get; set; } = new List<CalendarEntity>();
     public ICollection<AppointmentsEntity> Appointments { get; set; } = new List<AppointmentsEntity>();
 
 }

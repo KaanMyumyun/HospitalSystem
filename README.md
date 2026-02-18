@@ -483,8 +483,6 @@ The application can be run fully containerized using Docker Compose.
 ### Start the application
 
 From the project root:
-
-```bash
 docker compose up --build
 
 ---
@@ -515,4 +513,21 @@ docker compose up --build
 * Prepare for cloud deployment
 
 ---
+
+# Plan
+
+* Finish the UI first
+So the app actually shows what it can do
+
+* Add Demo roles later
+DemoAdmin (read-only)
+DemoReception (fully usable panel)
+
+* Add rate limiting
+Focus on auth + sensitive endpoints
+
+* Host the app
+With demo credentials
+With basic security safeguards
+
 

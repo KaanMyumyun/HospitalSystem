@@ -2,20 +2,25 @@ import { useState, useEffect } from "react";
 import { ViewDepartment } from "@/api/departmentApi";
 import { ListDoctors, ListUsers } from "@/api/userApi";
 import { CreateAppointment } from "@/api/appointmentApi";
+import { ViewSchedule } from "@/api/scheduleApi"; 
 import type { ViewDepartmentDto } from "@/types/department";
-import { DoctorDisplayDto, UserDisplayDto } from "@/types/user";
+import type { DoctorDisplayDto, UserDisplayDto } from "@/types/user";
+import type { ViewSchedule as ViewScheduleDto } from "@/types/schedule"; 
 
 export default function SimpleAppointmentBooking() {
   const [departments, setDepartments] = useState<ViewDepartmentDto[]>([]);
   const [doctors, setDoctors] = useState<DoctorDisplayDto[]>([]);
   const [users, setUsers] = useState<UserDisplayDto[]>([]);
+  const [schedules, setSchedules] = useState<ViewScheduleDto[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [showDeptList, setShowDeptList] = useState(false);
   const [expandedDepts, setExpandedDepts] = useState<Set<number>>(new Set());
   const [selectedDoctor, setSelectedDoctor] = useState<DoctorDisplayDto | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<{ doctorId: number; dateTime: string } | null>(null);
-  const [patientId, setPatientId] = useState("");
+  const [patientName, setPatientName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -34,10 +39,11 @@ export default function SimpleAppointmentBooking() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [deptData, doctorData, userData] = await Promise.all([
+    const [deptData, doctorData, userData, scheduleData] = await Promise.all([
         ViewDepartment(),
         ListDoctors(),
-        ListUsers()
+        ListUsers(),
+        ViewSchedule() 
       ]);
       
       const normalizedUsers = userData.map((user: any) => ({
@@ -45,10 +51,20 @@ export default function SimpleAppointmentBooking() {
         UserName: user.UserName ?? user.userName ?? user.name ?? user.Name,
         Role: user.Role ?? user.role,
       }));
+
+      // NEW: Map and normalize schedule data safely
+      const normalizedSchedules = (scheduleData || []).map((s: any, index: number) => ({
+        ScheduleId: s.ScheduleId ?? s.scheduleId ?? s.id ?? `fallback-${index}`,
+        DoctorId: s.DoctorId ?? s.doctorId,
+        StartTime: s.StartTime ?? s.startTime,
+        EndTime: s.EndTime ?? s.endTime,
+        SlotDurationMin: s.SlotDurationMin ?? s.slotDurationMin ?? 30,
+      }));
       
       setDepartments(deptData.filter(d => d.isActive));
       setDoctors(doctorData);
       setUsers(normalizedUsers as UserDisplayDto[]);
+      setSchedules(normalizedSchedules as ViewScheduleDto[]); // Save schedules
     } catch (error) {
       showNotification("error", "Failed to load data");
     } finally {
@@ -57,15 +73,10 @@ export default function SimpleAppointmentBooking() {
   };
 
   const buildCurrentDoctors = () => {
-    if (users.length === 0) {
-      return [];
-    }
+    if (users.length === 0) return [];
     
     const doctorUsers = users.filter(u => u.Role === "Doctor");
-    
-    if (doctorUsers.length === 0) {
-      return [];
-    }
+    if (doctorUsers.length === 0) return [];
     
     return doctorUsers.map(user => {
       const doctorRecord = doctors.find(d => {
@@ -123,8 +134,32 @@ export default function SimpleAppointmentBooking() {
     return days;
   };
 
-  const generateTimeSlots = () => {
-    return ['14:30', '14:50', '15:10', '15:30', '15:50', '16:10', '16:30', '16:50'];
+ const generateTimeSlots = (doctorId: number) => {
+    const schedule = schedules.find(s => s.DoctorId === doctorId);
+    if (!schedule) return []; 
+
+    const startDate = new Date(schedule.StartTime);
+    const endDate = new Date(schedule.EndTime);
+    
+   if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return [];
+
+    const startHour = startDate.getUTCHours();
+    const endHour = endDate.getUTCHours();
+    const slotDuration = schedule.SlotDurationMin || 30;
+
+    const slots: string[] = [];
+    let currentMinutes = startHour * 60; 
+    const endMinutes = endHour * 60;    
+
+   while (currentMinutes < endMinutes) {
+      const h = Math.floor(currentMinutes / 60);
+      const m = currentMinutes % 60;
+      const timeString = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+      slots.push(timeString);
+      currentMinutes += slotDuration;
+    }
+
+    return slots;
   };
 
   const formatDate = (date: Date) => {
@@ -154,14 +189,16 @@ export default function SimpleAppointmentBooking() {
   };
 
   const handleCreateAppointment = async () => {
-    if (!selectedSlot || !patientId) {
-      showNotification("error", "Please enter patient ID");
+    if (!selectedSlot || !patientName || !phoneNumber || !dateOfBirth) {
+      showNotification("error", "Please fill in all patient details");
       return;
     }
 
     const result = await CreateAppointment({
       DoctorId: selectedSlot.doctorId,
-      PatientId: parseInt(patientId),
+      PatientName: patientName,
+      PhoneNumber: phoneNumber,
+      DateOfBirth: dateOfBirth,
       AppointmentTime: selectedSlot.dateTime,
     });
 
@@ -169,7 +206,9 @@ export default function SimpleAppointmentBooking() {
       showNotification("success", "Appointment created successfully");
       setShowConfirmModal(false);
       setSelectedSlot(null);
-      setPatientId("");
+      setPatientName("");
+      setPhoneNumber("");
+      setDateOfBirth("");
       loadData();
     } else {
       showNotification("error", result.error || "Failed to create appointment");
@@ -186,7 +225,7 @@ export default function SimpleAppointmentBooking() {
   };
 
   const weekDays = generateWeekDays();
-  const timeSlots = generateTimeSlots();
+  const timeSlots = selectedDoctor ? generateTimeSlots(selectedDoctor.DoctorId) : [];
 
   if (loading) {
     return (
@@ -284,6 +323,11 @@ export default function SimpleAppointmentBooking() {
           margin: 0 auto;
           position: relative;
           z-index: 1;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 1rem;
         }
 
         .header h1 {
@@ -967,13 +1011,55 @@ export default function SimpleAppointmentBooking() {
             grid-template-columns: repeat(2, 1fr);
           }
         }
+        
+        .btn-logout {
+          padding: 0.6rem 1.4rem;
+          border: 2px solid rgba(255, 255, 255, 0.55);
+          border-radius: 10px;
+          background: transparent;
+          color: white;
+          font-family: 'Poppins', sans-serif;
+          font-size: 0.9rem;
+          font-weight: 600;
+          cursor: pointer;
+          letter-spacing: 0.3px;
+          transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.4rem;
+          white-space: nowrap;
+          align-self: flex-start;
+          margin-top: 0.25rem;
+        }
+        
+        .btn-logout:hover {
+          background: rgba(255, 255, 255, 0.15);
+          border-color: rgba(255, 255, 255, 0.85);
+          transform: translateY(-1px);
+        }
       `}</style>
 
-      <div className="booking-page">
+    <div className="booking-page">
+        {/* --- BOOKING PAGE HEADER --- */}
         <div className="header">
           <div className="header-content">
-            <h1>Book Appointment</h1>
-            <p>Select department and doctor to book an appointment</p>
+            
+            <div className="header-text">
+              <h1>Book Appointment</h1>
+              <p>Select department and doctor to book an appointment</p>
+            </div>
+            
+            <button
+              className="btn-logout"
+              onClick={() => {
+                localStorage.removeItem("token");
+                localStorage.removeItem("role");
+                window.location.href = "/";
+              }}
+            >
+              ↩ Logout
+            </button>
+
           </div>
         </div>
 
@@ -1096,17 +1182,21 @@ export default function SimpleAppointmentBooking() {
                 <div className="slots-grid">
                   {weekDays.map((day, dayIdx) => (
                     <div key={dayIdx} className="day-column">
-                      {/* Show slots only for Monday, Tuesday, and Sunday */}
-                      {(dayIdx === 0 || dayIdx === 1 || dayIdx === 6) ? (
-                        timeSlots.map((time, timeIdx) => (
-                          <div
-                            key={timeIdx}
-                            className="time-slot"
-                            onClick={() => handleSlotClick(selectedDoctor.DoctorId, day, time)}
-                          >
-                            {time}
-                          </div>
-                        ))
+                      {/* Show slots Monday through Friday (0-4) */}
+                      {dayIdx >= 0 && dayIdx <= 4 ? (
+                        timeSlots.length > 0 ? (
+                          timeSlots.map((time, timeIdx) => (
+                            <div
+                              key={timeIdx}
+                              className="time-slot"
+                              onClick={() => handleSlotClick(selectedDoctor.DoctorId, day, time)}
+                            >
+                              {time}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="empty-slot" style={{ fontSize: '0.85rem' }}>No Schedule</div>
+                        )
                       ) : (
                         <div className="empty-slot">⚊</div>
                       )}
@@ -1129,7 +1219,9 @@ export default function SimpleAppointmentBooking() {
                     onClick={() => {
                       setShowConfirmModal(false);
                       setSelectedSlot(null);
-                      setPatientId("");
+                      setPatientName("");
+                      setPhoneNumber("");
+                      setDateOfBirth("");
                     }}
                     className="btn-close"
                   >
@@ -1142,10 +1234,6 @@ export default function SimpleAppointmentBooking() {
                   <div className="info-row">
                     <span className="info-label">Doctor</span>
                     <span className="info-value">Dr. {selectedDoctor.Name}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Department</span>
-                    <span className="info-value">{getDepartmentName(selectedDoctor.DeparmentId)}</span>
                   </div>
                   <div className="info-row">
                     <span className="info-label">Date & Time</span>
@@ -1162,13 +1250,34 @@ export default function SimpleAppointmentBooking() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Patient ID</label>
+                  <label className="form-label">Patient Name</label>
                   <input
-                    type="number"
+                    type="text"
                     className="form-input"
-                    placeholder="Enter patient ID..."
-                    value={patientId}
-                    onChange={(e) => setPatientId(e.target.value)}
+                    placeholder="Enter patient name..."
+                    value={patientName}
+                    onChange={(e) => setPatientName(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Phone Number</label>
+                  <input
+                    type="tel"
+                    className="form-input"
+                    placeholder="Enter phone number..."
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Date of Birth</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={dateOfBirth}
+                    onChange={(e) => setDateOfBirth(e.target.value)}
                   />
                 </div>
 
@@ -1178,7 +1287,9 @@ export default function SimpleAppointmentBooking() {
                     onClick={() => {
                       setShowConfirmModal(false);
                       setSelectedSlot(null);
-                      setPatientId("");
+                      setPatientName("");
+                      setPhoneNumber("");
+                      setDateOfBirth("");
                     }}
                   >
                     Cancel

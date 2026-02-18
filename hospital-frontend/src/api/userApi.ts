@@ -17,7 +17,6 @@ const Base_URL = "http://localhost:5272/api/Users";
 export async function ListDoctors(): Promise<DoctorDisplayDto[]> {
   const token = localStorage.getItem("token");
   
-  // Fixed: Added parentheses around template literal
   const response = await fetch(`${Base_URL}/ListDoctors`, {
     method: "GET",
     headers: {
@@ -37,8 +36,6 @@ export async function ListDoctors(): Promise<DoctorDisplayDto[]> {
 
 export async function ListUsers(): Promise<UserDisplayDto[]> {
   const token = localStorage.getItem("token");
-  
-  // Fixed: Added parentheses around template literal
   const response = await fetch(`${Base_URL}/ListUsers`, {
     method: "GET",
     headers: {

@@ -21,7 +21,8 @@ builder.Services.AddCors(options =>
                 "http://localhost:3000"  // Docker frontend
             )
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
@@ -83,6 +84,8 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<ICalendarService, CalendarService>();
+
 
 // =======================
 // JWT Configuration
@@ -131,7 +134,6 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate();
 }
-
 // =======================
 // Middleware Pipeline
 // =======================

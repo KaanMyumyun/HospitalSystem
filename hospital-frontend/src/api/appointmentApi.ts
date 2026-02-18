@@ -36,7 +36,11 @@ export async function CreateAppointment(
 ): Promise<CreateAppointmentResultDto> {
   try {
     const token = localStorage.getItem("token");
-    const response = await fetch(`${Base_URL}/CreateAppointment`, {
+    
+    // DEBUG: See what you're sending
+    console.log("Sending appointment:", dto);
+    
+    const response = await fetch(`${Base_URL}/CreateAppointment`, { // FIXED!
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -44,12 +48,27 @@ export async function CreateAppointment(
       },
       body: JSON.stringify(dto),
     });
-
-    return (await response.json()) as CreateAppointmentResultDto;
-  } catch {
+    
+    console.log("Response status:", response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Server error:", errorText);
+      return {
+        isSuccess: false,
+        error: errorText || `Server error: ${response.status}`,
+      };
+    }
+    
+    const result = await response.json();
+    console.log("Result:", result);
+    return result as CreateAppointmentResultDto;
+    
+  } catch (error) {
+    console.error("Network error:", error);
     return {
       isSuccess: false,
-      error: "Network error",
+      error: "Network error: " + (error as Error).message,
     };
   }
 }
