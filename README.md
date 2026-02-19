@@ -397,6 +397,42 @@ Each test uses a fresh EF Core InMemory database instance:
 
 ---
 
+### Mocked DependenciesICurrentUserService is mocked using Moq to simulate different user roles without relying on actual authentication mechanisms:
+```csharp
+currentUserMock
+.Setup(x => x.IsInRole(UserRole.Admin))
+.Returns(true);
+```
+
+---
+x
+### Example Test FlowThanks to the helper methods, tests follow a highly readable and concise Arrange-Act-Assert pattern:
+
+```csharp
+
+[Fact]
+public async Task ChangeDoctorStatus_Admin_Succeeds()
+{
+   var db = CreateDbContext();
+    await SeedStandardDoctorAsync(db, isDoctorActive: false);
+    var service = CreateService(db, isAdmin: true);
+
+   var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorsStatus { DoctorId = 1, IsActive = true });
+
+    Assert.True(result.IsSuccess);
+    Assert.True(db.Doctors.First().IsActive);
+}
+```
+
+---
+### Running the TestsFrom the solution root directory, execute the following command in your terminal:
+
+```bash
+dotnet test
+```
+
+---
+
    ## Future Test Coverage
 
    * DepartmentService

@@ -23,6 +23,11 @@ public class AppointmentService : IAppointmentService
         {
             return CancelAppointmentResultDto.Fail("Appointment not found");
         }
+        if (string.IsNullOrWhiteSpace(dto.Reason))
+        {
+            return CancelAppointmentResultDto.Fail("Cancellation reason is required");
+        }
+
 
         if (appointment.Status == AppointmentStatus.Cancelled)
         {
@@ -33,11 +38,7 @@ public class AppointmentService : IAppointmentService
         appointment.CancellationReason = dto.Reason;
         appointment.CancelledAt = DateTime.UtcNow;
 
-        if (string.IsNullOrWhiteSpace(dto.Reason))
-        {
-            return CancelAppointmentResultDto.Fail("Cancellation reason is required");
-        }
-
+       
         await _context.SaveChangesAsync();
         return CancelAppointmentResultDto.Success();
     }

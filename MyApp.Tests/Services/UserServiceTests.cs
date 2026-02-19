@@ -1,12 +1,7 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using HospitalSystem.Interface;
 using HospitalSystem.Services;
 using Microsoft.EntityFrameworkCore;
 using Moq;
-using Xunit;
-using Microsoft.AspNetCore.Identity;
 
 public class UserServiceTests
 {
