@@ -3,5 +3,7 @@ public enum UserRole
     Pending,
     Admin,
     Doctor,
-    FrontDesk
+    FrontDesk,
+    DemoAdmin,
+    DemoFrontDesk
 }

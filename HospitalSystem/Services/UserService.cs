@@ -141,8 +141,8 @@ return CreateDoctorResultDto.Success();
 
 
  public async Task<ServiceResult<List<DoctorDisplayDto>>> ListDoctorsAsync()
-{
-    if (!_currentUser.IsInRole(UserRole.Admin)&&!_currentUser.IsInRole(UserRole.FrontDesk))
+{   
+    if (!_currentUser.IsInRole(UserRole.Admin)&&!_currentUser.IsInRole(UserRole.FrontDesk)&&!_currentUser.IsInRole(UserRole.DemoAdmin)&&!_currentUser.IsInRole(UserRole.DemoFrontDesk))
     {
         return ServiceResult<List<DoctorDisplayDto>>
             .Fail("You are not allowed to list doctors");
@@ -168,7 +168,19 @@ return CreateDoctorResultDto.Success();
 
     public async Task<ServiceResult<List<UserDisplayDto>>> ListUsersAsync()
 {
-    if (!_currentUser.IsInRole(UserRole.Admin)&&!_currentUser.IsInRole(UserRole.FrontDesk))
+    // if (_currentUser.IsInRole(UserRole.DemoAdmin) || _currentUser.IsInRole(UserRole.DemoFrontDesk))
+    // {
+    //     var mockUsers = new List<UserDisplayDto>
+    //     {
+    //         new UserDisplayDto { UserId = 101, UserName = "Dr. John Smith (Demo)", Role = UserRole.Admin },
+    //         new UserDisplayDto { UserId = 102, UserName = "Jane Doe (Demo)", Role = UserRole.FrontDesk },
+    //         new UserDisplayDto { UserId = 103, UserName = "Admin Tester", Role = UserRole.Admin },
+    //         new UserDisplayDto { UserId = 104, UserName = "New Applicant", Role = UserRole.Pending }
+    //     };
+        
+    //     return ServiceResult<List<UserDisplayDto>>.Success(mockUsers);
+    // }
+    if (!_currentUser.IsInRole(UserRole.Admin)&&!_currentUser.IsInRole(UserRole.FrontDesk)&&!_currentUser.IsInRole(UserRole.DemoAdmin)&&!_currentUser.IsInRole(UserRole.DemoFrontDesk))
     {
         return ServiceResult<List<UserDisplayDto>>
             .Fail("Not allowed to list users");

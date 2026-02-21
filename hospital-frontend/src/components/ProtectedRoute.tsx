@@ -3,18 +3,18 @@ import { Navigate } from "react-router-dom";
 
 interface Props {
   children: JSX.Element;
-  requiredRole?: string;
+  allowedRoles?: string[]; 
 }
 
-const ProtectedRoute = ({ children, requiredRole }: Props) => {
+const ProtectedRoute = ({ children, allowedRoles }: Props) => {
   const token = localStorage.getItem("token");
-  const role = localStorage.getItem("role"); // optional
+  const role = localStorage.getItem("role"); 
 
   if (!token) {
     return <Navigate to="/" replace />;
   }
 
-  if (requiredRole && role !== requiredRole) {
+ if (allowedRoles && role && !allowedRoles.includes(role)) {
     return <Navigate to="/" replace />;
   }
 

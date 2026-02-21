@@ -13,13 +13,14 @@ public class CurrentUserService : ICurrentUserService
     public string UserId =>
         _httpContextAccessor.HttpContext?
             .User?
-            .FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            .FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 
-   public bool IsInRole(UserRole role)
+  public bool IsInRole(UserRole role)
 {
-    var roleName = role.ToString();
-    return _httpContextAccessor.HttpContext?
-        .User?
-        .IsInRole(roleName) ?? false;
+    var roleName = role.ToString(); // e.g., "DemoAdmin"
+    
+    return _httpContextAccessor.HttpContext?.User?.Claims
+        .Any(c => (c.Type == ClaimTypes.Role || c.Type == "role") 
+                  && c.Value.Replace(" ", "") == roleName) ?? false;
 }
 }

@@ -122,8 +122,8 @@ public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppoi
 }
 
     public async Task<ServiceResult<List<ViewAppointmentDto>>> GetAppointmentsAsync()
-    {
-        if (!_currentUser.IsInRole(UserRole.FrontDesk))
+    {   
+        if (!_currentUser.IsInRole(UserRole.FrontDesk)&&!_currentUser.IsInRole(UserRole.DemoFrontDesk))
         {
             return ServiceResult<List<ViewAppointmentDto>>
                 .Fail("Not allowed to list deparments");

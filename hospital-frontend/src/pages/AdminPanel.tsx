@@ -27,6 +27,10 @@ import type {
 import { CreateUser } from "../api/authApi";
 
 export default function AdminPanel() {
+  // Demo Role Check
+  const currentRole = localStorage.getItem("role");
+  const isDemo = currentRole === "DemoAdmin" || currentRole === "DemoFrontDesk";
+
   const [departments, setDepartments] = useState<ViewDepartmentDto[]>([]);
   const [doctors, setDoctors] = useState<DoctorDisplayDto[]>([]);
   const [users, setUsers] = useState<UserDisplayDto[]>([]);
@@ -328,7 +332,7 @@ export default function AdminPanel() {
 
   const changeRole = async (userId: number, role: UserRole) => {
     const result = await ChangeRole({ UserId: userId, NewRole: role });
-    if (!result.IsSuccess) {
+    if (!result.isSuccess) {
       showNotification("error", result.Error || "Failed to change role");
       return;
     }
@@ -1294,15 +1298,18 @@ export default function AdminPanel() {
             <div className="section-header">
               <h2 className="section-title">User Management</h2>
               <div style={{ display: "flex", gap: "1rem" }}>
-                <button
-                  className={showCreateUser ? "btn btn-secondary" : "btn btn-primary"}
-                  onClick={() => {
-                    setShowCreateUser(!showCreateUser);
-                    if (!showCreateUser) setShowUserMgmt(false);
-                  }}
-                >
-                  {showCreateUser ? "Cancel" : "+ Create User"}
-                </button>
+                {/* 1. Only show "Create User" button to REAL Admins */}
+                {!isDemo && (
+                  <button
+                    className={showCreateUser ? "btn btn-secondary" : "btn btn-primary"}
+                    onClick={() => {
+                      setShowCreateUser(!showCreateUser);
+                      if (!showCreateUser) setShowUserMgmt(false);
+                    }}
+                  >
+                    {showCreateUser ? "Cancel" : "+ Create User"}
+                  </button>
+                )}
                 <button
                   className={showUserMgmt ? "btn btn-secondary" : "btn btn-primary"}
                   onClick={() => setShowUserMgmt(!showUserMgmt)}
@@ -1312,7 +1319,8 @@ export default function AdminPanel() {
               </div>
             </div>
 
-            {showCreateUser && (
+            {/* 2. Hide Create User inputs entirely for demo users */}
+            {showCreateUser && !isDemo && (
               <div className="input-group">
                 <input
                   className="input"
@@ -1342,7 +1350,7 @@ export default function AdminPanel() {
                   <div className="empty-state"><p>No users found</p></div>
                 ) : (
                   users.map((user) => (
-                    <div key={user.UserId} className="user-item">
+                    <div key={user.UserId || (user as any).userId} className="user-item">
                       <div className="user-info">
                         <span style={{ fontSize: "1.5rem", color: "var(--primary)" }}>👤</span>
                         <div>
@@ -1351,8 +1359,15 @@ export default function AdminPanel() {
                       </div>
                       <div className="user-role-section">
                         <span className="user-role-label">Current Role:</span>
+                        {/* 3. Disable the select dropdown for demo users */}
                         <select
                           className="select"
+                          disabled={isDemo}
+                          style={{
+                            cursor: isDemo ? "not-allowed" : "pointer",
+                            opacity: isDemo ? 0.7 : 1,
+                            backgroundColor: isDemo ? "#f0f0f0" : "white"
+                          }}
                           value={
                             user.Role ||
                             (user as any).role ||
@@ -1365,6 +1380,8 @@ export default function AdminPanel() {
                           <option value="Admin">Admin</option>
                           <option value="Doctor">Doctor</option>
                           <option value="FrontDesk">Front Desk</option>
+                          <option value="DemoAdmin">Demo Admin</option>
+                          <option value="DemoFrontDesk">Demo Front Desk</option>
                         </select>
                       </div>
                     </div>

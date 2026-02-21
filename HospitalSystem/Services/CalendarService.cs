@@ -79,9 +79,8 @@ public async Task<CalendarActionResult> ChangeScheduleAsync(ChangeScheduleDto dt
     return CalendarActionResult.Success();
 }
     public async Task<ServiceResult<List<ViewSchedule>>> ViewScheduleAsync()
-    {
-           
-        if (!_currentUser.IsInRole(UserRole.FrontDesk)&& !_currentUser.IsInRole(UserRole.Admin))
+    {      
+        if (!_currentUser.IsInRole(UserRole.FrontDesk)&& !_currentUser.IsInRole(UserRole.Admin)&&!_currentUser.IsInRole(UserRole.DemoAdmin)&&!_currentUser.IsInRole(UserRole.DemoFrontDesk))
         {
             return ServiceResult<List<ViewSchedule>>
                 .Fail("Not allowed to list deparments");

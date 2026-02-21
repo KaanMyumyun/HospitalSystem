@@ -34,18 +34,35 @@ export default function SimpleAppointmentBooking() {
 
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
     const today = new Date();
-    const day = today.getDay();
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+    today.setHours(0, 0, 0, 0); 
+    
+    const day = today.getDay(); 
+    
+    let diff = today.getDate() - day + 1; 
+    
+    if (day === 6) {
+      diff = today.getDate() + 2; 
+    } else if (day === 0) {
+      diff = today.getDate() + 1;
+    }
+    
     return new Date(today.setDate(diff));
   });
+ useEffect(() => {
+    loadData(true);
 
-  useEffect(() => {
-    loadData();
+   const handleFocus = () => {
+      loadData(false); 
+    };
+
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
-  const loadData = async () => {
+const loadData = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
+      
       const [deptData, doctorData, userData, scheduleData, appointmentData] = await Promise.all([
         ViewDepartment(),
         ListDoctors(),
@@ -68,10 +85,8 @@ export default function SimpleAppointmentBooking() {
         SlotDurationMin: s.SlotDurationMin ?? s.slotDurationMin ?? 30,
       }));
       
-      // FIX: Normalize appointments to ensure PascalCase matches our DTO exactly!
       if (appointmentData && Array.isArray(appointmentData)) {
         const normalizedAppointments = appointmentData.map((app: any) => {
-          // Fix potentially lowercased status from backend
           let rawStatus = app.Status ?? app.status ?? "Scheduled";
           if (typeof rawStatus === 'string' && rawStatus.length > 0) {
             rawStatus = rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1);
@@ -98,9 +113,9 @@ export default function SimpleAppointmentBooking() {
       setSchedules(normalizedSchedules as ViewScheduleDto[]); 
       
     } catch (error) {
-      showNotification("error", "Failed to load data");
+      if (showLoading) showNotification("error", "Failed to load data");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -246,7 +261,7 @@ export default function SimpleAppointmentBooking() {
       setPatientName("");
       setPhoneNumber("");
       setDateOfBirth("");
-      loadData(); 
+      loadData(false); // --- UPDATED: Silently reload data ---
     } else {
       showNotification("error", result.error || (result as any).Error || "Failed to create appointment");
     }
@@ -270,7 +285,7 @@ export default function SimpleAppointmentBooking() {
       setShowCancelModal(false);
       setAppointmentToCancel(null);
       setCancelReason("");
-      loadData(); 
+      loadData(false); // --- UPDATED: Silently reload data ---
     } else {
       showNotification("error", result.error || (result as any).Error || "Failed to cancel appointment");
     }
@@ -799,6 +814,30 @@ export default function SimpleAppointmentBooking() {
           color: var(--danger);
         }
 
+        /* --- NEW: Past Slots CSS --- */
+        .time-slot-past {
+          background: var(--bg);
+          border: 2px solid #e2e8f0;
+          border-radius: 10px;
+          padding: 1rem 0.5rem;
+          text-align: center;
+          cursor: not-allowed;
+          font-weight: 500;
+          color: #94a3b8; 
+          font-size: 0.875rem;
+          position: relative;
+          opacity: 0.6;
+        }
+
+        .time-slot-past::before {
+          content: '−';
+          position: absolute;
+          left: 0.5rem;
+          top: 0.5rem;
+          color: #cbd5e1;
+          font-size: 0.875rem;
+        }
+
         .empty-slot {
           min-height: 65px;
           background: var(--bg);
@@ -1219,7 +1258,9 @@ export default function SimpleAppointmentBooking() {
                             const slotDateTime = new Date(day);
                             slotDateTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
                             
-                            // USING NORMALIZED DATA: Match exact values
+                            // --- NEW: Check if this slot is in the past ---
+                            const isPast = slotDateTime.getTime() < new Date().getTime();
+                            
                             const bookedAppointment = appointments.find(app => {
                                 if (app.DoctorId !== selectedDoctor.DoctorId) return false;
                                 if (app.Status === 'Cancelled') return false;
@@ -1241,7 +1282,19 @@ export default function SimpleAppointmentBooking() {
                                 );
                             }
 
-                            // If not booked, render normal clickable slot to book
+                            // --- NEW: Render unclickable box if the slot time has passed ---
+                            if (isPast) {
+                              return (
+                                <div
+                                  key={timeIdx}
+                                  className="time-slot-past"
+                                  title="This time slot has already passed"
+                                >
+                                  {time}
+                                </div>
+                              );
+                            }
+
                             return (
                               <div
                                 key={timeIdx}

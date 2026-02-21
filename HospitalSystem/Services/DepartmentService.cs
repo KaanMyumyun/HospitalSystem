@@ -8,21 +8,21 @@ using Microsoft.EntityFrameworkCore;
 public class DepartmentService : IDepartmentService
 {
     private readonly ApplicationDbContext _context;
-  private readonly ICurrentUserService _currentUser;
-    public DepartmentService(ApplicationDbContext context,ICurrentUserService currentUser)
+    private readonly ICurrentUserService _currentUser;
+    public DepartmentService(ApplicationDbContext context, ICurrentUserService currentUser)
     {
         _context = context;
         _currentUser = currentUser;
     }
     public async Task<DepartmentActionResultDto> ChangeDepartmentStatusAsync(ChangeDepartmentStatusDto dto)
-    {   
-          if (!_currentUser.IsInRole(UserRole.Admin))
+    {
+        if (!_currentUser.IsInRole(UserRole.Admin))
         {
             return DepartmentActionResultDto.Fail("You are not allowed to change doctor status");
         }
-       
-        var department = await _context.Departments.FirstOrDefaultAsync(u => u.Id == dto.DepartmentId );
-        if (department==null)
+
+        var department = await _context.Departments.FirstOrDefaultAsync(u => u.Id == dto.DepartmentId);
+        if (department == null)
         {
             return DepartmentActionResultDto.Fail("Department doesnt exist");
         }
@@ -34,35 +34,35 @@ public class DepartmentService : IDepartmentService
 
     public async Task<DepartmentActionResultDto> ChangeDoctorDepartmentAsync(ChangeDoctorDepartmentDto dto)
     {
-          if (!_currentUser.IsInRole(UserRole.Admin))
+        if (!_currentUser.IsInRole(UserRole.Admin))
         {
             return DepartmentActionResultDto.Fail("You are not allowed to change doctor status");
         }
 
-        var Doctor = await _context.Doctors.FirstOrDefaultAsync(u => u.Id == dto.DoctorId );
-        if (Doctor==null)
+        var Doctor = await _context.Doctors.FirstOrDefaultAsync(u => u.Id == dto.DoctorId);
+        if (Doctor == null)
         {
             return DepartmentActionResultDto.Fail("Doctor doesnt exist ");
         }
-        if(!Doctor.IsActive)
+        if (!Doctor.IsActive)
         {
             return DepartmentActionResultDto.Fail("This Doctor isnt active");
         }
 
-        var Department = await _context.Departments.FirstOrDefaultAsync(u => u.Id == dto.DepartmentId );
-        if (Department==null)
+        var Department = await _context.Departments.FirstOrDefaultAsync(u => u.Id == dto.DepartmentId);
+        if (Department == null)
         {
             return DepartmentActionResultDto.Fail("Department doesnt exist");
         }
-        if(!Department.IsActive)
+        if (!Department.IsActive)
         {
             return DepartmentActionResultDto.Fail("This Deparment isnt active");
         }
 
-        if(Doctor.DepartmentId == dto.DepartmentId)
+        if (Doctor.DepartmentId == dto.DepartmentId)
         {
             return DepartmentActionResultDto.Fail("Already in that department");
-        } 
+        }
 
         Doctor.DepartmentId = dto.DepartmentId;
         await _context.SaveChangesAsync();
@@ -71,7 +71,7 @@ public class DepartmentService : IDepartmentService
 
     public async Task<DepartmentActionResultDto> CreateDepartmentAsync(CreateDepartmentDto dto)
     {
-         if (!_currentUser.IsInRole(UserRole.Admin))
+        if (!_currentUser.IsInRole(UserRole.Admin))
         {
             return DepartmentActionResultDto.Fail("You are not allowed to change doctor status");
         }
@@ -94,19 +94,20 @@ public class DepartmentService : IDepartmentService
     }
 
 
-   public async Task<ServiceResult<List<ViewDepartmentDto>>> ListDepartmentsAsync()
-    { 
-          if (!_currentUser.IsInRole(UserRole.Admin)&&!_currentUser.IsInRole(UserRole.FrontDesk) )
+    public async Task<ServiceResult<List<ViewDepartmentDto>>> ListDepartmentsAsync()
     {
-        return ServiceResult<List<ViewDepartmentDto>>
-            .Fail("Not allowed to list deparments");
-    }
+        if (!_currentUser.IsInRole(UserRole.Admin) && !_currentUser.IsInRole(UserRole.FrontDesk)&&!_currentUser.IsInRole(UserRole.DemoAdmin)&&!_currentUser.IsInRole(UserRole.DemoFrontDesk))
+        {
+            return ServiceResult<List<ViewDepartmentDto>>
+                .Fail("Not allowed to list deparments");
+        }
+
         var departments = await _context.Departments.Select(u => new ViewDepartmentDto
         {
             Id = u.Id,
             Name = u.Department,
             IsActive = u.IsActive
         }).ToListAsync();
-       return ServiceResult<List<ViewDepartmentDto>>.Success(departments);
+        return ServiceResult<List<ViewDepartmentDto>>.Success(departments);
     }
 }

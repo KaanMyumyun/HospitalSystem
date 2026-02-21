@@ -11,21 +11,21 @@ function App() {
         {/* Public route */}
         <Route path="/" element={<Login />} />
 
-        {/* Admin only */}
+        {/* Admin only (Real & Demo) */}
         <Route
           path="/admin"
           element={
-            <ProtectedRoute requiredRole="Admin">
+            <ProtectedRoute allowedRoles={["Admin", "DemoAdmin"]}>
               <Admin />
             </ProtectedRoute>
           }
         />
 
-        {/* FrontDesk + Admin */}
+        {/* FrontDesk (Real & Demo) + Admins */}
         <Route
           path="/receptiondashboard"
           element={
-            <ProtectedRoute requiredRole="FrontDesk">
+            <ProtectedRoute allowedRoles={["FrontDesk", "DemoFrontDesk", "Admin", "DemoAdmin"]}>
               <ReceptionDashboard />
             </ProtectedRoute>
           }

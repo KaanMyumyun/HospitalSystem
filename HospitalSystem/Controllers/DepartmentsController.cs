@@ -17,7 +17,7 @@ public DepartmentController(IDepartmentService departmentService )
     _departmentService = departmentService;
 }
 
-    [Authorize(Roles = "FrontDesk,Admin")]
+    [Authorize(Roles = "FrontDesk,Admin,DemoAdmin,DemoFrontDesk")]
     [HttpGet("ViewDepartment")]
     public async Task<ActionResult<List<ViewDepartmentDto>>> ListDeparments()
     {

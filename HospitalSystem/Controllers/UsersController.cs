@@ -78,7 +78,7 @@ public class UsersController : ControllerBase
         
         return Ok(result);          
     }
-    [Authorize(Roles = "FrontDesk,Admin")]
+    [Authorize(Roles = "FrontDesk,Admin,DemoAdmin,DemoFrontDesk")]
     [HttpGet("ListUsers")]
     public async Task<ActionResult<List<UserDisplayDto>>> ListUsersAsync()
     {
@@ -86,7 +86,7 @@ public class UsersController : ControllerBase
         return Ok(users);
     }
 
-    [Authorize(Roles = "FrontDesk,Admin")]
+    [Authorize(Roles = "FrontDesk,Admin,DemoAdmin,DemoFrontDesk")]
     [HttpGet("ListDoctors")]
     public async Task<ActionResult<List<DoctorDisplayDto>>> ListDoctorsAsync()
     {

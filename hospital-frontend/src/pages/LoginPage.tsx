@@ -1,4 +1,4 @@
-import { TextField, Button, Box, Typography } from "@mui/material";
+import { TextField, Button, Box, Typography, Divider } from "@mui/material";
 import { useState } from "react";
 import { login, CreateUser } from "../api/authApi";
 import { useNavigate } from "react-router-dom";
@@ -9,25 +9,44 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
-  const handleLogin = async () => {
+  // 1. Helper function to handle all logins (Real & Demo)
+  const executeLogin = async (loginName: string, loginPass: string) => {
     try {
-      const result = await login({ name, password });
+      const result = await login({ name: loginName, password: loginPass });
       if (!result.isSuccess || !result.token || !result.role) {
         console.log(result.error);
         return;
       }
+      
+      // Save credentials
       localStorage.setItem("token", result.token);
       localStorage.setItem("role", result.role);
-      if (result.role === "Admin") {
+      
+      // Route based on role (Now handles Demo roles too!)
+      if (result.role === "Admin" || result.role === "DemoAdmin") {
         navigate("/admin");
-      } else if(result.role ==="FrontDesk") {
+      } else if (result.role === "FrontDesk" || result.role === "DemoFrontDesk") {
         navigate("/receptiondashboard");
-      }else{
-        navigate("/")
+      } else {
+        navigate("/");
       }
     } catch (error) {
       console.error("Login failed:", error);
     }
+  };
+
+  // Standard Login (Triggered by main login button)
+  const handleLogin = () => {
+    executeLogin(name, password);
+  };
+
+  // 2. One-Click Demo Login Handlers
+  const loginAsDemoAdmin = () => {
+    executeLogin("DemoAdmin", "12345678");
+  };
+
+  const loginAsDemoReception = () => {
+    executeLogin("DemoReception", "12345678");
   };
 
   const createUser = async () => {
@@ -102,13 +121,13 @@ const Login = () => {
           Login
         </Typography>
 
-        {/* Email Address Field */}
+        {/* Username/Email Field */}
         <TextField
           margin="normal"
           required
           fullWidth
           id="name"
-          label="Email Address"
+          label="Username"
           name="name"
           autoFocus
           value={name}
@@ -140,6 +159,7 @@ const Login = () => {
           }}
         />
 
+        {/* Standard Login Button */}
         <Button
           type="button"
           fullWidth
@@ -160,6 +180,52 @@ const Login = () => {
           Login
         </Button>
          
+      <Box sx={{ mt: 3, mb: 1 }}>
+          <Divider sx={{ mb: 2 }}>
+            <Typography variant="body2" color="textSecondary">
+              Portfolio Reviewer? 1-Click Login
+            </Typography>
+          </Divider>
+          
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <Button
+              type="button"
+              fullWidth
+              variant="outlined"
+              onClick={loginAsDemoAdmin}
+              sx={{
+                padding: "10px",
+                borderColor: "#1976D2",
+                color: "#1976D2",
+                "&:hover": {
+                  backgroundColor: "rgba(25, 118, 210, 0.04)",
+                  borderColor: "#1565C0",
+                },
+              }}
+            >
+               Login as Demo Admin
+            </Button>
+            
+            <Button
+              type="button"
+              fullWidth
+              variant="outlined"
+              onClick={loginAsDemoReception}
+              sx={{
+                padding: "10px",
+                borderColor: "#2E7D32", // Green tint to separate from admin
+                color: "#2E7D32",
+                "&:hover": {
+                  backgroundColor: "rgba(46, 125, 50, 0.04)",
+                  borderColor: "#1B5E20",
+                },
+              }}
+            >
+               Login as Demo Reception
+            </Button>
+          </Box>
+        </Box>
+
       </Box>
     </Box>
   );

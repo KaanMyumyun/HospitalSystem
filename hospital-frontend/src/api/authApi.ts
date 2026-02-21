@@ -1,49 +1,36 @@
-import type { LoginDto, LoginResultDto } from "../types/auth";
-import type { CreateUserDto, CreateUserResultDto } from "../types/auth";
-const Base_URL = "http://localhost:5272/api/Auth";
+import { apiClient } from "./apiClient";
+
+import type { LoginDto, LoginResultDto, CreateUserDto, CreateUserResultDto } from "../types/auth";
+
 export async function login(dto: LoginDto): Promise<LoginResultDto> {
   try {
-    const response = await fetch(`${Base_URL}/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(dto),
-    });
-
-    const data: LoginResultDto = await response.json();
-
-    if (data.isSuccess && data.token) {
-      localStorage.setItem("token", data.token);    
+    const response = await apiClient.post<LoginResultDto>("/Auth/login", dto);
+    
+    if (response.data.isSuccess && response.data.token) {
+      localStorage.setItem("token", response.data.token);
+     if (response.data.role) {
+         localStorage.setItem("role", response.data.role);
+      }
     }
 
-    return data;
-  } catch {
+    return response.data;
+  } catch (error: any) {
     return { 
         isSuccess: false, 
-        error: "Network error" };
+        error: error.response?.data?.message || "Network error" 
+    };
   }
 }
 
 export async function CreateUser(dto: CreateUserDto): Promise<CreateUserResultDto> {
     try {
-            const token = localStorage.getItem("token");
-        const response = await fetch(`${Base_URL}/CreateUser`,
-            {
-                method: "POST",
-                headers:
-                {
-                            Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(dto),
-            });
-        const data: CreateUserResultDto = await response.json();
-        return data;
+        const response = await apiClient.post<CreateUserResultDto>("/Auth/CreateUser", dto);
+        return response.data;
     } 
-   catch (error) 
-    {
+    catch (error: any) {
         return {
             isSuccess: false,
-            error: "Network error",
+            error: error.response?.data?.message || "Network error",
         };
     }
 }

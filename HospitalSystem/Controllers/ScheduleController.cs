@@ -46,7 +46,7 @@ public class ScheduleController : ControllerBase
         return Ok(result);
     }
 
-    [Authorize(Roles = "FrontDesk,Admin")]
+    [Authorize(Roles = "FrontDesk,Admin,DemoAdmin,DemoFrontDesk")]
     [HttpGet("list-schedule")]
     public async Task<ActionResult<List<ViewSchedule>>> ViewSchedule()
     {

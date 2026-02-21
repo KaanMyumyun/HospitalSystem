@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 namespace HospitalSystem.Controllers;
 
-[Authorize(Roles = "FrontDesk")]
 [ApiController]
 [Route("api/[controller]")]
 public class AppointmentsController : ControllerBase
@@ -33,7 +32,7 @@ public class AppointmentsController : ControllerBase
         return Ok(result);
     }
 
-    [Authorize(Roles = "FrontDesk")]
+    [Authorize(Roles = "FrontDesk,DemoFrontDesk")]
     [HttpGet("ListAppointments")]
     public async Task<ActionResult<List<ViewAppointmentDto>>> ListAppointmentAsync()
     {
