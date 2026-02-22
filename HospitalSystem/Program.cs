@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using HospitalSystem.Interface;
 using HospitalSystem.Services;
 using Microsoft.EntityFrameworkCore;
@@ -120,6 +121,27 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection")
     ));
+    builder.Services.AddRateLimiter(options =>
+{
+    // Standard 429 status code
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+   // Custom message to show this is intentional
+   options.OnRejected = async (context, token) =>
+   {
+     await context.HttpContext.Response.WriteAsync("Rate limit exceeded. API protection active. Please try again in a minute.", token);
+  };
+    
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    {
+    var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+      return RateLimitPartition.GetFixedWindowLimiter(clientIp, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,                 // 60 requests (generous for clicking, stops spam)
+            Window = TimeSpan.FromMinutes(1), // Per 1 minute
+            QueueLimit = 0                    // Zero queueing to save free-tier RAM
+        });
+    });
+});
 
 // =======================
 // Build App
@@ -147,6 +169,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseRouting();
 app.UseCors("ReactPolicy");
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using HospitalSystem.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,7 +15,7 @@ public class AppointmentsController : ControllerBase
     }
 
 
-    [Authorize(Roles = "FrontDesk")]
+  [Authorize(Roles = "FrontDesk")]
     [HttpPost("CreateAppointment")]
     public async Task<IActionResult> CreateAppointment([FromBody] CreateAppointmentDto dto)
     {
@@ -23,8 +24,17 @@ public class AppointmentsController : ControllerBase
             return BadRequest(ModelState);
         }
         
-        var userId = int.Parse(User.FindFirst("UserId").Value);
-        var result = await _appointmentService.CreateAppointmentAsync(dto,userId);
+       var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+                       ?? User.FindFirst("UserId")?.Value;
+
+        // Ensure we actually got a value and it is a valid integer before proceeding
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+        {
+            return Unauthorized(new { Message = "Invalid or missing User ID claim in token." });
+        }
+
+        var result = await _appointmentService.CreateAppointmentAsync(dto, userId);
+        
         if (!result.IsSuccess)
         {
             return BadRequest(result);

@@ -10,6 +10,7 @@ import {
   ListUsers,
   ChangeRole,
   ChangeDoctorStatus,
+  ResetPassword,
 } from "../api/userApi";
 import {
   ViewSchedule,
@@ -52,6 +53,10 @@ export default function AdminPanel() {
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [newUserName, setNewUserName] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
+
+  // New State variables for Reset Password
+  const [resettingPasswordUserId, setResettingPasswordUserId] = useState<number | null>(null);
+  const [newResetPassword, setNewResetPassword] = useState("");
 
   const [newScheduleDoctorId, setNewScheduleDoctorId] = useState<number | "">(
     ""
@@ -147,6 +152,32 @@ export default function AdminPanel() {
     } catch (error) {
       console.error("Create user failed:", error);
       showNotification("error", "Failed to create user");
+    }
+  };
+
+  const submitResetPassword = async (userId: number) => {
+    if (!newResetPassword.trim()) {
+      showNotification("error", "Please enter a new password");
+      return;
+    }
+
+    try {
+      // Note: Adjust the parameter casing to match what your ResetPasswordDto expects (e.g. UserId vs userId)
+      const result = await ResetPassword({ 
+        UserId: userId, 
+        NewPassword: newResetPassword 
+      } as any);
+
+      if (result.isSuccess) {
+        setResettingPasswordUserId(null);
+        setNewResetPassword("");
+        showNotification("success", "Password reset successfully");
+      } else {
+        showNotification("error", result.error || "Failed to reset password");
+      }
+    } catch (error) {
+      console.error("Reset password failed:", error);
+      showNotification("error", "Failed to reset password");
     }
   };
 
@@ -1183,7 +1214,6 @@ export default function AdminPanel() {
                           <div className="schedule-group-title">
                             <span>{doctorName}</span>
                           </div>
-
                         </div>
 
                         {docSchedules.map((schedule) => {
@@ -1383,6 +1413,46 @@ export default function AdminPanel() {
                           <option value="DemoAdmin">Demo Admin</option>
                           <option value="DemoFrontDesk">Demo Front Desk</option>
                         </select>
+
+                        {/* NEW: Reset Password Functionality */}
+                        {!isDemo && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '1rem', paddingLeft: '1rem', borderLeft: '1px solid var(--border)' }}>
+                            {resettingPasswordUserId === user.UserId ? (
+                              <>
+                                <input
+                                  className="input"
+                                  type="password"
+                                  placeholder="New password..."
+                                  value={newResetPassword}
+                                  onChange={(e) => setNewResetPassword(e.target.value)}
+                                  style={{ padding: '0.4rem 0.8rem', minWidth: '130px', fontSize: '0.85rem' }}
+                                />
+                                <button
+                                  className="btn btn-sm btn-success"
+                                  onClick={() => submitResetPassword(user.UserId)}
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  className="btn btn-sm btn-secondary"
+                                  onClick={() => {
+                                    setResettingPasswordUserId(null);
+                                    setNewResetPassword("");
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                className="btn btn-sm btn-warning"
+                                onClick={() => setResettingPasswordUserId(user.UserId)}
+                              >
+                                Reset Password
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))

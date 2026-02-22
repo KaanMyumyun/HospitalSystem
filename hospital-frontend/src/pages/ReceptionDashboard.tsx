@@ -48,10 +48,11 @@ export default function SimpleAppointmentBooking() {
     
     return new Date(today.setDate(diff));
   });
- useEffect(() => {
+
+  useEffect(() => {
     loadData(true);
 
-   const handleFocus = () => {
+    const handleFocus = () => {
       loadData(false); 
     };
 
@@ -59,7 +60,7 @@ export default function SimpleAppointmentBooking() {
     return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
-const loadData = async (showLoading = true) => {
+  const loadData = async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true);
       
@@ -230,7 +231,8 @@ const loadData = async (showLoading = true) => {
   const handleSlotClick = (doctorId: number, date: Date, time: string) => {
     const [hours, minutes] = time.split(':');
     const dateTime = new Date(date);
-    dateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    // Add base 10 to parseInt to avoid octal formatting issues that can corrupt the C# date string
+    dateTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
     setSelectedSlot({ doctorId, dateTime: dateTime.toISOString() });
     setShowConfirmModal(true);
   };
@@ -246,11 +248,16 @@ const loadData = async (showLoading = true) => {
       return;
     }
 
+    // --- CRITICAL FIX: Convert DateOfBirth to a full ISO string ---
+    // ASP.NET Core expects a full DateTime string (e.g. 1990-01-01T00:00:00.000Z).
+    // If you send just "YYYY-MM-DD", model binding fails and the DTO becomes null.
+    const formattedDob = new Date(dateOfBirth).toISOString();
+
     const result = await CreateAppointment({
       DoctorId: selectedSlot.doctorId,
       PatientName: patientName,
       PhoneNumber: phoneNumber,
-      DateOfBirth: dateOfBirth,
+      DateOfBirth: formattedDob, // <-- Send the C#-safe formatted string
       AppointmentTime: selectedSlot.dateTime,
     });
 
@@ -1110,7 +1117,7 @@ const loadData = async (showLoading = true) => {
         }
       `}</style>
 
-    <div className="booking-page">
+      <div className="booking-page">
         <div className="header">
           <div className="header-content">
             <div className="header-text">
