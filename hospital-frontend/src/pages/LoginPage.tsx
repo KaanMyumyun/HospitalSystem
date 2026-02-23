@@ -50,18 +50,7 @@ const Login = () => {
     executeLogin("DemoReception", "12345678");
   };
 
-  const createUser = async () => {
-    try {
-      const result = await CreateUser({ name, password });
-      if (!result.isSuccess) {
-        console.log(result.error);
-        return;
-      }
-      console.log("User created");
-    } catch (error) {
-      console.error("Create user failed:", error);
-    }
-  };
+ 
 
   return (
     <Box

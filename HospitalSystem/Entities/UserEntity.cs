@@ -4,8 +4,6 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 public class UserEntity
 {
     public int Id { get; set; }
-
-
     [Required]
     public string Name { get; set; }
     [Required]
