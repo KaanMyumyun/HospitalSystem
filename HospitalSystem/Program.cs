@@ -19,7 +19,8 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins(
                 "http://localhost:5173", // Vite (local)
-                "http://localhost:3000"  // Docker frontend
+                "http://localhost:3000",  // Docker frontend
+                "https://hospitalsystem.pages.dev"
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
