@@ -9,9 +9,7 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// =======================
-// CORS
-// =======================
+// Cords to front end
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("ReactPolicy", policy =>
@@ -28,9 +26,8 @@ builder.Services.AddCors(options =>
     });
 });
 
-// =======================
-// Controllers & JSON
-// =======================
+// Controllers + json
+
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -38,9 +35,8 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     });
 
-// =======================
-// Swagger + JWT Support
-// =======================
+// swager + JWT 
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -76,9 +72,9 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// =======================
-// Dependency Injection
-// =======================
+
+// 
+
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -89,9 +85,9 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<ICalendarService, CalendarService>();
 
 
-// =======================
-// JWT Configuration
-// =======================
+
+// JWT config
+
 builder.Services.Configure<JwtSettings>(
     builder.Configuration.GetSection("JwtSettings"));
 
