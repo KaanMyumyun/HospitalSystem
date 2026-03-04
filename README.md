@@ -1,41 +1,528 @@
-![act-logo](https://raw.githubusercontent.com/wiki/nektos/act/img/logo-150.png)
+# Hospital System
 
-# Overview [![push](https://github.com/nektos/act/workflows/push/badge.svg?branch=master&event=push)](https://github.com/nektos/act/actions) [![Go Report Card](https://goreportcard.com/badge/github.com/nektos/act)](https://goreportcard.com/report/github.com/nektos/act) [![awesome-runners](https://img.shields.io/badge/listed%20on-awesome--runners-blue.svg)](https://github.com/jonico/awesome-runners)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Click_Here-success?style=for-the-badge&logo=cloudflare)](https://hospitalsystem.pages.dev/)
 
-> "Think globally, `act` locally"
+A full-stack **Hospital Management System** built with **ASP.NET Core Web API** and a **React + TypeScript + Vite** frontend.
 
-Run your [GitHub Actions](https://developer.github.com/actions/) locally! Why would you want to do this? Two reasons:
+## Free Cloud Hosting
 
-- **Fast Feedback** - Rather than having to commit/push every time you want to test out the changes you are making to your `.github/workflows/` files (or for any changes to embedded GitHub actions), you can use `act` to run the actions locally. The [environment variables](https://help.github.com/en/actions/configuring-and-managing-workflows/using-environment-variables#default-environment-variables) and [filesystem](https://help.github.com/en/actions/reference/virtual-environments-for-github-hosted-runners#filesystems-on-github-hosted-runners) are all configured to match what GitHub provides.
-- **Local Task Runner** - I love [make](<https://en.wikipedia.org/wiki/Make_(software)>). However, I also hate repeating myself. With `act`, you can use the GitHub Actions defined in your `.github/workflows/` to replace your `Makefile`!
+This project is fully deployed using a modern, free-tier cloud infrastructure:
 
-> [!TIP]
-> **Now Manage and Run Act Directly From VS Code!**<br/>
-> Check out the [GitHub Local Actions](https://sanjulaganepola.github.io/github-local-actions-docs/) Visual Studio Code extension which allows you to leverage the power of `act` to run and test workflows locally without leaving your editor.
+* **Frontend:** Hosted on [Cloudflare Pages](https://pages.cloudflare.com/)
+* **Backend API:** Hosted on [Render](https://render.com/)
+* **Database:** Serverless PostgreSQL hosted on [Neon](https://neon.tech/)
 
-# How Does It Work?
+*(Note: The backend runs on a free cloud instance. If the system has been inactive, it may take 30-60 seconds to "spin up" during your first login attempt. Please be patient!)*
 
-When you run `act` it reads in your GitHub Actions from `.github/workflows/` and determines the set of actions that need to be run. It uses the Docker API to either pull or build the necessary images, as defined in your workflow files and finally determines the execution path based on the dependencies that were defined. Once it has the execution path, it then uses the Docker API to run containers for each action based on the images prepared earlier. The [environment variables](https://help.github.com/en/actions/configuring-and-managing-workflows/using-environment-variables#default-environment-variables) and [filesystem](https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#file-systems) are all configured to match what GitHub provides.
+---
 
-Let's see it in action with a [sample repo](https://github.com/cplee/github-actions-demo)!
+The project focuses on secure authentication, role-based authorization, and clean API design, while remaining extensible for future improvements such as cloud hosting, containerization, testing, and UI enhancements.
 
-![Demo](https://raw.githubusercontent.com/wiki/nektos/act/quickstart/act-quickstart-2.gif)
+---
 
-# Act User Guide
+## Overview
 
-Please look at the [act user guide](https://nektosact.com) for more documentation.
+The Hospital System is designed to manage hospital operations including:
 
-# Support
+* User registration and authentication
+* Role-based access control
+* Department management
+* Appointment scheduling and cancellation
+* Secure API access using JWT
 
-Need help? Ask in [discussions](https://github.com/nektos/act/discussions)!
+The system is divided into two independent layers:
 
-# Contributing
+* Backend – RESTful API built with ASP.NET Core
+* Frontend – React application built with TypeScript and Vite
 
-Want to contribute to act? Awesome! Check out the [contributing guidelines](CONTRIBUTING.md) to get involved.
+---
 
-## Manually building from source
+## Tech Stack
 
-- Install Go tools 1.20+ - (<https://golang.org/doc/install>)
-- Clone this repo `git clone git@github.com:nektos/act.git`
-- Run unit tests with `make test`
-- Build and install: `make install`
+### Backend
+
+* ASP.NET Core Web API
+* Entity Framework Core
+* PostgreSQL
+* JWT Authentication
+* Role-based Authorization
+* Swagger / OpenAPI
+
+### Frontend
+
+* React
+* TypeScript
+* Vite
+
+### Tooling
+
+* .NET SDK 8+
+* Node.js 18+
+* npm
+
+---
+
+## Project Structure
+
+```text
+.
+├── hospital-frontend/              # Frontend (React + TypeScript + Vite)
+│   ├── public/
+│   ├── src/
+│   │   ├── api/                    # API communication layer
+│   │   │   ├── appointmentApi.ts
+│   │   │   ├── authApi.ts
+│   │   │   ├── departmentApi.ts
+│   │   │   ├── http.ts
+│   │   │   ├── unwrapServiceResult.ts
+│   │   │   └── userApi.ts
+│   │   ├── components/             # Reusable UI components
+│   │   ├── lib/                    # Shared utilities/helpers
+│   │   ├── pages/                  # Application pages
+│   │   │   ├── AdminPanel.tsx
+│   │   │   ├── Appointmentbooking.tsx
+│   │   │   ├── LoginPage.tsx
+│   │   │   └── ReceptionDashboard.tsx
+│   │   ├── types/                  # TypeScript type definitions
+│   │   │   ├── appointment.ts
+│   │   │   ├── appointmentStatus.ts
+│   │   │   ├── auth.ts
+│   │   │   ├── department.ts
+│   │   │   ├── serviceResult.ts
+│   │   │   ├── user.ts
+│   │   │   └── userRole.ts
+│   │   ├── App.tsx
+│   │   ├── main.tsx
+│   │   └── index.css
+│   ├── Dockerfile
+│   ├── vite.config.ts
+│   ├── tailwind.config.js
+│   ├── package.json
+│   └── README.md
+│
+├── HospitalSystem/                 # Backend (ASP.NET Core Web API)
+│   ├── Controllers/
+│   │   ├── AppointmentsController.cs
+│   │   ├── AuthController.cs
+│   │   ├── DepartmentsController.cs
+│   │   └── UsersController.cs
+│   ├── Entities/                   # Database entities
+│   │   ├── ApointmentsEntity.cs
+│   │   ├── DepartmentEntity.cs
+│   │   ├── DoctorEntity.cs
+│   │   ├── PatiensEntity.cs
+│   │   ├── RoleEntity.cs
+│   │   └── UserEntity.cs
+│   ├── Enums/
+│   │   ├── AppointmentStatus.cs
+│   │   ├── JwtSettings.cs
+│   │   └── UserRole.cs
+│   ├── Interface/                  # Service interfaces
+│   │   ├── IAppointmentService.cs
+│   │   ├── IAuthService.cs
+│   │   ├── ICurrentUserService.cs
+│   │   ├── IDepartmentService.cs
+│   │   └── IUserService.cs
+│   ├── Services/                   # Business logic
+│   │   ├── AppointmentService.cs
+│   │   ├── AuthService.cs
+│   │   ├── CurrentUserService.cs
+│   │   ├── DepartmentService.cs
+│   │   └── UserService.cs
+│   ├── Migrations/
+│   ├── Data/
+│   ├── Program.cs
+│   ├── appsettings.json
+│   ├── appsettings.Development.json
+│   ├── Dockerfile
+│   └── HospitalSystem.csproj
+│
+├── MyApp.Tests/                    # Unit Tests
+│   ├── Services/
+│   │   ├── AppointmentServiceTests.cs
+│   │   └── UserServiceTests.cs
+│   ├── Controllers/
+│   ├── GlobalUsings.cs
+│   └── MyApp.Tests.csproj
+│
+├── docker-compose.yml
+├── HospitalSystem.sln
+├── .dockerignore
+└── README.md
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+* .NET SDK 8.0 or later
+* Node.js 18 or later
+* PostgreSQL
+
+---
+
+### Clone the Repository
+
+```bash
+git clone [https://github.com/KaanMyumyun/HospitalSystem.git](https://github.com/KaanMyumyun/HospitalSystem.git)
+cd HospitalSystem
+```
+
+---
+
+## Backend Setup
+
+```bash
+cd HospitalSystem.Api
+dotnet restore
+dotnet run
+```
+
+API available at:
+
+```text
+http://localhost:5272
+```
+
+Swagger UI:
+
+```text
+http://localhost:5272/swagger
+```
+
+---
+
+## Frontend Setup
+
+```bash
+cd front-end
+npm install
+npm run dev
+```
+
+Frontend available at:
+
+```text
+http://localhost:5173
+```
+
+---
+
+## Authentication and Authorization
+
+* JWT-based authentication
+* Protected endpoints require a Bearer token
+* Role-based access restrictions
+* Swagger supports authenticated testing
+
+---
+
+## API Endpoints
+
+### Authentication
+
+| Method | Endpoint             | Description                      |
+| -----: | -------------------- | -------------------------------- |
+|   POST | /api/Auth/CreateUser | Register a new user              |
+|   POST | /api/Auth/login      | Authenticate user and return JWT |
+
+---
+
+### Users
+
+| Method | Endpoint                  | Description         |
+| -----: | ------------------------- | ------------------- |
+|   POST | /api/Users/change-role    | Change user role    |
+|   POST | /api/Users/create-doctor  | Create doctor user  |
+|   POST | /api/Users/reset-password | Reset user password |
+|    GET | /api/Users/ListUsers      | List all users      |
+|    GET | /api/Users/ListDoctors    | List all doctors    |
+
+---
+
+### Departments
+
+| Method | Endpoint                               | Description                  |
+| -----: | -------------------------------------- | ---------------------------- |
+|    GET | /api/Department/ViewDepartment         | View departments             |
+|   POST | /api/Department/CreateDepartment       | Create department            |
+|   POST | /api/Department/ChangeDoctorDepartment | Assign doctor to department  |
+|   POST | /api/Department/ChangeDepartmentStatus | Enable or disable department |
+
+---
+
+### Appointments
+
+| Method | Endpoint                            | Description        |
+| -----: | ----------------------------------- | ------------------ |
+|   POST | /api/Appointments/CreateAppointment | Create appointment |
+|    GET | /api/Appointments/ListAppointments  | List appointments  |
+|   POST | /api/Appointments/CancelAppointment | Cancel appointment |
+
+---
+
+### Schedules
+
+| Method | Endpoint                            | Description                 |
+| -----: | ----------------------------------- | --------------------------- |
+|   POST | /api/Schedule/create-schedule       | Create a new schedule       |
+|   POST | /api/Schedule/change-schedule       | Modify an existing schedule |
+|   GET  | /api/Schedule/list-schedule         | View all schedules          |
+
+---
+
+## Example Request
+
+### Change User Role
+
+Endpoint:
+
+```text
+POST /api/Users/change-role
+```
+
+Headers:
+
+```text
+Authorization: Bearer <JWT_TOKEN>
+```
+
+Request body:
+
+```json
+{
+  "userId": 10,
+  "newRole": "Doctor"
+}
+```
+
+Response:
+
+```json
+{
+  "isSuccess": true,
+  "error": null
+}
+```
+
+---
+
+## Error Handling
+
+* 200 OK – Successful request
+* 400 Bad Request – Validation or business logic error
+* 401 Unauthorized – Missing or invalid JWT
+* 403 Forbidden – Insufficient permissions
+* 404 Not Found – Resource not found
+* 500 Internal Server Error – Unexpected server error
+
+---
+
+## Database
+
+The backend uses **PostgreSQL** with **Entity Framework Core**.
+
+Database name:
+
+```text
+HospitalSystemDb
+```
+
+Create database:
+
+```sql
+CREATE DATABASE "HospitalSystemDb";
+```
+
+---
+
+## Security Considerations
+
+* JWT-based authentication
+* Role-based authorization
+* Secure password hashing
+* Input validation on all endpoints
+* HTTPS recommended for production
+
+---
+
+## API Rate Limiting & Protection
+
+To protect the backend from spam, brute-force attacks, and to optimize resource usage on the free-tier cloud hosting, a global rate limiter is implemented using ASP.NET Core's built-in rate-limiting middleware.
+
+* **Strategy:** Fixed Window Limiter (Partitioned by Client IP Address)
+* **Permit Limit:** 60 requests per minute per user.
+* **Queueing:** Disabled (`QueueLimit = 0`). Exceeding requests are immediately rejected to conserve server RAM rather than holding them in memory.
+* **Rejection Behavior:** Returns a `429 Too Many Requests` status code with a custom intervention message: *"Rate limit exceeded. API protection active. Please try again in a minute."*
+
+---
+
+# UserService Unit Tests
+
+This project contains unit tests for the `UserService` class in the **HospitalSystem** application.
+The tests validate business logic, role-based authorization, and database state changes using an in-memory database.
+
+---
+
+## Technologies Used
+
+* .NET / C#
+* xUnit (unit testing framework)
+* Moq (mocking dependencies)
+* Entity Framework Core InMemory (isolated test database)
+* ASP.NET Core Identity (password hashing used internally by the service)
+
+---
+
+## Testing
+
+Unit tests are implemented for the `UserService`, focusing on service-layer business logic and role-based authorization. Tests are written using xUnit and validate both successful "happy paths" and complex edge-case failure scenarios.
+
+---
+
+### Covered Methods
+
+- `ChangeDoctorsStatusAsync`
+- `ChangeRoleAsync`
+- `CreateDoctorAsync`
+- `ListUsersAsync`
+- `ListDoctorsAsync`
+- `ResetPasswordAsync`
+
+---
+
+### Tested Scenarios Include
+
+- **Role-Based Access Control (RBAC):** Admin vs. non-admin authorization rules, as well as specific Front Desk permissions.
+- **Entity State Management:** Dynamic entity management, such as automatically creating or deactivating Doctor profiles when a user's role is changed.
+- **Edge Cases:** Handling of non-existent entities, invalid Enum states, and reactivating/updating existing profiles instead of creating duplicates.
+- **Validation:** Prevention of invalid state changes and verification of business rules.
+
+---
+
+### What the Tests Verify
+
+- Role-based authorization is strictly enforced.
+- Business logic behaves correctly during complex edge cases.
+- Database state is modified *only* on successful operations.
+- Unintended side effects do not occur during read-only or failed operations.
+
+---
+
+## Test Design
+
+### In-Memory Database
+
+Each test uses a fresh EF Core InMemory database instance:
+
+```csharp
+.UseInMemoryDatabase(Guid.NewGuid().ToString())
+```
+
+---
+
+### Mocked Dependencies
+
+ICurrentUserService is mocked using Moq to simulate different user roles without relying on actual authentication mechanisms:
+
+```csharp
+currentUserMock
+.Setup(x => x.IsInRole(UserRole.Admin))
+.Returns(true);
+```
+
+---
+
+### Example Test Flow
+
+Thanks to the helper methods, tests follow a highly readable and concise Arrange-Act-Assert pattern:
+
+```csharp
+[Fact]
+public async Task ChangeDoctorStatus_Admin_Succeeds()
+{
+    var db = CreateDbContext();
+    await SeedStandardDoctorAsync(db, isDoctorActive: false);
+    var service = CreateService(db, isAdmin: true);
+
+    var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorsStatus { DoctorId = 1, IsActive = true });
+
+    Assert.True(result.IsSuccess);
+    Assert.True(db.Doctors.First().IsActive);
+}
+```
+
+---
+
+### Running the Tests
+
+From the solution root directory, execute the following command in your terminal:
+
+```bash
+dotnet test
+```
+
+---
+
+## Future Test Coverage
+
+* DepartmentService
+* AuthService
+* CurrentUserService (authorization edge cases)
+
+--- 
+
+## Containerization
+
+The project supports full containerization using Docker.
+
+* Multi-stage Dockerfile for ASP.NET Core Web API
+* Dockerfile for React + Vite frontend (served via Nginx)
+* PostgreSQL container with persistent volume
+* Docker Compose for local development and deployment parity
+
+## Running with Docker
+
+The application can be run fully containerized using Docker Compose.
+
+### Prerequisites
+
+* Docker
+* Docker Compose
+
+### Start the application
+
+From the project root:
+
+```bash
+docker compose up --build
+```
+
+---
+
+## UI Improvements (Planned)
+
+* Improved layout and styling
+* Enhanced form validation
+* Role-based UI behavior
+* Responsive design
+
+---
+
+## Known Limitations
+
+* UI still under development
+* Limited unit test coverage (currently focused on DeparmentServices)
+
+---
+
+## Project Goals
+
+* Build a secure full-stack system
+* Apply authentication best practices
+* Design scalable backend architecture
+* Prepare for cloud deployment
+
+---
