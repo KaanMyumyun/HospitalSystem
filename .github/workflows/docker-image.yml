@@ -14,13 +14,13 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
 
-      - name: build image
-        run: docker build -t kstkaan/githubactions:latest ./HospitalSystem
+      - name: Build backend
+        run: docker build -f HospitalSystem/Dockerfile -t kstkaan/githubactions:backend-latest .
 
       - name: push to docker hub
         run: docker push kstkaan/githubactions:latest
 
-      - name: build image
+      - name: Build frontend
         run: docker build -t kstkaan/githubactions:frontend-latest ./hospital-frontend
 
       - name: push to docker hub
