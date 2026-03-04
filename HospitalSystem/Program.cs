@@ -111,18 +111,16 @@ builder.Services.AddAuthentication("Bearer")
         };
     });
 
-// =======================
-// PostgreSQL (EF Core)
-// =======================
+// PostgreSQL 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection")
     ));
     builder.Services.AddRateLimiter(options =>
 {
-    // Standard 429 status code
+ 
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-   // Custom message to show this is intentional
+  
    options.OnRejected = async (context, token) =>
    {
      await context.HttpContext.Response.WriteAsync("Rate limit exceeded. API protection active. Please try again in a minute.", token);
@@ -133,29 +131,23 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
       return RateLimitPartition.GetFixedWindowLimiter(clientIp, _ => new FixedWindowRateLimiterOptions
         {
-            PermitLimit = 60,                 // 60 requests (generous for clicking, stops spam)
+            PermitLimit = 60,                 // 60 requests 
             Window = TimeSpan.FromMinutes(1), // Per 1 minute
-            QueueLimit = 0                    // Zero queueing to save free-tier RAM
+            QueueLimit = 0                    // Zero queue
         });
     });
 });
 
-// =======================
 // Build App
-// =======================
 var app = builder.Build();
 
-// =======================
 // Apply EF Core Migrations
-// =======================
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate();
 }
-// =======================
 // Middleware Pipeline
-// =======================
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
