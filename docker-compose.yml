@@ -21,29 +21,21 @@ services:
     container_name: hospital-backend
     depends_on:
       - postgres
+    env_file:
+      - .env
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__DefaultConnection: >
-        Host=postgres;
-        Port=5432;
-        Database=HospitalSystemDb;
-        Username=hospitaluser;
-        Password=strongpassword
-      JwtSettings__SecretKey: THIS_SHOULD_BE_LONG_AND_SECRET_123456789
-      JwtSettings__Issuer: HospitalSystem
-      JwtSettings__Audience: HospitalSystemUsers
     ports:
-      - "5000:8080"
+      - "5272:5272"
 
   frontend:
     build:
-      context: .
-      dockerfile: hospital-frontend/Dockerfile
+      context: ./hospital-frontend
+      dockerfile: Dockerfile
     container_name: hospital-frontend
     depends_on:
       - backend
     ports:
-      - "3000:80"
-
+         - "5173:5173"
 volumes:
   postgres_data:
