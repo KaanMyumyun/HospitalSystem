@@ -18,7 +18,7 @@ public class DepartmentService : IDepartmentService
     {
         if (!_currentUser.IsInRole(UserRole.Admin))
         {
-            return DepartmentActionResultDto.Fail("You are not allowed to change doctor status");
+            return DepartmentActionResultDto.Fail("You are not allowed to change deparment status");
         }
 
         var department = await _context.Departments.FirstOrDefaultAsync(u => u.Id == dto.DepartmentId);
@@ -73,7 +73,7 @@ public class DepartmentService : IDepartmentService
     {
         if (!_currentUser.IsInRole(UserRole.Admin))
         {
-            return DepartmentActionResultDto.Fail("You are not allowed to change doctor status");
+            return DepartmentActionResultDto.Fail("You are not allowed to create a deparmentdot");
         }
         var exist = await _context.Departments.AnyAsync(u => u.Department == dto.Name);
 

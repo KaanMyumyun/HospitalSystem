@@ -16,7 +16,7 @@ builder.Services.AddCors(options =>
     {
         policy
             .WithOrigins(
-                "http://localhost:5173", // Vite (local)
+                "http://localhost:5173", // local
                 "https://hospitalsystem.pages.dev"
             )
             .AllowAnyHeader()
@@ -72,7 +72,7 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 
-// 
+// services
 
 builder.Services.AddHttpContextAccessor();
 

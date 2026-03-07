@@ -72,7 +72,7 @@ public async Task<CalendarActionResult> ChangeScheduleAsync(ChangeScheduleDto dt
     if (exist)
         return CalendarActionResult.Fail("Schedule already exists for this time range");
 
-    calendar.StartTime = start;  // entity setter handles UTC automatically
+    calendar.StartTime = start;  
     calendar.EndTime   = end;
     calendar.SlotDurationMin = dto.SlotDurationMin;
     await _context.SaveChangesAsync();
