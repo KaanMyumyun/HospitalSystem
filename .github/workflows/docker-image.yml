@@ -21,14 +21,14 @@ jobs:
 
 
       - name: Build backend image
-        run: docker build -f HospitalSystem/Dockerfile -t kstkaan/hospital-backend:latest .
+        run: docker build -f HospitalSystem/Dockerfile -t kstkaan/hospital-backend:${{ github.sha }} .
 
       - name: Push backend image
-        run: docker push kstkaan/hospital-backend:latest
+        run: docker push kstkaan/hospital-backend:${{ github.sha }}
 
 
       - name: Build frontend image
-        run: docker build -t kstkaan/hospital-frontend:latest ./hospital-frontend
+        run: docker build -t kstkaan/hospital-frontend:${{ github.sha }} ./hospital-frontend
 
       - name: Push frontend image
-        run: docker push kstkaan/hospital-frontend:latest
+        run: docker push kstkaan/hospital-frontend:${{ github.sha }}

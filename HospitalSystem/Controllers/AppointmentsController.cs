@@ -15,7 +15,7 @@ public class AppointmentsController : ControllerBase
     }
 
 
-  [Authorize(Roles = "FrontDesk")]
+    [Authorize(Roles = "FrontDesk")]
     [HttpPost("CreateAppointment")]
     public async Task<IActionResult> CreateAppointment([FromBody] CreateAppointmentDto dto)
     {
