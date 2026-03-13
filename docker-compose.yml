@@ -21,13 +21,12 @@ services:
     container_name: hospital-backend
     depends_on:
       - postgres
-    env_file:
-      - .env
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=HospitalSystemDb;Username=hospitaluser;Password=strongpassword
     ports:
-      - "5272:5272"
-
+      - "5272:8080"
+      
   frontend:
     build:
       context: ./hospital-frontend
@@ -36,6 +35,7 @@ services:
     depends_on:
       - backend
     ports:
-         - "5173:5173"
+      - "5173:5173"
+
 volumes:
   postgres_data:

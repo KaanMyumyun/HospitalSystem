@@ -27,7 +27,6 @@ public class AppointmentsController : ControllerBase
        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
                        ?? User.FindFirst("UserId")?.Value;
 
-        // Ensure we actually got a value and it is a valid integer before proceeding
         if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
         {
             return Unauthorized(new { Message = "Invalid or missing User ID claim in token." });

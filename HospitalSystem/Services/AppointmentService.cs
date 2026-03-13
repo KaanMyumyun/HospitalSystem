@@ -45,20 +45,17 @@ public class AppointmentService : IAppointmentService
 
 public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppointmentDto dto, int frontDeskUserId)
 {
-    // 1. Authorize role
     if (!_currentUser.IsInRole(UserRole.FrontDesk))
     {
         return CreateAppointmentResultDto.Fail("You are not allowed to create appointments");
     }
 
-    // 2. Validate Doctor
     var doctorExist = await _context.Doctors.AnyAsync(u => u.Id == dto.DoctorId);
     if (!doctorExist)
     {
         return CreateAppointmentResultDto.Fail("Doctor not found");
     }
 
-    // 3. Find or create patient
     var existingPatient = await _context.Patients
         .FirstOrDefaultAsync(p => p.PhoneNumber == dto.PhoneNumber);
     
@@ -81,7 +78,7 @@ public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppoi
         patientId = newPatient.Id;
     }
 
-    // 4. Time and Overlap calculations
+    
     var appointmentTime = DateTime.SpecifyKind(dto.AppointmentTime, DateTimeKind.Utc);
     var duration = TimeSpan.FromMinutes(15);
     var appointmentEnd = appointmentTime.Add(duration);
@@ -95,7 +92,6 @@ public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppoi
         .Select(a => new { a.TimeOfAppointment })
         .ToListAsync(); 
     
-    // Check overlap in memory
     var overlap = existingAppointments.Any(a =>
     {
         var existingEnd = a.TimeOfAppointment.Add(duration);
@@ -107,7 +103,6 @@ public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppoi
         return CreateAppointmentResultDto.Fail("Doctor already booked for that time slot");
     }
 
-    // 5. Create the appointment
     var appointment = new AppointmentsEntity
     {
         DoctorId = dto.DoctorId,

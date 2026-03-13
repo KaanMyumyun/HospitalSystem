@@ -132,28 +132,26 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         {
             PermitLimit = 60,                 // 60 requests 
             Window = TimeSpan.FromMinutes(1), // Per 1 minute
-            QueueLimit = 0                    // Zero queue
+            QueueLimit = 0                    
         });
     });
 });
 
-// Build App
+
 var app = builder.Build();
 
-// Apply EF Core Migrations
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate();
 }
-// Middleware Pipeline
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-// app.UseHttpsRedirection(); // enable only behind HTTPS proxy
 
 app.UseRouting();
 app.UseCors("ReactPolicy");
