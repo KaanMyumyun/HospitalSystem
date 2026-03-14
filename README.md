@@ -20,8 +20,24 @@ The project focuses on secure authentication, role-based authorization, and clea
 
 ---
 
-## Overview
+## DevOps Experiments & Learning
 
+As part of learning DevOps practices, the following was set up alongside the main project:
+
+### CI/CD Pipeline (GitHub Actions)
+- Unit tests run on every push to main
+- Docker images built and pushed to Docker Hub on test success  
+- Images tagged with both `latest` and commit SHA for traceability
+
+### AWS EC2 Deployment (Experimental)
+- Deployed on AWS EC2 (Amazon Linux 2023)
+- Nginx configured as reverse proxy
+- Docker + Docker Compose for container orchestration
+- systemd service for automatic container restart on boot
+
+---
+
+## Overview
 The Hospital System is designed to manage hospital operations including:
 
 * User registration and authentication
