@@ -145,6 +145,7 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate();
 }
+//swagger
 
 if (app.Environment.IsDevelopment())
 {
