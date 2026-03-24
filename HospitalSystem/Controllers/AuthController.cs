@@ -30,15 +30,15 @@ using Microsoft.AspNetCore.Mvc;
        
     }
 
-    [HttpPost("login")]
-    public async Task<IActionResult> LogIn([FromBody] LoginDto dto)
-    {
-        LoginResultDto result = await _authService.LoginAsync(dto);
-        if (!result.IsSuccess)
+        [HttpPost("login")]
+        public async Task<IActionResult> LogIn([FromBody] LoginDto dto)
         {
-            return Unauthorized(result);
+            LoginResultDto result = await _authService.LoginAsync(dto);
+            if (!result.IsSuccess)
+            {
+                return Unauthorized(result);
+            }
+            return Ok(result);
         }
-        return Ok(result);
-    }
 
 }
