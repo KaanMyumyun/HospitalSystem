@@ -17,5 +17,12 @@ jobs:
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
+          # pull latest image
           docker pull kstkaan/hospital-backend:latest
-          docker compose up -d --no-deps backend
+
+          # stop + remove the old backend container (prevents 125 errors)
+          docker compose stop backend || true
+          docker compose rm -f backend || true
+
+          # recreate using the new image
+          docker compose up -d backend
