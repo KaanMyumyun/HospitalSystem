@@ -23,8 +23,8 @@ jobs:
           docker pull kstkaan/hospital-backend:latest
 
           # stop + remove the old backend container 
-          docker compose stop backend || true
-          docker compose rm -f backend || true
+          docker-compose stop backend || true
+          docker-compose rm -f backend || true
 
           # recreate using the new image
-          docker compose up -d backend
+          docker-compose up -d backend
