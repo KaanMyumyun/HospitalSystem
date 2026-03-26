@@ -20,20 +20,28 @@ The project focuses on secure authentication, role-based authorization, and clea
 
 ---
 
-## DevOps Experiments & Learning
-
-As part of learning DevOps practices, the following was set up alongside the main project:
+## DevOps & Infrastructure
 
 ### CI/CD Pipeline (GitHub Actions)
-- Unit tests run on every push to main
-- Docker images built and pushed to Docker Hub on test success  
-- Images tagged with both `latest` and commit SHA for traceability
+- Branch protection on `main` — all changes require a passing pipeline before merge
+- Unit tests run automatically on every pull request
+- On merge to `main`: Docker images built and pushed to Docker Hub
+- Images tagged with both `latest` and commit SHA for easy rollback
+- Automated deployment to EC2 via SSH on successful build
 
-### AWS EC2 Deployment (Experimental)
-- Deployed on AWS EC2 (Amazon Linux 2023)
-- Nginx configured as reverse proxy
+### AWS EC2 Deployment
+- Running on AWS EC2 (Amazon Linux 2023) with a static Elastic IP
+- Nginx as reverse proxy with SSL/HTTPS via Let's Encrypt
 - Docker + Docker Compose for container orchestration
-- systemd service for automatic container restart on boot
+- Postgres database isolated from public internet (internal network only)
+- Automatic container restart on instance reboot via systemd
+
+### Tech Stack
+- **CI/CD:** GitHub Actions
+- **Containerization:** Docker, Docker Compose
+- **Web Server:** Nginx + Let's Encrypt (SSL)
+- **Cloud:** AWS EC2
+- **Registry:** Docker Hub
 
 ---
 
