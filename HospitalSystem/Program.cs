@@ -44,7 +44,7 @@ builder.Services.AddSwaggerGen(c =>
         Title = "HospitalSystem API",
         Version = "v1"
     });
-
+//test
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
