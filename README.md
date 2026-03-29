@@ -16,7 +16,7 @@ This project is fully deployed using a modern, free-tier cloud infrastructure:
 
 ---
 
-The project focuses on secure authentication, role-based authorization, and clean API design, while remaining extensible for future improvements such as cloud hosting, containerization, testing, and UI enhancements.
+extensible for future improvements such as Kubernetes orchestration, monitoring, 
 
 ---
 
@@ -538,7 +538,6 @@ docker compose up --build
 ## Known Limitations
 
 * UI still under development
-* Limited unit test coverage (currently focused on DeparmentServices)
 
 ---
 
@@ -547,6 +546,15 @@ docker compose up --build
 * Build a secure full-stack system
 * Apply authentication best practices
 * Design scalable backend architecture
-* Prepare for cloud deployment
+* ✅ Deployed to AWS EC2 with full CI/CD pipeline
+* ✅ Containerized with Docker and Docker Compose
+* ✅ HTTPS with Nginx and Let's Encrypt
+* ✅ Automated testing and branch protection
 
----
+## Roadmap
+
+* Kubernetes orchestration
+* Monitoring and alerting (Prometheus, Grafana)
+* Centralized logging (ELK stack)
+* Expanded unit and integration test coverage
+* UI improvements and responsive design
