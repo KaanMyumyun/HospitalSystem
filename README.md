@@ -16,7 +16,7 @@ This project is fully deployed using a modern, free-tier cloud infrastructure:
 
 ---
 
-The project focuses on secure authentication, role-based authorization, and clean API design, while remaining extensible for future improvements such as cloud hosting, containerization, testing, and UI enhancements.
+extensible for future improvements such as Kubernetes orchestration, monitoring, 
 
 ---
 
