@@ -28,3 +28,17 @@ jobs:
 
           # recreate using the new image
           docker-compose up -d backend
+
+          # pull latest image
+          docker pull kstkaan/hospital-frontend:latest
+
+          # stop + remove the old frontend container 
+          docker-compose stop frontend || true
+          docker-compose rm -f frontend || true
+
+          # recreate using the new image
+          docker-compose up -d frontend
+
+
+
+
