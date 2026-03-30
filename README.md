@@ -4,7 +4,11 @@
 
 A full-stack **Hospital Management System** built with **ASP.NET Core Web API** and a **React + TypeScript + Vite** frontend.
 
-## Free Cloud Hosting
+---
+
+## Deployment
+
+### Free Cloud Hosting
 
 This project is fully deployed using a modern, free-tier cloud infrastructure:
 
@@ -14,9 +18,14 @@ This project is fully deployed using a modern, free-tier cloud infrastructure:
 
 *(Note: The backend runs on a free cloud instance. If the system has been inactive, it may take 30-60 seconds to "spin up" during your first login attempt. Please be patient!)*
 
----
 
-extensible for future improvements such as Kubernetes orchestration, monitoring, 
+### Self-Hosted (AWS EC2)
+* **Frontend:** React build served via Nginx container
+* **Backend API:** ASP.NET Core container on port 8080
+* **Database:** PostgreSQL container (internal network only)
+* **Web Server:** Nginx reverse proxy with SSL/HTTPS via Let's Encrypt
+* **Instance:** Amazon Linux 2023, Elastic IP 
+*   **Live:** Coming soon
 
 ---
 
