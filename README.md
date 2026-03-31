@@ -25,7 +25,7 @@ This project is fully deployed using a modern, free-tier cloud infrastructure:
 * **Database:** PostgreSQL container (internal network only)
 * **Web Server:** Nginx reverse proxy with SSL/HTTPS via Let's Encrypt
 * **Instance:** Amazon Linux 2023, Elastic IP 
-*   **Live:** Coming soon
+*   **Live:** Coming soon!
 
 ---
 
