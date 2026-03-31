@@ -1,12 +1,18 @@
-FROM node:20-alpine
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+RUN --mount=type=cache,target=/HospitalSystem/.npm npm ci
 
 COPY . .
 
-EXPOSE 5173
+RUN npm run build
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+FROM node:20-alpine
+
+COPY nginx.conf /etc/nginx/conf.d/hospital.conf
+COPY --from=builder /app/dist /usr/share/nginx/html
+USER nginx
+
+EXPOSE 8080
