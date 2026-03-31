@@ -39,6 +39,8 @@ jobs:
           # recreate using the new image
           docker-compose up -d frontend
 
+          docker image prune -f
+
 
 
 

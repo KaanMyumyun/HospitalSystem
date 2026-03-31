@@ -25,7 +25,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Controllers + json
+// Controllers + jsons
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
