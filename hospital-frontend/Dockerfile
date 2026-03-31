@@ -13,6 +13,6 @@ FROM node:20-alpine
 
 COPY nginx.conf /etc/nginx/conf.d/hospital.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
-USER nginx
+
 
 EXPOSE 8080
