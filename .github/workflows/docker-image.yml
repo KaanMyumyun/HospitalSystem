@@ -33,6 +33,7 @@ jobs:
       - name: Build frontend image
         run: |
           docker build \
+            -f hospital-frontend/Dockerfile \
             -t kstkaan/hospital-frontend:latest \
             -t kstkaan/hospital-frontend:${{ github.sha }} \
             ./hospital-frontend
