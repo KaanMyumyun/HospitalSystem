@@ -17,7 +17,9 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins(
                 "http://localhost:5173", // local
-                "https://hospitalsystem.pages.dev"
+                "https://hospitalsystem.pages.dev",
+                "https://hostpitalsyst.servebeer.com"
+
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
