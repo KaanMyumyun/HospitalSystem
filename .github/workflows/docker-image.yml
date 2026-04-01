@@ -2,43 +2,47 @@ name: Docker Image CI
 
 on:
   workflow_run:
-   workflows: [".NET"]
-   types:
-    - completed
-
+    workflows: [".NET"]
+    types:
+      - completed
 
 jobs:
   docker:
-    if: ${{github.event.workflow_run.conclusion=='success'}}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
- 
+
     steps:
-      - name: checkout
+      - name: Checkout exact upstream commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set IMAGE_TAG
+        run: echo "IMAGE_TAG=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_ENV
 
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
       - name: Build backend image
         run: |
-          docker build -f HospitalSystem/Dockerfile \
+          docker build --no-cache -f HospitalSystem/Dockerfile \
             -t kstkaan/hospital-backend:latest \
-            -t kstkaan/hospital-backend:${{ github.sha }} .
+            -t kstkaan/hospital-backend:${IMAGE_TAG} .
 
       - name: Push backend image
         run: |
           docker push kstkaan/hospital-backend:latest
-          docker push kstkaan/hospital-backend:${{ github.sha }}
+          docker push kstkaan/hospital-backend:${IMAGE_TAG}
 
       - name: Build frontend image
         run: |
-          docker build \
+          docker build --no-cache \
             -f hospital-frontend/Dockerfile \
             -t kstkaan/hospital-frontend:latest \
-            -t kstkaan/hospital-frontend:${{ github.sha }} \
+            -t kstkaan/hospital-frontend:${IMAGE_TAG} \
             ./hospital-frontend
 
       - name: Push frontend image
         run: |
           docker push kstkaan/hospital-frontend:latest
-          docker push kstkaan/hospital-frontend:${{ github.sha }}
+          docker push kstkaan/hospital-frontend:${IMAGE_TAG}
