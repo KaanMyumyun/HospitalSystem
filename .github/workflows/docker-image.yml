@@ -37,6 +37,7 @@ jobs:
       - name: Build frontend image
         run: |
           docker build --no-cache \
+            --build-arg VITE_API_URL=${{ vars.AWS_API_URL }} \
             -f hospital-frontend/Dockerfile \
             -t kstkaan/hospital-frontend:latest \
             -t kstkaan/hospital-frontend:${IMAGE_TAG} \
