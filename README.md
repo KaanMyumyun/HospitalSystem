@@ -20,12 +20,14 @@ This project is fully deployed using a modern, free-tier cloud infrastructure:
 
 
 ### Self-Hosted (AWS EC2)
+
 * **Frontend:** React build served via Nginx container
 * **Backend API:** ASP.NET Core container on port 8080
-* **Database:** PostgreSQL container (internal network only)
+* **Database:** Serverless PostgreSQL hosted on [Neon](https://neon.tech/) *(Shared with the free tier)*
 * **Web Server:** Nginx reverse proxy with SSL/HTTPS via Let's Encrypt
 * **Instance:** Amazon Linux 2023, Elastic IP 
-*   **Live:** Coming soon!
+* **Live:** [hostpitalsyst.servebeer.com](http://hostpitalsyst.servebeer.com) *(Note: The site is only accessible when the AWS EC2 instance is active).*
+
 
 ---
 
@@ -38,14 +40,6 @@ This project is fully deployed using a modern, free-tier cloud infrastructure:
 - Images tagged with both `latest` and commit SHA for easy rollback
 - Automated deployment to EC2 via SSH on successful build
 
-### Self-Hosted (AWS EC2)
-
-* **Frontend:** React build served via Nginx container
-* **Backend API:** ASP.NET Core container on port 8080
-* **Database:** Serverless PostgreSQL hosted on [Neon](https://neon.tech/) *(Shared with the free tier)*
-* **Web Server:** Nginx reverse proxy with SSL/HTTPS via Let's Encrypt
-* **Instance:** Amazon Linux 2023, Elastic IP 
-* **Live:** [hostpitalsyst.servebeer.com](http://hostpitalsyst.servebeer.com) *(Note: The site is only accessible when the AWS EC2 instance is active).*
 
 ---
 
