@@ -1,4 +1,4 @@
-# Hospital System
+# Hospital Management System
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-Click_Here-success?style=for-the-badge&logo=cloudflare)](https://hospitalsystem.pages.dev/)
 
@@ -6,28 +6,38 @@ A full-stack **Hospital Management System** built with **ASP.NET Core Web API** 
 
 ---
 
+## Live Demo
+
+The project is live on free-tier cloud infrastructure — no setup needed:
+
+| Layer | Service | Detail |
+| ----- | ------- | ------ |
+| Frontend | Cloudflare Pages | [hospitalsystem.pages.dev](https://hospitalsystem.pages.dev/) |
+| Backend API | Render | Auto-deployed on merge to main |
+| Database | Neon (Serverless PostgreSQL) | Persistent, always on |
+
+> The backend runs on a free Render instance. If inactive, it may take **30–60 seconds to spin up** on first request.
+
+---
+
 ## Deployment
 
-### Free Cloud Hosting
-
-This project is fully deployed using a modern, free-tier cloud infrastructure:
+### Free Cloud Hosting (Primary)
 
 * **Frontend:** Hosted on [Cloudflare Pages](https://pages.cloudflare.com/)
 * **Backend API:** Hosted on [Render](https://render.com/)
 * **Database:** Serverless PostgreSQL hosted on [Neon](https://neon.tech/)
 
-*(Note: The backend runs on a free cloud instance. If the system has been inactive, it may take 30-60 seconds to "spin up" during your first login attempt. Please be patient!)*
-
-
 ### Self-Hosted (AWS EC2)
 
 * **Frontend:** React build served via Nginx container
 * **Backend API:** ASP.NET Core container on port 8080
-* **Database:** Serverless PostgreSQL hosted on [Neon](https://neon.tech/) *(Shared with the free tier)*
+* **Database:** Serverless PostgreSQL hosted on [Neon](https://neon.tech/) *(Shared with the free tier — data persists across deployments)*
 * **Web Server:** Nginx reverse proxy with SSL/HTTPS via Let's Encrypt
-* **Instance:** Amazon Linux 2023, Elastic IP 
-* **Live:** [hostpitalsyst.servebeer.com](http://hostpitalsyst.servebeer.com) *(Note: The site is only accessible when the AWS EC2 instance is active).*
-
+* **Dynamic DNS:** No-IP — hostname stays stable across EC2 restarts
+* **Monitoring:** Prometheus + Grafana (see Monitoring section below)
+* **Instance:** Amazon Linux 2023
+* **Live:** [hostpitalsyst.servebeer.com](https://hostpitalsyst.servebeer.com) *(Note: The site is only accessible when the AWS EC2 instance is active)*
 
 ---
 
@@ -40,19 +50,35 @@ This project is fully deployed using a modern, free-tier cloud infrastructure:
 - Images tagged with both `latest` and commit SHA for easy rollback
 - Automated deployment to EC2 via SSH on successful build
 
-
----
-
 ### Tech Stack
 - **CI/CD:** GitHub Actions
 - **Containerization:** Docker, Docker Compose
 - **Web Server:** Nginx + Let's Encrypt (SSL)
-- **Cloud:** AWS EC2
+- **Cloud:** AWS EC2 (Amazon Linux 2023)
 - **Registry:** Docker Hub
+- **Database:** Neon (Serverless PostgreSQL)
+
+### Monitoring
+
+The self-hosted deployment includes a full observability stack:
+
+* **Prometheus** — scrapes metrics from the backend, node exporter, and cAdvisor every 60 seconds
+* **Grafana** — dashboards for infrastructure and application health:
+  * Node Exporter dashboard — CPU, memory, disk, and network metrics for the EC2 instance
+  * cAdvisor dashboard — per-container CPU and memory usage
+  * Backend dashboard — ASP.NET Core HTTP metrics (request rate, response times, status codes)
+* **Alerts configured for:**
+  * CPU usage above 80%
+  * Disk usage above 90%
+  * Frontend container health
+  * Backend container health
+  * Overall system status (EVERYTHING UP)
+* **Backend HTTP metrics** enabled via `app.UseHttpMetrics()` (prometheus-net middleware)
 
 ---
 
 ## Overview
+
 The Hospital System is designed to manage hospital operations including:
 
 * User registration and authentication
@@ -71,7 +97,6 @@ The system is divided into two independent layers:
 ## Tech Stack
 
 ### Backend
-
 * ASP.NET Core Web API
 * Entity Framework Core
 * PostgreSQL
@@ -80,13 +105,11 @@ The system is divided into two independent layers:
 * Swagger / OpenAPI
 
 ### Frontend
-
 * React
 * TypeScript
 * Vite
 
 ### Tooling
-
 * .NET SDK 8+
 * Node.js 18+
 * npm
@@ -101,77 +124,33 @@ The system is divided into two independent layers:
 │   ├── public/
 │   ├── src/
 │   │   ├── api/                    # API communication layer
-│   │   │   ├── appointmentApi.ts
-│   │   │   ├── authApi.ts
-│   │   │   ├── departmentApi.ts
-│   │   │   ├── http.ts
-│   │   │   ├── unwrapServiceResult.ts
-│   │   │   └── userApi.ts
 │   │   ├── components/             # Reusable UI components
 │   │   ├── lib/                    # Shared utilities/helpers
 │   │   ├── pages/                  # Application pages
-│   │   │   ├── AdminPanel.tsx
-│   │   │   ├── Appointmentbooking.tsx
-│   │   │   ├── LoginPage.tsx
-│   │   │   └── ReceptionDashboard.tsx
 │   │   ├── types/                  # TypeScript type definitions
-│   │   │   ├── appointment.ts
-│   │   │   ├── appointmentStatus.ts
-│   │   │   ├── auth.ts
-│   │   │   ├── department.ts
-│   │   │   ├── serviceResult.ts
-│   │   │   ├── user.ts
-│   │   │   └── userRole.ts
 │   │   ├── App.tsx
 │   │   ├── main.tsx
 │   │   └── index.css
 │   ├── Dockerfile
 │   ├── vite.config.ts
 │   ├── tailwind.config.js
-│   ├── package.json
-│   └── README.md
+│   └── package.json
 │
 ├── HospitalSystem/                 # Backend (ASP.NET Core Web API)
 │   ├── Controllers/
-│   │   ├── AppointmentsController.cs
-│   │   ├── AuthController.cs
-│   │   ├── DepartmentsController.cs
-│   │   └── UsersController.cs
-│   ├── Entities/                   # Database entities
-│   │   ├── ApointmentsEntity.cs
-│   │   ├── DepartmentEntity.cs
-│   │   ├── DoctorEntity.cs
-│   │   ├── PatiensEntity.cs
-│   │   ├── RoleEntity.cs
-│   │   └── UserEntity.cs
+│   ├── Entities/
 │   ├── Enums/
-│   │   ├── AppointmentStatus.cs
-│   │   ├── JwtSettings.cs
-│   │   └── UserRole.cs
-│   ├── Interface/                  # Service interfaces
-│   │   ├── IAppointmentService.cs
-│   │   ├── IAuthService.cs
-│   │   ├── ICurrentUserService.cs
-│   │   ├── IDepartmentService.cs
-│   │   └── IUserService.cs
-│   ├── Services/                   # Business logic
-│   │   ├── AppointmentService.cs
-│   │   ├── AuthService.cs
-│   │   ├── CurrentUserService.cs
-│   │   ├── DepartmentService.cs
-│   │   └── UserService.cs
+│   ├── Interface/
+│   ├── Services/
 │   ├── Migrations/
 │   ├── Data/
 │   ├── Program.cs
 │   ├── appsettings.json
-│   ├── appsettings.Development.json
 │   ├── Dockerfile
 │   └── HospitalSystem.csproj
 │
 ├── MyApp.Tests/                    # Unit Tests
 │   ├── Services/
-│   │   ├── AppointmentServiceTests.cs
-│   │   └── UserServiceTests.cs
 │   ├── Controllers/
 │   ├── GlobalUsings.cs
 │   └── MyApp.Tests.csproj
@@ -187,17 +166,14 @@ The system is divided into two independent layers:
 ## Getting Started
 
 ### Prerequisites
-
 * .NET SDK 8.0 or later
 * Node.js 18 or later
 * PostgreSQL
 
----
-
 ### Clone the Repository
 
 ```bash
-git clone [https://github.com/KaanMyumyun/HospitalSystem.git](https://github.com/KaanMyumyun/HospitalSystem.git)
+git clone https://github.com/KaanMyumyun/HospitalSystem.git
 cd HospitalSystem
 ```
 
@@ -206,20 +182,18 @@ cd HospitalSystem
 ## Backend Setup
 
 ```bash
-cd HospitalSystem.Api
+cd HospitalSystem
 dotnet restore
 dotnet run
 ```
 
 API available at:
-
-```text
+```
 http://localhost:5272
 ```
 
 Swagger UI:
-
-```text
+```
 http://localhost:5272/swagger
 ```
 
@@ -228,14 +202,13 @@ http://localhost:5272/swagger
 ## Frontend Setup
 
 ```bash
-cd front-end
+cd hospital-frontend
 npm install
 npm run dev
 ```
 
 Frontend available at:
-
-```text
+```
 http://localhost:5173
 ```
 
@@ -257,21 +230,17 @@ http://localhost:5173
 | Method | Endpoint             | Description                      |
 | -----: | -------------------- | -------------------------------- |
 |   POST | /api/Auth/CreateUser | Register a new user              |
-|   POST | /api/Auth/login      | Authenticate user and return JWT |
-
----
+|   POST | /api/Auth/login      | Authenticate and return JWT      |
 
 ### Users
 
 | Method | Endpoint                  | Description         |
 | -----: | ------------------------- | ------------------- |
 |   POST | /api/Users/change-role    | Change user role    |
-|   POST | /api/Users/create-doctor  | Create doctor user  |
-|   POST | /api/Users/reset-password | Reset user password |
+|   POST | /api/Users/create-doctor  | Create doctor       |
+|   POST | /api/Users/reset-password | Reset password      |
 |    GET | /api/Users/ListUsers      | List all users      |
 |    GET | /api/Users/ListDoctors    | List all doctors    |
-
----
 
 ### Departments
 
@@ -282,8 +251,6 @@ http://localhost:5173
 |   POST | /api/Department/ChangeDoctorDepartment | Assign doctor to department  |
 |   POST | /api/Department/ChangeDepartmentStatus | Enable or disable department |
 
----
-
 ### Appointments
 
 | Method | Endpoint                            | Description        |
@@ -292,51 +259,13 @@ http://localhost:5173
 |    GET | /api/Appointments/ListAppointments  | List appointments  |
 |   POST | /api/Appointments/CancelAppointment | Cancel appointment |
 
----
-
 ### Schedules
 
-| Method | Endpoint                            | Description                 |
-| -----: | ----------------------------------- | --------------------------- |
-|   POST | /api/Schedule/create-schedule       | Create a new schedule       |
-|   POST | /api/Schedule/change-schedule       | Modify an existing schedule |
-|   GET  | /api/Schedule/list-schedule         | View all schedules          |
-
----
-
-## Example Request
-
-### Change User Role
-
-Endpoint:
-
-```text
-POST /api/Users/change-role
-```
-
-Headers:
-
-```text
-Authorization: Bearer <JWT_TOKEN>
-```
-
-Request body:
-
-```json
-{
-  "userId": 10,
-  "newRole": "Doctor"
-}
-```
-
-Response:
-
-```json
-{
-  "isSuccess": true,
-  "error": null
-}
-```
+| Method | Endpoint                      | Description                 |
+| -----: | ----------------------------- | --------------------------- |
+|   POST | /api/Schedule/create-schedule | Create a new schedule       |
+|   POST | /api/Schedule/change-schedule | Modify an existing schedule |
+|    GET | /api/Schedule/list-schedule   | View all schedules          |
 
 ---
 
@@ -351,70 +280,30 @@ Response:
 
 ---
 
-## Database
-
-The backend uses **PostgreSQL** with **Entity Framework Core**.
-
-Database name:
-
-```text
-HospitalSystemDb
-```
-
-Create database:
-
-```sql
-CREATE DATABASE "HospitalSystemDb";
-```
-
----
-
-## Security Considerations
+## Security
 
 * JWT-based authentication
 * Role-based authorization
 * Secure password hashing
 * Input validation on all endpoints
-* HTTPS recommended for production
+* HTTPS enforced via Nginx + Let's Encrypt
 
----
+## API Rate Limiting
 
-## API Rate Limiting & Protection
+A global rate limiter is implemented using ASP.NET Core's built-in rate-limiting middleware:
 
-To protect the backend from spam, brute-force attacks, and to optimize resource usage on the free-tier cloud hosting, a global rate limiter is implemented using ASP.NET Core's built-in rate-limiting middleware.
-
-* **Strategy:** Fixed Window Limiter (Partitioned by Client IP Address)
-* **Permit Limit:** 60 requests per minute per user.
-* **Queueing:** Disabled (`QueueLimit = 0`). Exceeding requests are immediately rejected to conserve server RAM rather than holding them in memory.
-* **Rejection Behavior:** Returns a `429 Too Many Requests` status code with a custom intervention message: *"Rate limit exceeded. API protection active. Please try again in a minute."*
-
----
-
-# UserService Unit Tests
-
-This project contains unit tests for the `UserService` class in the **HospitalSystem** application.
-The tests validate business logic, role-based authorization, and database state changes using an in-memory database.
-
----
-
-## Technologies Used
-
-* .NET / C#
-* xUnit (unit testing framework)
-* Moq (mocking dependencies)
-* Entity Framework Core InMemory (isolated test database)
-* ASP.NET Core Identity (password hashing used internally by the service)
+* **Strategy:** Fixed Window Limiter (partitioned by client IP)
+* **Limit:** 60 requests per minute per IP
+* **Queue:** Disabled — exceeding requests are immediately rejected
+* **Response:** `429 Too Many Requests` with a custom message
 
 ---
 
 ## Testing
 
-Unit tests are implemented for the `UserService`, focusing on service-layer business logic and role-based authorization. Tests are written using xUnit and validate both successful "happy paths" and complex edge-case failure scenarios.
-
----
+Unit tests are implemented for `UserService` using xUnit, Moq, and EF Core InMemory.
 
 ### Covered Methods
-
 - `ChangeDoctorsStatusAsync`
 - `ChangeRoleAsync`
 - `CreateDoctorAsync`
@@ -422,74 +311,13 @@ Unit tests are implemented for the `UserService`, focusing on service-layer busi
 - `ListDoctorsAsync`
 - `ResetPasswordAsync`
 
----
+### Tested Scenarios
+- Role-based access control (Admin vs non-admin)
+- Entity state management during role changes
+- Edge cases: non-existent entities, invalid states, reactivation logic
+- Prevention of unintended side effects on failed operations
 
-### Tested Scenarios Include
-
-- **Role-Based Access Control (RBAC):** Admin vs. non-admin authorization rules, as well as specific Front Desk permissions.
-- **Entity State Management:** Dynamic entity management, such as automatically creating or deactivating Doctor profiles when a user's role is changed.
-- **Edge Cases:** Handling of non-existent entities, invalid Enum states, and reactivating/updating existing profiles instead of creating duplicates.
-- **Validation:** Prevention of invalid state changes and verification of business rules.
-
----
-
-### What the Tests Verify
-
-- Role-based authorization is strictly enforced.
-- Business logic behaves correctly during complex edge cases.
-- Database state is modified *only* on successful operations.
-- Unintended side effects do not occur during read-only or failed operations.
-
----
-
-## Test Design
-
-### In-Memory Database
-
-Each test uses a fresh EF Core InMemory database instance:
-
-```csharp
-.UseInMemoryDatabase(Guid.NewGuid().ToString())
-```
-
----
-
-### Mocked Dependencies
-
-ICurrentUserService is mocked using Moq to simulate different user roles without relying on actual authentication mechanisms:
-
-```csharp
-currentUserMock
-.Setup(x => x.IsInRole(UserRole.Admin))
-.Returns(true);
-```
-
----
-
-### Example Test Flow
-
-Thanks to the helper methods, tests follow a highly readable and concise Arrange-Act-Assert pattern:
-
-```csharp
-[Fact]
-public async Task ChangeDoctorStatus_Admin_Succeeds()
-{
-    var db = CreateDbContext();
-    await SeedStandardDoctorAsync(db, isDoctorActive: false);
-    var service = CreateService(db, isAdmin: true);
-
-    var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorsStatus { DoctorId = 1, IsActive = true });
-
-    Assert.True(result.IsSuccess);
-    Assert.True(db.Doctors.First().IsActive);
-}
-```
-
----
-
-### Running the Tests
-
-From the solution root directory, execute the following command in your terminal:
+### Run Tests
 
 ```bash
 dotnet test
@@ -497,35 +325,15 @@ dotnet test
 
 ---
 
-## Future Test Coverage
-
-* DepartmentService
-* AuthService
-* CurrentUserService (authorization edge cases)
-
---- 
-
 ## Containerization
 
-The project supports full containerization using Docker.
+Full Docker support:
 
-* Multi-stage Dockerfile for ASP.NET Core Web API
+* Multi-stage Dockerfile for ASP.NET Core backend
 * Dockerfile for React + Vite frontend (served via Nginx)
-* PostgreSQL container with persistent volume
-* Docker Compose for local development and deployment parity
+* Docker Compose for local development and EC2 deployment
 
-## Running with Docker
-
-The application can be run fully containerized using Docker Compose.
-
-### Prerequisites
-
-* Docker
-* Docker Compose
-
-### Start the application
-
-From the project root:
+### Run with Docker
 
 ```bash
 docker compose up --build
@@ -533,35 +341,19 @@ docker compose up --build
 
 ---
 
-## UI Improvements (Planned)
-
-* Improved layout and styling
-* Enhanced form validation
-* Role-based UI behavior
-* Responsive design
-
----
-
-## Known Limitations
-
-* UI still under development
-
----
-
 ## Project Goals
 
-* Build a secure full-stack system
-* Apply authentication best practices
-* Design scalable backend architecture
 * ✅ Deployed to AWS EC2 with full CI/CD pipeline
 * ✅ Containerized with Docker and Docker Compose
 * ✅ HTTPS with Nginx and Let's Encrypt
 * ✅ Automated testing and branch protection
+* ✅ Monitoring and alerting with Prometheus and Grafana
+* ✅ Serverless database with Neon (data persists independently of EC2)
 
 ## Roadmap
 
 * Kubernetes orchestration
-* Monitoring and alerting (Prometheus, Grafana)
 * Centralized logging (ELK stack)
 * Expanded unit and integration test coverage
 * UI improvements and responsive design
+* Refactor code so it folows solid principles and design patterns
