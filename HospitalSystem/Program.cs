@@ -155,16 +155,14 @@
         app.UseSwagger();
         app.UseSwaggerUI();
     }
-
+//
 
     app.UseRouting();
     app.UseCors("ReactPolicy");
     app.UseRateLimiter();
     app.UseHttpMetrics();   
-  app.MapGet("/metrics", async context =>
-{
-    await Prometheus.Metrics.DefaultRegistry.CollectAndExportAsTextAsync(context.Response.Body);
-});    
+    app.MapMetrics();
+    //
     app.UseAuthentication();
     app.UseAuthorization();
 

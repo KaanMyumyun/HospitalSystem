@@ -4,3 +4,7 @@
 .git
 .vscode
 .env
+**/*.md
+Dockerfile*
+docker-compose*
+.github
