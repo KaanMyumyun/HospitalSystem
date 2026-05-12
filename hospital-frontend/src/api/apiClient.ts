@@ -3,10 +3,11 @@ import toast from 'react-hot-toast';
 
 
 //this is importantttttt 
-const BASE_DOMAIN = import.meta.env.VITE_API_URL || 'http://localhost:5272';
+const BASE_DOMAIN =
+  import.meta.env.VITE_API_URL || window.location.origin;
 
 export const apiClient = axios.create({
-  baseURL: `${BASE_DOMAIN}/api`, 
+  baseURL: `${BASE_DOMAIN}/api`,
   headers: {
     'Content-Type': 'application/json',
   },
