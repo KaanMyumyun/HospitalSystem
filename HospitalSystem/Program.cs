@@ -7,6 +7,9 @@
     using Microsoft.IdentityModel.Tokens;
     using Microsoft.OpenApi.Models;
     using Prometheus;
+    using HospitalSystem.Services.Appointments;
+    using HospitalSystem.Interfaces.Appointments;
+
 
     var builder = WebApplication.CreateBuilder(args);
 
@@ -81,10 +84,16 @@
 
     builder.Services.AddScoped<IAuthService, AuthService>();
     builder.Services.AddScoped<IUserService, UserService>();
-    builder.Services.AddScoped<IAppointmentService, AppointmentService>();
+    // builder.Services.AddScoped<IAppointmentService, AppointmentService>();
     builder.Services.AddScoped<IDepartmentService, DepartmentService>();
     builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
     builder.Services.AddScoped<ICalendarService, CalendarService>();
+
+    // appointmets
+    builder.Services.AddScoped<IPatientService, PatientService>();
+    builder.Services.AddScoped<IAppointmentQueryService, AppointmentQueryService>();
+    builder.Services.AddScoped<IAppointmentCancellationService, AppointmentCancellationService>();
+    builder.Services.AddScoped<IAppointmentCreationService, AppointmentCreationService>();
 
 
 
