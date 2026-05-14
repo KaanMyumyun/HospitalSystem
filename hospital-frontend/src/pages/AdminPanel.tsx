@@ -1,12 +1,5 @@
 import { useEffect, useState } from "react";
 
-import {
-  ListDoctors,
-  ListUsers,
-  ChangeRole,
-  ChangeDoctorStatus,
-  ResetPassword,
-} from "../api/userApi";
 
 import type { UserRole } from "../types/userRole";
 import type { ViewDepartmentDto } from "../types/department";
@@ -22,6 +15,8 @@ import { CreateDepartment } from "@/api/Department/createDepartment";
 import { ViewDepartment } from "@/api/Department/viewDepartments";
 import { ChangeDepartmentStatus } from "@/api/Department/changeDepartmentStatus";
 import { ChangeDoctorDepartment } from "@/api/Department/changeDoctorDepartment";
+import { ListDoctors } from "@/api/User/listDoctors";
+import { ChangeDoctorStatus, ChangeRole, ListUsers, ResetPassword } from "@/api/User";
 
 export default function AdminPanel() {
   // Demo Role Check
@@ -360,7 +355,7 @@ export default function AdminPanel() {
   const changeRole = async (userId: number, role: UserRole) => {
     const result = await ChangeRole({ UserId: userId, NewRole: role });
     if (!result.isSuccess) {
-      showNotification("error", result.Error || "Failed to change role");
+      showNotification("error", result.error || "Failed to change role");
       return;
     }
     await loadData();

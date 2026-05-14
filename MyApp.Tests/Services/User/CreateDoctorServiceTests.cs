@@ -53,10 +53,12 @@ public class CreateDoctorServiceTests : UserTestBase
     public async Task CreateDoctorAsync_DepartmentNotFound_Fails()
     {
         var db = CreateDbContext();
+        db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.FrontDesk });
+        await db.SaveChangesAsync();
         var service = CreateService(db);
- 
+
         var result = await service.CreateDoctorAsync(new CreateDoctorDto { UserId = 1, DepartmentId = 1000 });
- 
+
         Assert.False(result.IsSuccess);
         Assert.Equal("Department not found", result.Error);
     }
