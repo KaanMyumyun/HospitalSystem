@@ -12,11 +12,7 @@ import {
   ChangeDoctorStatus,
   ResetPassword,
 } from "../api/userApi";
-import {
-  ViewSchedule,
-  CreateSchedule,
-  ChangeSchedule,
-} from "../api/scheduleApi";
+
 import type { UserRole } from "../types/userRole";
 import type { ViewDepartmentDto } from "../types/department";
 import type { DoctorDisplayDto, UserDisplayDto } from "../types/user";
@@ -26,6 +22,7 @@ import type {
   ChangeScheduleDto,
 } from "../types/schedule";
 import { CreateUser } from "@/api/Auth/createUser";
+import { ChangeSchedule, CreateSchedule, ViewSchedule } from "@/api/Calendar";
 
 export default function AdminPanel() {
   // Demo Role Check
