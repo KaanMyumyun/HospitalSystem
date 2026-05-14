@@ -12,6 +12,7 @@
 using HospitalSystem.Interface.Auth;
 using HospitalSystem.Interface.Calendar;
 using HospitalSystem.Interface.Department;
+using HospitalSystem.Interface.User;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -86,7 +87,7 @@ var builder = WebApplication.CreateBuilder(args);
     builder.Services.AddHttpContextAccessor();
 
     // builder.Services.AddScoped<IAuthService, AuthService>();
-    builder.Services.AddScoped<IUserService, UserService>();
+    // builder.Services.AddScoped<IUserService, UserService>();
     // builder.Services.AddScoped<IAppointmentService, AppointmentService>();
     // builder.Services.AddScoped<IDepartmentService, DepartmentService>();
     builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
@@ -113,6 +114,12 @@ var builder = WebApplication.CreateBuilder(args);
     builder.Services.AddScoped<IDepartmentStatusService, DepartmentStatusService>();
     builder.Services.AddScoped<IDoctorDepartmentService, DoctorDepartmentService>();
 
+    //user 
+    builder.Services.AddScoped<IUserQueryService, UserQueryService>();
+    builder.Services.AddScoped<IResetPasswordService, ResetPasswordService>();
+    builder.Services.AddScoped<IChangeRoleService, ChangeRoleService>();
+    builder.Services.AddScoped<ICreateDoctorService, CreateDoctorService>();
+    builder.Services.AddScoped<IDoctorStatusService, DoctorStatusService>();
 
     // JWT config
 
