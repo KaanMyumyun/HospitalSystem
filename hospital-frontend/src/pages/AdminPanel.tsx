@@ -25,7 +25,7 @@ import type {
   CreateScheduleDto as CreateScheduleDto,
   ChangeScheduleDto,
 } from "../types/schedule";
-import { CreateUser } from "../api/authApi";
+import { CreateUser } from "@/api/Auth/createUser";
 
 export default function AdminPanel() {
   // Demo Role Check
