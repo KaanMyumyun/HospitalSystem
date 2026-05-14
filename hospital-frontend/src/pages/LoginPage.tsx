@@ -1,9 +1,9 @@
 import { TextField, Button, Box, Typography, Divider } from "@mui/material";
 import { useState } from "react";
-import { login, CreateUser } from "../api/authApi";
 import { useNavigate } from "react-router-dom";
 import LockIcon from "@mui/icons-material/Lock";
 import { apiClient } from "@/api/apiClient";
+import { login } from "@/api/Auth/login";
 
 const Login = () => {
   const [name, setName] = useState("");

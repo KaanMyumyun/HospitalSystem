@@ -9,9 +9,12 @@
     using Prometheus;
     using HospitalSystem.Services.Appointments;
     using HospitalSystem.Interfaces.Appointments;
+using HospitalSystem.Interface.Auth;
+using HospitalSystem.Interface.Calendar;
+using HospitalSystem.Interface.Department;
 
 
-    var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
     // Cords to front end
     builder.Services.AddCors(options =>
@@ -82,12 +85,12 @@
 
     builder.Services.AddHttpContextAccessor();
 
-    builder.Services.AddScoped<IAuthService, AuthService>();
+    // builder.Services.AddScoped<IAuthService, AuthService>();
     builder.Services.AddScoped<IUserService, UserService>();
     // builder.Services.AddScoped<IAppointmentService, AppointmentService>();
-    builder.Services.AddScoped<IDepartmentService, DepartmentService>();
+    // builder.Services.AddScoped<IDepartmentService, DepartmentService>();
     builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
-    builder.Services.AddScoped<ICalendarService, CalendarService>();
+    // builder.Services.AddScoped<ICalendarService, CalendarService>();
 
     // appointmets
     builder.Services.AddScoped<IPatientService, PatientService>();
@@ -95,6 +98,20 @@
     builder.Services.AddScoped<IAppointmentCancellationService, AppointmentCancellationService>();
     builder.Services.AddScoped<IAppointmentCreationService, AppointmentCreationService>();
 
+    //auth
+    builder.Services.AddScoped<ILoginService, LoginService>();
+    builder.Services.AddScoped<IUserCreationService, UserCreationService>();
+
+    // calendar 
+    builder.Services.AddScoped<IScheduleCreationService, ScheduleCreationService>();
+    builder.Services.AddScoped<IScheduleModificationService, ScheduleModificationService>();
+    builder.Services.AddScoped<IScheduleQueryService, ScheduleQueryService>();
+
+    // deparment 
+    builder.Services.AddScoped<IDepartmentQueryService, DepartmentQueryService>();
+    builder.Services.AddScoped<IDepartmentCreationService, DepartmentCreationService>();
+    builder.Services.AddScoped<IDepartmentStatusService, DepartmentStatusService>();
+    builder.Services.AddScoped<IDoctorDepartmentService, DoctorDepartmentService>();
 
 
     // JWT config
