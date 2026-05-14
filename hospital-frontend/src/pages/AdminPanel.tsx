@@ -1,10 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  ViewDepartment,
-  CreateDepartment,
-  ChangeDepartmentStatus,
-  ChangeDoctorDepartment,
-} from "../api/departmentApi";
+
 import {
   ListDoctors,
   ListUsers,
@@ -23,6 +18,10 @@ import type {
 } from "../types/schedule";
 import { CreateUser } from "@/api/Auth/createUser";
 import { ChangeSchedule, CreateSchedule, ViewSchedule } from "@/api/Calendar";
+import { CreateDepartment } from "@/api/Department/createDepartment";
+import { ViewDepartment } from "@/api/Department/viewDepartments";
+import { ChangeDepartmentStatus } from "@/api/Department/changeDepartmentStatus";
+import { ChangeDoctorDepartment } from "@/api/Department/changeDoctorDepartment";
 
 export default function AdminPanel() {
   // Demo Role Check
