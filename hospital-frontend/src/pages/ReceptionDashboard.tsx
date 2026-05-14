@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { ViewDepartment } from "@/api/departmentApi";
 import { ListDoctors, ListUsers } from "@/api/userApi";
-import { CreateAppointment, ViewAppointment, CancelAppointment } from "@/api/appointmentApi";
+
 import { ViewSchedule } from "@/api/scheduleApi"; 
 import type { ViewDepartmentDto } from "@/types/department";
 import type { DoctorDisplayDto, UserDisplayDto } from "@/types/user";
 import type { ViewSchedule as ViewScheduleDto } from "@/types/schedule"; 
 import type { ViewAppointmentDto } from "@/types/appointment";
-
+import { CreateAppointment, ViewAppointment, CancelAppointment } from "@/api/Appointments";
 export default function SimpleAppointmentBooking() {
   const [departments, setDepartments] = useState<ViewDepartmentDto[]>([]);
   const [doctors, setDoctors] = useState<DoctorDisplayDto[]>([]);

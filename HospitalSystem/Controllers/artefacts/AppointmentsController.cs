@@ -1,0 +1,69 @@
+// using System.Security.Claims;
+// using HospitalSystem.Interface;
+// using Microsoft.AspNetCore.Authorization;
+// using Microsoft.AspNetCore.Mvc;
+// namespace HospitalSystem.Controllers;
+
+// [ApiController]
+// [Route("api/[controller]")]
+// public class AppointmentsController : ControllerBase
+// {
+//     private readonly IAppointmentService _appointmentService;
+//     public AppointmentsController(IAppointmentService appointmentService)
+//     {
+//         _appointmentService = appointmentService;
+//     }
+
+
+//     [Authorize(Roles = "FrontDesk")]
+//     [HttpPost("CreateAppointment")]
+//     public async Task<IActionResult> CreateAppointment([FromBody] CreateAppointmentDto dto)
+//     {
+//         if (!ModelState.IsValid)
+//         {
+//             return BadRequest(ModelState);
+//         }
+        
+//        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+//                        ?? User.FindFirst("UserId")?.Value;
+
+//         if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+//         {
+//             return Unauthorized(new { Message = "Invalid or missing User ID claim in token." });
+//         }
+
+//         var result = await _appointmentService.CreateAppointmentAsync(dto, userId);
+        
+//         if (!result.IsSuccess)
+//         {
+//             return BadRequest(result);
+//         }
+//         return Ok(result);
+//     }
+
+//     [Authorize(Roles = "FrontDesk,DemoFrontDesk")]
+//     [HttpGet("ListAppointments")]
+//     public async Task<ActionResult<List<ViewAppointmentDto>>> ListAppointmentAsync()
+//     {
+//         var appointment = await _appointmentService.GetAppointmentsAsync();
+//         return Ok(appointment);
+//     }
+    
+//     [Authorize(Roles = "FrontDesk")]
+//     [HttpPost("CancelAppointment")]
+//     public async Task<IActionResult> CancelAppointment([FromBody] CancelAppointmentDto dto)
+//     {
+//         if(!ModelState.IsValid)
+//         {
+//             return BadRequest(ModelState);
+//         }
+//         var result = await _appointmentService.CancelAppointmentAsync(dto);
+
+//         if(!result.IsSuccess)
+//         {
+//             return BadRequest(result);
+//         }
+//         return Ok(result);      
+//     }
+   
+// }
