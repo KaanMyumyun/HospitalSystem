@@ -50,6 +50,12 @@ The project is live on free-tier cloud infrastructure — no setup needed:
 - Images tagged with both `latest` and commit SHA for easy rollback
 - Automated deployment to EC2 via SSH on successful build
 
+### Infrastructure as Code (Terraform)
+- Full AWS infrastructure provisioned with Terraform (VPC, subnet, security groups, EC2)
+- Automated provisioner script — spins up a fresh EC2 with Docker, Nginx, SSL, Prometheus, Grafana, and the full app stack on first boot
+- Secrets managed via Terraform variables, never hardcoded
+- Repository: [https://github.com/KaanMyumyun/IaC]
+
 ### Tech Stack
 - **CI/CD:** GitHub Actions
 - **Containerization:** Docker, Docker Compose
