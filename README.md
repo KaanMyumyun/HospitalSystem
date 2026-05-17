@@ -81,6 +81,13 @@ The self-hosted deployment includes a full observability stack:
   * Overall system status (EVERYTHING UP)
 * **Backend HTTP metrics** enabled via `app.UseHttpMetrics()` (prometheus-net middleware)
 
+### Logging
+
+- Grafana Loki — centralized log aggregation for all containers
+- Promtail — log shipping agent, auto-discovers Docker containers
+- Custom Grafana dashboard — backend logs, frontend logs, and error rate panels
+- Full observability stack: metrics (Prometheus) + logs (Loki) in one Grafana instance
+
 ---
 
 ## Overview
@@ -355,11 +362,11 @@ docker compose up --build
 * ✅ Automated testing and branch protection
 * ✅ Monitoring and alerting with Prometheus and Grafana
 * ✅ Serverless database with Neon (data persists independently of EC2)
-
+* ✅ Centralized logging (Loki + Promtail)
+* ✅ Refactor code so it folows solid principles and design patterns
 ## Roadmap
 
 * Kubernetes orchestration
-* Centralized logging (ELK stack)
 * Expanded unit and integration test coverage
 * UI improvements and responsive design
 * Refactor code so it folows solid principles and design patterns
