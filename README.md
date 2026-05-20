@@ -80,6 +80,7 @@ The self-hosted deployment includes a full observability stack:
   * Backend container health
   * Overall system status (EVERYTHING UP)
 * **Backend HTTP metrics** enabled via `app.UseHttpMetrics()` (prometheus-net middleware)
+- [Grafana Dashboards](https://github.com/KaanMyumyun/grafanadashboards) — Monitoring dashboards for Prometheus and Loki
 
 ### Logging
 
