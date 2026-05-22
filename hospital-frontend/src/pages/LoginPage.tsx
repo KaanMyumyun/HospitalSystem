@@ -273,3 +273,5 @@ return (
   </>
 );
 }
+
+export default Login;
