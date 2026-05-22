@@ -51,8 +51,17 @@ const Login = () => {
   };
 
  
+return (
+  <>
+    <title>Hospital Management System - Login</title>
 
-  return (
+    <meta
+      name="description"
+      content="Secure login portal for the Hospital Management System."
+    />
+
+    <meta name="robots" content="index, follow" />
+
     <Box
       sx={{
         display: "flex",
@@ -60,7 +69,8 @@ const Login = () => {
         alignItems: "center",
         justifyContent: "center",
         minHeight: "100vh",
-        backgroundColor: "#f5f5f5",
+        background:
+          "linear-gradient(135deg, #e3f2fd 0%, #bbdefb 50%, #90caf9 100%)",
         padding: 3,
       }}
     >
@@ -69,49 +79,62 @@ const Login = () => {
           width: "100%",
           maxWidth: 480,
           backgroundColor: "white",
-          padding: 4,
-          borderRadius: 2,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          padding: 5,
+          borderRadius: 4,
+          boxShadow: "0 12px 35px rgba(0,0,0,0.12)",
         }}
       >
-        {/* Lock Icon */}
+        {/* Logo + Lock Icon */}
         <Box
           sx={{
             display: "flex",
-            justifyContent: "center",
-            marginBottom: 2,
+            flexDirection: "column",
+            alignItems: "center",
+            marginBottom: 3,
           }}
         >
           <Box
             sx={{
-              width: 56,
-              height: 56,
+              width: 70,
+              height: 70,
               borderRadius: "50%",
-              backgroundColor: "#2196F3",
+              background:
+                "linear-gradient(135deg, #1976D2 0%, #42A5F5 100%)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              boxShadow: "0 6px 18px rgba(25,118,210,0.35)",
+              marginBottom: 2,
             }}
           >
-            <LockIcon sx={{ color: "white", fontSize: 28 }} />
+            <LockIcon sx={{ color: "white", fontSize: 34 }} />
           </Box>
+
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{
+              fontWeight: 700,
+              color: "#1565C0",
+              marginBottom: 1,
+              textAlign: "center",
+            }}
+          >
+            Hospital Management System
+          </Typography>
+
+          <Typography
+            variant="body1"
+            sx={{
+              color: "#666",
+              textAlign: "center",
+            }}
+          >
+            Secure staff login portal
+          </Typography>
         </Box>
 
-        {/* Login Title */}
-        <Typography
-          variant="h5"
-          component="h1"
-          sx={{
-            textAlign: "center",
-            marginBottom: 3,
-            fontWeight: 400,
-            color: "#333",
-          }}
-        >
-          Login
-        </Typography>
-
-        {/* Username/Email Field */}
+        {/* Username Field */}
         <TextField
           margin="normal"
           required
@@ -125,7 +148,8 @@ const Login = () => {
           sx={{
             marginBottom: 2,
             "& .MuiOutlinedInput-root": {
-              backgroundColor: "white",
+              borderRadius: 2,
+              backgroundColor: "#fafafa",
             },
           }}
         />
@@ -144,47 +168,62 @@ const Login = () => {
           sx={{
             marginBottom: 3,
             "& .MuiOutlinedInput-root": {
-              backgroundColor: "white",
+              borderRadius: 2,
+              backgroundColor: "#fafafa",
             },
           }}
         />
 
-        {/* Standard Login Button */}
+        {/* Login Button */}
         <Button
           type="button"
           fullWidth
           variant="contained"
           onClick={handleLogin}
           sx={{
-            padding: "12px",
+            padding: "14px",
             fontSize: "15px",
-            fontWeight: 500,
+            fontWeight: 700,
             textTransform: "uppercase",
-            backgroundColor: "#1976D2",
+            background:
+              "linear-gradient(135deg, #1976D2 0%, #2196F3 100%)",
+            borderRadius: 2,
             marginBottom: 2,
+            boxShadow: "0 6px 16px rgba(25,118,210,0.3)",
             "&:hover": {
-              backgroundColor: "#1565C0",
+              background:
+                "linear-gradient(135deg, #1565C0 0%, #1E88E5 100%)",
             },
           }}
         >
           Login
         </Button>
-         
-      <Box sx={{ mt: 3, mb: 1 }}>
+
+        {/* Divider */}
+        <Box sx={{ mt: 3, mb: 1 }}>
           <Divider sx={{ mb: 2 }}>
             <Typography variant="body2" color="textSecondary">
-              Portfolio Reviewer? 1-Click Login
+              Portfolio Reviewer? Quick Access
             </Typography>
           </Divider>
-          
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+
+          {/* Demo Buttons */}
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 1.5,
+            }}
+          >
             <Button
               type="button"
               fullWidth
               variant="outlined"
               onClick={loginAsDemoAdmin}
               sx={{
-                padding: "10px",
+                padding: "12px",
+                borderRadius: 2,
+                fontWeight: 600,
                 borderColor: "#1976D2",
                 color: "#1976D2",
                 "&:hover": {
@@ -193,17 +232,19 @@ const Login = () => {
                 },
               }}
             >
-               Login as Demo Admin
+              Login as Demo Admin
             </Button>
-            
+
             <Button
               type="button"
               fullWidth
               variant="outlined"
               onClick={loginAsDemoReception}
               sx={{
-                padding: "10px",
-                borderColor: "#2E7D32", // Green tint to separate from admin
+                padding: "12px",
+                borderRadius: 2,
+                fontWeight: 600,
+                borderColor: "#2E7D32",
                 color: "#2E7D32",
                 "&:hover": {
                   backgroundColor: "rgba(46, 125, 50, 0.04)",
@@ -211,14 +252,24 @@ const Login = () => {
                 },
               }}
             >
-               Login as Demo Reception
+              Login as Demo Reception
             </Button>
           </Box>
         </Box>
+
+        {/* Footer */}
+        <Typography
+          variant="body2"
+          sx={{
+            textAlign: "center",
+            marginTop: 4,
+            color: "#777",
+          }}
+        >
+          © 2025 Hospital Management System
+        </Typography>
       </Box>
     </Box>
-    
-  );
-};
-
-export default Login;
+  </>
+);
+}
