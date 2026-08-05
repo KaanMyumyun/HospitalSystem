@@ -5,7 +5,7 @@ using HospitalSystem.Services;
 public class ChangeRoleServiceTests : UserTestBase
 {
     private ChangeRoleService CreateService(ApplicationDbContext db, bool isAdmin = true)
-        => new(db, CreateCurrentUser(isAdmin));
+        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db));
  
     [Fact]
     public async Task ChangeRoleAsync_Admin_Succeeds()

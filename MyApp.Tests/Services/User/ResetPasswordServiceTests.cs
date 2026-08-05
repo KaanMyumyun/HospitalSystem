@@ -4,7 +4,7 @@ using HospitalSystem.Services;
 public class ResetPasswordServiceTests : UserTestBase
 {
     private ResetPasswordService CreateService(ApplicationDbContext db, bool isAdmin = true)
-        => new(db, CreateCurrentUser(isAdmin));
+        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db));
  
     [Fact]
     public async Task ResetPasswordAsync_Admin_Succeeds()
@@ -40,6 +40,18 @@ public class ResetPasswordServiceTests : UserTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("No password entered", result.Error);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_ShortPassword_Fails()
+    {
+        var db = CreateDbContext();
+        var service = CreateService(db);
+
+        var result = await service.ResetPasswordAsync(new ResetPasswordDto { UserId = 1, NewPassword = "short" });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Password must be at least 8 characters long", result.Error);
     }
  
     [Fact]

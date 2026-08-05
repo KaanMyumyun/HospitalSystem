@@ -8,11 +8,13 @@ public class DoctorDepartmentService : IDoctorDepartmentService
 {
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
+    private readonly IAuditLogService _auditLog;
  
-    public DoctorDepartmentService(ApplicationDbContext context, ICurrentUserService currentUser)
+    public DoctorDepartmentService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
     {
         _context = context;
         _currentUser = currentUser;
+        _auditLog = auditLog;
     }
  
     public async Task<DepartmentActionResultDto> ChangeDoctorDepartmentAsync(ChangeDoctorDepartmentDto dto)
@@ -37,7 +39,13 @@ public class DoctorDepartmentService : IDoctorDepartmentService
         if (doctor.DepartmentId == dto.DepartmentId)
             return DepartmentActionResultDto.Fail("Already in that department");
  
+        var oldDepartmentId = doctor.DepartmentId;
         doctor.DepartmentId = dto.DepartmentId;
+        await _auditLog.LogAsync(
+            "ChangeDoctorDepartment",
+            "Doctor",
+            doctor.Id,
+            $"Doctor {doctor.Id} moved from department {oldDepartmentId} to {dto.DepartmentId}");
         await _context.SaveChangesAsync();
  
         return DepartmentActionResultDto.Success();

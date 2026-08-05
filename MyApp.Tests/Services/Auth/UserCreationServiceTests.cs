@@ -42,6 +42,30 @@ public class UserCreationServiceTests : AuthTestBase
         Assert.False(result.IsSuccess);
         Assert.Equal("Name and password are required", result.Error);
     }
+
+    [Fact]
+    public async Task CreateUserAsync_ShortPassword_Fails()
+    {
+        using var db = CreateDbContext();
+        var service = CreateService(db);
+
+        var result = await service.CreateUserAsync(new CreateUserDto { Name = "NewUser", Password = "short" });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Password must be at least 8 characters long", result.Error);
+    }
+
+    [Fact]
+    public async Task CreateUserAsync_InvalidName_Fails()
+    {
+        using var db = CreateDbContext();
+        var service = CreateService(db);
+
+        var result = await service.CreateUserAsync(new CreateUserDto { Name = "12 bad", Password = "Password123" });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Username must start with a letter and use only letters, numbers, dots, hyphens, or underscores", result.Error);
+    }
  
     [Fact]
     public async Task CreateUserAsync_ValidData_Succeeds()

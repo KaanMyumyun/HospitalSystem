@@ -24,8 +24,16 @@ public class ScheduleModificationService : IScheduleModificationService
         if (calendar == null)
             return CalendarActionResult.Fail("Schedule not found");
 
-        if (dto.StartHour >= dto.EndHour)
-            return CalendarActionResult.Fail("Start hour must be before end hour");
+        var validationError = await ScheduleValidation.ValidateAsync(
+            _context,
+            calendar.DoctorId,
+            dto.StartHour,
+            dto.EndHour,
+            dto.SlotDurationMin,
+            dto.ScheduleId);
+
+        if (validationError is not null)
+            return CalendarActionResult.Fail(validationError);
 
         var baseDate = DateTime.UtcNow.Date;
         var start = baseDate.AddHours(dto.StartHour);

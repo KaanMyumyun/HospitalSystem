@@ -12,6 +12,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<DoctorEntity> Doctors { get; set; }
     public DbSet<PatientEntity> Patients { get; set; }
     public DbSet<CalendarEntity> Calendars { get; set; }
+    public DbSet<AuditLogEntity> AuditLogs { get; set; }
     // public DbSet<RoleEntity> Roles { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -55,11 +56,21 @@ public class ApplicationDbContext : DbContext
             builder.Property(s => s.Status).HasConversion<string>();
             builder.Property(a => a.CancellationReason).HasMaxLength(500).IsRequired(false);
             builder.Property(a => a.CancelledAt).IsRequired(false);
+            builder.HasIndex(a => new { a.DoctorId, a.Status, a.TimeOfAppointment });
         });
         
         modelBuilder.Entity<CalendarEntity>(builder =>
         {
             builder.HasOne(c => c.Doctor).WithMany(d => d.Calendars).HasForeignKey(c => c.DoctorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AuditLogEntity>(builder =>
+        {
+            builder.Property(a => a.Action).IsRequired().HasMaxLength(80);
+            builder.Property(a => a.EntityType).IsRequired().HasMaxLength(80);
+            builder.Property(a => a.Details).IsRequired().HasMaxLength(1000);
+            builder.Property(a => a.ActorName).IsRequired().HasMaxLength(80);
+            builder.HasIndex(a => new { a.EntityType, a.EntityId, a.CreatedAt });
         });
 
     }

@@ -23,6 +23,14 @@ public class ScheduleCreationServiceTests
         return new ScheduleCreationService(db, currentUserMock.Object);
     }
 
+    private async Task SeedDoctorAsync(ApplicationDbContext db, bool doctorActive = true, bool departmentActive = true)
+    {
+        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Pediatrics", IsActive = departmentActive });
+        db.Users.Add(new UserEntity { Id = 1, Name = "Doctor", PasswordHash = "hashed", Role = UserRole.Doctor });
+        db.Doctors.Add(new DoctorEntity { Id = 1, DepartmentId = 1, UserId = 1, IsActive = doctorActive });
+        await db.SaveChangesAsync();
+    }
+
     [Fact]
     public async Task CreateSchedule_NotAdmin_Fails()
     {
@@ -39,8 +47,9 @@ public class ScheduleCreationServiceTests
     public async Task CreateSchedule_Fails_Starts_BeforeEnd()
     {
         var db = CreateDbContext();
+        await SeedDoctorAsync(db);
         var service = CreateService(db, isAdmin: true);
-        var dto = new CreateSchedule { DoctorId = 1, StartHour = 14, EndHour = 10 };
+        var dto = new CreateSchedule { DoctorId = 1, StartHour = 14, EndHour = 10, SlotDurationMin = 30 };
         var result = await service.CreateScheduleAsync(dto);
 
         Assert.False(result.IsSuccess);
@@ -51,6 +60,7 @@ public class ScheduleCreationServiceTests
     public async Task CreateSchedule_Fails_AlreadyExist()
     {
         var db = CreateDbContext();
+        await SeedDoctorAsync(db);
         var dummyDate = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         db.Calendars.Add(new CalendarEntity { Id = 1, DoctorId = 1, StartTime = dummyDate.AddHours(8), EndTime = dummyDate.AddHours(12) });
         await db.SaveChangesAsync();
@@ -60,13 +70,14 @@ public class ScheduleCreationServiceTests
         var result = await service.CreateScheduleAsync(dto);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal("Schedule already exists for this time range", result.Error);
+        Assert.Equal("Doctor already has a schedule. Edit the existing schedule instead", result.Error);
     }
 
     [Fact]
     public async Task CreateSchedule_HappyPaths()
     {
         var db = CreateDbContext();
+        await SeedDoctorAsync(db);
         var service = CreateService(db, isAdmin: true);
         var dto = new CreateSchedule { DoctorId = 1, StartHour = 9, EndHour = 17, SlotDurationMin = 30 };
         var result = await service.CreateScheduleAsync(dto);
@@ -77,5 +88,47 @@ public class ScheduleCreationServiceTests
         Assert.Equal(new DateTime(2000, 1, 1, 9, 0, 0, DateTimeKind.Utc), newCalendar.StartTime);
         Assert.Equal(new DateTime(2000, 1, 1, 17, 0, 0, DateTimeKind.Utc), newCalendar.EndTime);
         Assert.Equal(30, newCalendar.SlotDurationMin);
+    }
+
+    [Theory]
+    [InlineData(4, "Slot duration must be between 5 and 120 minutes")]
+    [InlineData(121, "Slot duration must be between 5 and 120 minutes")]
+    [InlineData(50, "Slot duration must fit evenly inside the schedule window")]
+    public async Task CreateSchedule_InvalidSlotDuration_Fails(int slotDuration, string expectedError)
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db);
+        var service = CreateService(db, isAdmin: true);
+
+        var result = await service.CreateScheduleAsync(new CreateSchedule { DoctorId = 1, StartHour = 9, EndHour = 17, SlotDurationMin = slotDuration });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(expectedError, result.Error);
+    }
+
+    [Fact]
+    public async Task CreateSchedule_InactiveDoctor_Fails()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db, doctorActive: false);
+        var service = CreateService(db, isAdmin: true);
+
+        var result = await service.CreateScheduleAsync(new CreateSchedule { DoctorId = 1, StartHour = 9, EndHour = 17, SlotDurationMin = 30 });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Cannot schedule an inactive doctor", result.Error);
+    }
+
+    [Fact]
+    public async Task CreateSchedule_InactiveDepartment_Fails()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db, departmentActive: false);
+        var service = CreateService(db, isAdmin: true);
+
+        var result = await service.CreateScheduleAsync(new CreateSchedule { DoctorId = 1, StartHour = 9, EndHour = 17, SlotDurationMin = 30 });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Cannot schedule a doctor in an inactive department", result.Error);
     }
 }

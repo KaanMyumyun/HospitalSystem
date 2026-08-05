@@ -4,7 +4,7 @@ using Xunit;
 public class AppointmentCancellationServiceTests : AppointmentTestBase
 {
     private AppointmentCancellationService CreateService(ApplicationDbContext db, bool isFrontDesk = true)
-        => new(db, CreateCurrentUser(isFrontDesk));
+        => new(db, CreateCurrentUser(isFrontDesk), new TestAuditLogService(db));
  
     [Fact]
     public async Task CancelAppointmentAsync_FrontDesk_Succeeds()
