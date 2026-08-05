@@ -24,6 +24,14 @@ public class ScheduleModificationServiceTests
         return new ScheduleModificationService(db, currentUserMock.Object);
     }
 
+    private async Task SeedDoctorAsync(ApplicationDbContext db)
+    {
+        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Pediatrics", IsActive = true });
+        db.Users.Add(new UserEntity { Id = 1, Name = "Doctor", PasswordHash = "hashed", Role = UserRole.Doctor });
+        db.Doctors.Add(new DoctorEntity { Id = 1, DepartmentId = 1, UserId = 1, IsActive = true });
+        await db.SaveChangesAsync();
+    }
+
     [Fact]
     public async Task ChangeSchedule_NotAdmin_fail()
     {
@@ -52,6 +60,7 @@ public class ScheduleModificationServiceTests
     public async Task ChangeSchedule_Fails_Starts_BeforeEnd()
     {
         var db = CreateDbContext();
+        await SeedDoctorAsync(db);
         db.Calendars.Add(new CalendarEntity { Id = 1, DoctorId = 1 });
         await db.SaveChangesAsync();
 
@@ -67,6 +76,7 @@ public class ScheduleModificationServiceTests
     public async Task ChangeSchedule_Schedule_AlreadyExist()
     {
         var db = CreateDbContext();
+        await SeedDoctorAsync(db);
         var today = DateTime.UtcNow.Date;
         db.Calendars.AddRange(
             new CalendarEntity { Id = 1, DoctorId = 1, StartTime = today.AddHours(8), EndTime = today.AddHours(12) },
@@ -86,6 +96,7 @@ public class ScheduleModificationServiceTests
     public async Task ChangeSchedule_HappyPaths()
     {
         var db = CreateDbContext();
+        await SeedDoctorAsync(db);
         var today = DateTime.UtcNow.Date;
         db.Calendars.Add(new CalendarEntity { Id = 1, DoctorId = 1, StartTime = today.AddHours(8), EndTime = today.AddHours(12), SlotDurationMin = 15 });
         await db.SaveChangesAsync();

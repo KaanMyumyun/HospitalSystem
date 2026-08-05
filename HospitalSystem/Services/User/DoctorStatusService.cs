@@ -8,11 +8,13 @@ public class DoctorStatusService : IDoctorStatusService
 {
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
+    private readonly IAuditLogService _auditLog;
  
-    public DoctorStatusService(ApplicationDbContext context, ICurrentUserService currentUser)
+    public DoctorStatusService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
     {
         _context = context;
         _currentUser = currentUser;
+        _auditLog = auditLog;
     }
  
     public async Task<ChangeDoctorsStatusResult> ChangeDoctorsStatusAsync(ChangeDoctorsStatus dto)
@@ -31,6 +33,11 @@ public class DoctorStatusService : IDoctorStatusService
             return ChangeDoctorsStatusResult.Fail("Doctor already has this status");
  
         doctor.IsActive = dto.IsActive;
+        await _auditLog.LogAsync(
+            "ChangeDoctorStatus",
+            "Doctor",
+            doctor.Id,
+            $"Doctor {doctor.User.Name} set to {(dto.IsActive ? "active" : "inactive")}");
         await _context.SaveChangesAsync();
  
         return ChangeDoctorsStatusResult.Success(new ChangeDoctorsStatus

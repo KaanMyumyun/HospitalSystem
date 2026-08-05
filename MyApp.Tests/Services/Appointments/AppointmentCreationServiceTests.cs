@@ -139,4 +139,96 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor already booked for that time slot", result.Error);
     }
+
+    [Theory]
+    [InlineData("555-CALL", "Phone number must contain 7 to 15 digits and no letters")]
+    [InlineData("123", "Phone number must contain 7 to 15 digits and no letters")]
+    [InlineData("", "Phone number is required")]
+    public async Task CreateAppointmentAsync_InvalidPhone_Fails(string phoneNumber, string expectedError)
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+
+        var dto = new CreateAppointmentDto
+        {
+            DoctorId = 1,
+            PatientName = "New Patient",
+            PhoneNumber = phoneNumber,
+            DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            AppointmentTime = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)
+        };
+
+        var result = await service.CreateAppointmentAsync(dto, 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(expectedError, result.Error);
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_MissingPatientName_Fails()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+
+        var dto = new CreateAppointmentDto
+        {
+            DoctorId = 1,
+            PatientName = "",
+            PhoneNumber = "555-7777",
+            DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            AppointmentTime = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)
+        };
+
+        var result = await service.CreateAppointmentAsync(dto, 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Patient name is required", result.Error);
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_DateOfBirthAfterAppointment_Fails()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+
+        var dto = new CreateAppointmentDto
+        {
+            DoctorId = 1,
+            PatientName = "New Patient",
+            PhoneNumber = "555-7777",
+            DateOfBirth = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc),
+            AppointmentTime = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)
+        };
+
+        var result = await service.CreateAppointmentAsync(dto, 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Date of birth cannot be after the appointment date", result.Error);
+    }
+
+    [Theory]
+    [InlineData(9, 45)]
+    [InlineData(10, 15)]
+    public async Task CreateAppointmentAsync_AdjacentTime_Succeeds(int hour, int minute)
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+
+        var dto = new CreateAppointmentDto
+        {
+            DoctorId = 1,
+            PatientName = "Adjacent Patient",
+            PhoneNumber = $"555-{hour:D2}{minute:D2}",
+            DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            AppointmentTime = new DateTime(2026, 1, 1, hour, minute, 0, DateTimeKind.Utc)
+        };
+
+        var result = await service.CreateAppointmentAsync(dto, 5);
+
+        Assert.True(result.IsSuccess);
+    }
 }

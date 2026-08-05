@@ -29,6 +29,7 @@ public class AppointmentQueryService : IAppointmentQueryService
                 DoctorName = a.Doctor != null && a.Doctor.User != null ? a.Doctor.User.Name : null,
                 PatientId = a.PatientId,
                 PatientName = a.Patient != null ? a.Patient.Name : null,
+                PatientPhoneNumber = a.Patient != null ? a.Patient.PhoneNumber : null,
                 AppointmentTime = a.TimeOfAppointment,
                 Status = a.Status
             })

@@ -8,11 +8,13 @@ public class DepartmentStatusService : IDepartmentStatusService
 {
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
+    private readonly IAuditLogService _auditLog;
  
-    public DepartmentStatusService(ApplicationDbContext context, ICurrentUserService currentUser)
+    public DepartmentStatusService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
     {
         _context = context;
         _currentUser = currentUser;
+        _auditLog = auditLog;
     }
  
     public async Task<DepartmentActionResultDto> ChangeDepartmentStatusAsync(ChangeDepartmentStatusDto dto)
@@ -25,6 +27,11 @@ public class DepartmentStatusService : IDepartmentStatusService
             return DepartmentActionResultDto.Fail("Department doesnt exist");
  
         department.IsActive = dto.IsActive;
+        await _auditLog.LogAsync(
+            "ChangeDepartmentStatus",
+            "Department",
+            department.Id,
+            $"Department {department.Department} set to {(dto.IsActive ? "active" : "inactive")}");
         await _context.SaveChangesAsync();
  
         return DepartmentActionResultDto.Success();

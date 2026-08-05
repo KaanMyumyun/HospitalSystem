@@ -91,6 +91,7 @@ var builder = WebApplication.CreateBuilder(args);
     // builder.Services.AddScoped<IAppointmentService, AppointmentService>();
     // builder.Services.AddScoped<IDepartmentService, DepartmentService>();
     builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+    builder.Services.AddScoped<IAuditLogService, AuditLogService>();
     // builder.Services.AddScoped<ICalendarService, CalendarService>();
 
     // appointmets
@@ -176,8 +177,9 @@ var builder = WebApplication.CreateBuilder(args);
 
     var app = builder.Build();
 
-    using (var scope = app.Services.CreateScope())
+    if (app.Configuration.GetValue<bool>("Database:RunMigrationsOnStartup"))
     {
+        using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         db.Database.Migrate();
     }
@@ -189,6 +191,19 @@ var builder = WebApplication.CreateBuilder(args);
         app.UseSwaggerUI();
     }
 //
+
+    app.UseExceptionHandler(errorApp =>
+    {
+        errorApp.Run(async context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "Something went wrong while processing the request. Please try again."
+            });
+        });
+    });
 
     app.UseRouting();
     app.UseCors("ReactPolicy");

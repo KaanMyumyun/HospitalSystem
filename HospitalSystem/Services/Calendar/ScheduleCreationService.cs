@@ -20,8 +20,15 @@ public class ScheduleCreationService : IScheduleCreationService
         if (!_currentUser.IsInRole(UserRole.Admin))
             return CalendarActionResult.Fail("You are not allowed to create a schedule");
 
-        if (dto.StartHour >= dto.EndHour)
-            return CalendarActionResult.Fail("Start hour must be before end hour");
+        var validationError = await ScheduleValidation.ValidateAsync(
+            _context,
+            dto.DoctorId,
+            dto.StartHour,
+            dto.EndHour,
+            dto.SlotDurationMin);
+
+        if (validationError is not null)
+            return CalendarActionResult.Fail(validationError);
 
         var dummyDate = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var start = dummyDate.AddHours(dto.StartHour);

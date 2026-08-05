@@ -8,11 +8,16 @@ public class AppointmentCancellationService : IAppointmentCancellationService
 {
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
+    private readonly IAuditLogService _auditLog;
  
-    public AppointmentCancellationService(ApplicationDbContext context, ICurrentUserService currentUser)
+    public AppointmentCancellationService(
+        ApplicationDbContext context,
+        ICurrentUserService currentUser,
+        IAuditLogService auditLog)
     {
         _context = context;
         _currentUser = currentUser;
+        _auditLog = auditLog;
     }
  
     public async Task<CancelAppointmentResultDto> CancelAppointmentAsync(CancelAppointmentDto dto)
@@ -35,6 +40,11 @@ public class AppointmentCancellationService : IAppointmentCancellationService
         appointment.Status = AppointmentStatus.Cancelled;
         appointment.CancellationReason = dto.Reason;
         appointment.CancelledAt = DateTime.UtcNow;
+        await _auditLog.LogAsync(
+            "CancelAppointment",
+            "Appointment",
+            appointment.Id,
+            $"Cancelled appointment {appointment.Id}. Reason: {dto.Reason}");
  
         await _context.SaveChangesAsync();
  

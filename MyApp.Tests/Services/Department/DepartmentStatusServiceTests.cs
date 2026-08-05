@@ -4,7 +4,7 @@ using HospitalSystem.Services;
 public class DepartmentStatusServiceTests : DepartmentTestBase
 {
     private DepartmentStatusService CreateService(ApplicationDbContext db, bool isAdmin = true)
-        => new(db, CreateCurrentUser(isAdmin));
+        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db));
  
     [Fact]
     public async Task ChangeDepartmentStatusAsync_Admin_Succeeds()

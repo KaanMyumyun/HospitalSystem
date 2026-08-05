@@ -9,11 +9,13 @@ public class ResetPasswordService : IResetPasswordService
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
     private readonly PasswordHasher<UserEntity> _hasher;
+    private readonly IAuditLogService _auditLog;
  
-    public ResetPasswordService(ApplicationDbContext context, ICurrentUserService currentUser)
+    public ResetPasswordService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
     {
         _context = context;
         _currentUser = currentUser;
+        _auditLog = auditLog;
         _hasher = new PasswordHasher<UserEntity>();
     }
  
@@ -24,12 +26,20 @@ public class ResetPasswordService : IResetPasswordService
  
         if (string.IsNullOrWhiteSpace(dto.NewPassword))
             return ResetPasswordResultDto.Fail("No password entered");
+
+        if (dto.NewPassword.Length < 8)
+            return ResetPasswordResultDto.Fail("Password must be at least 8 characters long");
  
         var user = await _context.Users.FindAsync(dto.UserId);
         if (user == null)
             return ResetPasswordResultDto.Fail("User not found");
  
         user.PasswordHash = _hasher.HashPassword(user, dto.NewPassword);
+        await _auditLog.LogAsync(
+            "ResetPassword",
+            "User",
+            user.Id,
+            $"Password reset for user {user.Name}");
         await _context.SaveChangesAsync();
  
         return ResetPasswordResultDto.Success();

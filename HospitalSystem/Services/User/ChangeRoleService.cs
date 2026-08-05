@@ -8,11 +8,13 @@ public class ChangeRoleService : IChangeRoleService
 {
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
+    private readonly IAuditLogService _auditLog;
  
-    public ChangeRoleService(ApplicationDbContext context, ICurrentUserService currentUser)
+    public ChangeRoleService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
     {
         _context = context;
         _currentUser = currentUser;
+        _auditLog = auditLog;
     }
  
     public async Task<ChangeRoleResultDto> ChangeRoleAsync(ChangeRoleDto dto)
@@ -30,6 +32,7 @@ public class ChangeRoleService : IChangeRoleService
         if (user.Role == dto.NewRole)
             return ChangeRoleResultDto.Fail("User already has this role");
  
+        var oldRole = user.Role;
         user.Role = dto.NewRole;
  
         var doctor = await _context.Doctors.FirstOrDefaultAsync(d => d.UserId == user.Id);
@@ -56,6 +59,11 @@ public class ChangeRoleService : IChangeRoleService
                 doctor.IsActive = false;
         }
  
+        await _auditLog.LogAsync(
+            "ChangeUserRole",
+            "User",
+            user.Id,
+            $"User {user.Name} role changed from {oldRole} to {dto.NewRole}");
         await _context.SaveChangesAsync();
         return ChangeRoleResultDto.Success();
     }
