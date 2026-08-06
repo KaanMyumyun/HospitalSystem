@@ -42,7 +42,7 @@ services:
       context: ./hospital-frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-}
+        VITE_API_URL: http://localhost:5272/api
     container_name: hospital-frontend
     depends_on:
       backend:
