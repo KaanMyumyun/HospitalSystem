@@ -82,7 +82,12 @@ type ServiceResult<T> = {
   Error?: string
 }
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5272/api'
+const API_BASE = resolveApiBase(import.meta.env.VITE_API_URL)
+
+function resolveApiBase(value?: string) {
+  const base = (value?.trim() || 'http://localhost:5272/api').replace(/\/+$/, '')
+  return base.endsWith('/api') ? base : `${base}/api`
+}
 
 export function getStoredSession() {
   const token = localStorage.getItem('hospital-ui-v2-token')
