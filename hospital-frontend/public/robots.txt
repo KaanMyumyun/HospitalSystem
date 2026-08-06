@@ -1,8 +1,0 @@
-User-agent: *
-Allow: /
-
-Disallow: /admin
-Disallow: /receptiondashboard
-Disallow: /login
-
-Sitemap: https://yourdomain.com/sitemap.xml
