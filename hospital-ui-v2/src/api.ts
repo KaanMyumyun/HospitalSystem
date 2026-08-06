@@ -82,11 +82,16 @@ type ServiceResult<T> = {
   Error?: string
 }
 
-const API_BASE = resolveApiBase(import.meta.env.VITE_API_URL)
+const API_ORIGIN = resolveApiOrigin(import.meta.env.VITE_API_URL)
 
-function resolveApiBase(value?: string) {
+function resolveApiOrigin(value?: string) {
   const base = (value?.trim() || 'http://localhost:5272/api').replace(/\/+$/, '')
-  return base.endsWith('/api') ? base : `${base}/api`
+  return base.endsWith('/api') ? base.slice(0, -4) : base
+}
+
+function apiUrl(path: string) {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`
+  return `${API_ORIGIN}${cleanPath.startsWith('/api/') ? cleanPath : `/api${cleanPath}`}`
 }
 
 export function getStoredSession() {
@@ -107,7 +112,7 @@ export function clearSession() {
 
 export async function login(name: string, password: string): Promise<LoginResult> {
   try {
-    const result = await request<LoginResult>('/Auth/login', {
+    const result = await request<LoginResult>('/api/Auth/login', {
       method: 'POST',
       body: JSON.stringify({ name, password }),
     })
@@ -124,12 +129,12 @@ export async function login(name: string, password: string): Promise<LoginResult
 
 export async function loadHospitalData(role: UserRole) {
   const [departments, doctors, users, schedules, appointments] = await Promise.all([
-    getServiceResult<unknown[]>('/Department/ViewDepartment').then((items) => items.map(normalizeDepartment)),
-    getServiceResult<unknown[]>('/Users/ListDoctors').then((items) => items.map(normalizeDoctor)),
-    getServiceResult<unknown[]>('/Users/ListUsers').then((items) => items.map(normalizeUser)),
-    getServiceResult<unknown[]>('/schedule/list-schedule').then((items) => items.map(normalizeSchedule)),
+    getServiceResult<unknown[]>('/api/Department/ViewDepartment').then((items) => items.map(normalizeDepartment)),
+    getServiceResult<unknown[]>('/api/Users/ListDoctors').then((items) => items.map(normalizeDoctor)),
+    getServiceResult<unknown[]>('/api/Users/ListUsers').then((items) => items.map(normalizeUser)),
+    getServiceResult<unknown[]>('/api/schedule/list-schedule').then((items) => items.map(normalizeSchedule)),
     canReadAppointments(role)
-      ? getServiceResult<unknown[]>('/Appointments/ListAppointments').then((items) =>
+      ? getServiceResult<unknown[]>('/api/Appointments/ListAppointments').then((items) =>
           items.map(normalizeAppointment),
         )
       : Promise.resolve([]),
@@ -139,35 +144,35 @@ export async function loadHospitalData(role: UserRole) {
 }
 
 export async function createAppointment(input: CreateAppointmentInput) {
-  return postAction('/Appointments/CreateAppointment', input)
+  return postAction('/api/Appointments/CreateAppointment', input)
 }
 
 export async function cancelAppointment(input: CancelAppointmentInput) {
-  return postAction('/Appointments/CancelAppointment', input)
+  return postAction('/api/Appointments/CancelAppointment', input)
 }
 
 export async function createDepartment(name: string) {
-  return postAction('/Department/CreateDepartment', { Name: name })
+  return postAction('/api/Department/CreateDepartment', { Name: name })
 }
 
 export async function changeDepartmentStatus(departmentId: number, isActive: boolean) {
-  return postAction('/Department/ChangeDepartmentStatus', { DepartmentId: departmentId, IsActive: isActive })
+  return postAction('/api/Department/ChangeDepartmentStatus', { DepartmentId: departmentId, IsActive: isActive })
 }
 
 export async function createUser(name: string, password: string) {
-  return postAction('/Auth/CreateUser', { name, password })
+  return postAction('/api/Auth/CreateUser', { name, password })
 }
 
 export async function changeUserRole(userId: number, newRole: UserRole) {
-  return postAction('/Users/change-role', { UserId: userId, NewRole: newRole })
+  return postAction('/api/Users/change-role', { UserId: userId, NewRole: newRole })
 }
 
 export async function resetPassword(userId: number, newPassword: string) {
-  return postAction('/Users/reset-password', { UserId: userId, NewPassword: newPassword })
+  return postAction('/api/Users/reset-password', { UserId: userId, NewPassword: newPassword })
 }
 
 export async function changeDoctorStatus(doctor: DoctorDto, isActive: boolean) {
-  return postAction('/Users/change-doctor-status', {
+  return postAction('/api/Users/change-doctor-status', {
     DoctorId: doctor.doctorId,
     IsActive: isActive,
     UserId: doctor.userId,
@@ -176,15 +181,15 @@ export async function changeDoctorStatus(doctor: DoctorDto, isActive: boolean) {
 }
 
 export async function changeDoctorDepartment(doctorId: number, departmentId: number) {
-  return postAction('/Department/ChangeDoctorDepartment', { DoctorId: doctorId, DepartmentId: departmentId })
+  return postAction('/api/Department/ChangeDoctorDepartment', { DoctorId: doctorId, DepartmentId: departmentId })
 }
 
 export async function createSchedule(input: CreateScheduleInput) {
-  return postAction('/schedule/create-schedule', input)
+  return postAction('/api/schedule/create-schedule', input)
 }
 
 export async function changeSchedule(input: ChangeScheduleInput) {
-  return postAction('/schedule/change-schedule', input)
+  return postAction('/api/schedule/change-schedule', input)
 }
 
 function canReadAppointments(role: UserRole) {
@@ -218,7 +223,7 @@ async function postAction(path: string, body: unknown) {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('hospital-ui-v2-token')
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...init,
     headers: {
       'Content-Type': 'application/json',
