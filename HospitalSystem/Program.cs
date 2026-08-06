@@ -25,6 +25,7 @@ var builder = WebApplication.CreateBuilder(args);
             policy
                 .WithOrigins(
                     "http://localhost:5173", // local
+                    "http://localhost:3000",
                     "https://hospitalsystem.pages.dev",
                     "https://hostpitalsyst.servebeer.com"
 
@@ -43,6 +44,7 @@ var builder = WebApplication.CreateBuilder(args);
             options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
             options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
         });
+    builder.Services.AddHealthChecks();
 
     // swager + JWT 
 
@@ -214,6 +216,7 @@ var builder = WebApplication.CreateBuilder(args);
     app.UseAuthentication();
     app.UseAuthorization();
 
+    app.MapHealthChecks("/health");
     app.MapControllers();
 
     app.Run();
