@@ -85,7 +85,8 @@ type ServiceResult<T> = {
 const API_ORIGIN = resolveApiOrigin(import.meta.env.VITE_API_URL)
 
 function resolveApiOrigin(value?: string) {
-  const base = (value?.trim() || 'http://localhost:5272/api').replace(/\/+$/, '')
+  const fallback = import.meta.env.DEV ? 'http://localhost:5272' : ''
+  const base = (value?.trim() || fallback).replace(/\/+$/, '')
   return base.endsWith('/api') ? base.slice(0, -4) : base
 }
 
