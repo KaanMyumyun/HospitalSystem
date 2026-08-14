@@ -51,10 +51,9 @@ The project is live on free-tier cloud infrastructure — no setup needed:
 - Automated deployment to EC2 via SSH on successful build
 
 ### Infrastructure as Code (Terraform)
-- Full AWS infrastructure provisioned with Terraform (VPC, subnet, security groups, EC2)
-- Automated provisioner script — spins up a fresh EC2 with Docker, Nginx, SSL, Prometheus, Grafana, and the full app stack on first boot
-- Secrets managed via Terraform variables, never hardcoded
-- Repository: [https://github.com/KaanMyumyun/IaC]
+- [IaC](https://github.com/KaanMyumyun/IaC) — Terraform-only EC2 deployment. It provisions the AWS network, security group, and EC2 instance, then uses a bootstrap script to install Docker, Nginx, Certbot, No-IP, Prometheus, Grafana, and the application stack.
+- [ansiblehospitalsystem](https://github.com/KaanMyumyun/ansiblehospitalsystem) — Terraform plus Ansible deployment. Terraform creates the AWS resources, then Ansible configures the server and manages Docker Compose, Nginx, Certbot, No-IP, monitoring, and logging in a cleaner, reusable way.
+- [kubeIAchp](https://github.com/KaanMyumyun/kubeIAchp) — Kubernetes/k3s version. This is still in progress. It provisions an EC2 instance, installs k3s, and deploys the backend and frontend through Kubernetes manifests, Traefik ingress, and cert-manager.
 
 ### Tech Stack
 - **CI/CD:** GitHub Actions
