@@ -17,7 +17,7 @@ public class CurrentUserService : ICurrentUserService
 
   public bool IsInRole(UserRole role)
 {
-    var roleName = role.ToString(); // e.g., "DemoAdmin"
+    var roleName = role.ToString();
     
     return _httpContextAccessor.HttpContext?.User?.Claims
         .Any(c => (c.Type == ClaimTypes.Role || c.Type == "role") 

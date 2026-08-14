@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-//IMPORTANT
 public class CreateUserDto
 {
         [Required]
