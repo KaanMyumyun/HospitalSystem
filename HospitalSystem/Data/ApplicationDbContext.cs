@@ -13,8 +13,6 @@ public class ApplicationDbContext : DbContext
     public DbSet<PatientEntity> Patients { get; set; }
     public DbSet<CalendarEntity> Calendars { get; set; }
     public DbSet<AuditLogEntity> AuditLogs { get; set; }
-    // public DbSet<RoleEntity> Roles { get; set; }
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

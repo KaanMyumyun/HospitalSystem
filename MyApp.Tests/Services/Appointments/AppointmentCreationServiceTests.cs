@@ -61,7 +61,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         {
             DoctorId = 1,
             PatientName = "Patient One",
-            PhoneNumber = "555-0001", // already seeded
+            PhoneNumber = "555-0001",
             DateOfBirth = DateTime.UtcNow.AddYears(-30),
             AppointmentTime = time
         };
@@ -71,7 +71,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.True(result.IsSuccess);
  
         var patientCount = await db.Patients.CountAsync(p => p.PhoneNumber == "555-0001");
-        Assert.Equal(1, patientCount); // no dups created
+        Assert.Equal(1, patientCount);
     }
  
     [Fact]

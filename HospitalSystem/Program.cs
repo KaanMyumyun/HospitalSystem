@@ -17,14 +17,13 @@ using HospitalSystem.Interface.User;
 
 var builder = WebApplication.CreateBuilder(args);
 
-    // Cords to front end
     builder.Services.AddCors(options =>
     {
         options.AddPolicy("ReactPolicy", policy =>
         {
             policy
                 .WithOrigins(
-                    "http://localhost:5173", // local
+                    "http://localhost:5173",
                     "http://localhost:3000",
                     "https://hospitalsystem.pages.dev",
                     "https://hostpitalsyst.servebeer.com"
@@ -36,8 +35,6 @@ var builder = WebApplication.CreateBuilder(args);
         });
     });
 
-    // Controllers + jsons
-
     builder.Services.AddControllers()
         .AddJsonOptions(options =>
         {
@@ -45,8 +42,6 @@ var builder = WebApplication.CreateBuilder(args);
             options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
         });
     builder.Services.AddHealthChecks();
-
-    // swager + JWT 
 
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(c =>
@@ -56,7 +51,6 @@ var builder = WebApplication.CreateBuilder(args);
             Title = "HospitalSystem API",
             Version = "v1"
         });
-    //test
         c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
         {
             Name = "Authorization",
@@ -84,47 +78,33 @@ var builder = WebApplication.CreateBuilder(args);
     });
 
 
-    // services
-
     builder.Services.AddHttpContextAccessor();
 
-    // builder.Services.AddScoped<IAuthService, AuthService>();
-    // builder.Services.AddScoped<IUserService, UserService>();
-    // builder.Services.AddScoped<IAppointmentService, AppointmentService>();
-    // builder.Services.AddScoped<IDepartmentService, DepartmentService>();
     builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
     builder.Services.AddScoped<IAuditLogService, AuditLogService>();
-    // builder.Services.AddScoped<ICalendarService, CalendarService>();
 
-    // appointmets
     builder.Services.AddScoped<IPatientService, PatientService>();
     builder.Services.AddScoped<IAppointmentQueryService, AppointmentQueryService>();
     builder.Services.AddScoped<IAppointmentCancellationService, AppointmentCancellationService>();
     builder.Services.AddScoped<IAppointmentCreationService, AppointmentCreationService>();
 
-    //auth
     builder.Services.AddScoped<ILoginService, LoginService>();
     builder.Services.AddScoped<IUserCreationService, UserCreationService>();
 
-    // calendar 
     builder.Services.AddScoped<IScheduleCreationService, ScheduleCreationService>();
     builder.Services.AddScoped<IScheduleModificationService, ScheduleModificationService>();
     builder.Services.AddScoped<IScheduleQueryService, ScheduleQueryService>();
 
-    // deparment 
     builder.Services.AddScoped<IDepartmentQueryService, DepartmentQueryService>();
     builder.Services.AddScoped<IDepartmentCreationService, DepartmentCreationService>();
     builder.Services.AddScoped<IDepartmentStatusService, DepartmentStatusService>();
     builder.Services.AddScoped<IDoctorDepartmentService, DoctorDepartmentService>();
 
-    //user 
     builder.Services.AddScoped<IUserQueryService, UserQueryService>();
     builder.Services.AddScoped<IResetPasswordService, ResetPasswordService>();
     builder.Services.AddScoped<IChangeRoleService, ChangeRoleService>();
     builder.Services.AddScoped<ICreateDoctorService, CreateDoctorService>();
     builder.Services.AddScoped<IDoctorStatusService, DoctorStatusService>();
-
-    // JWT config
 
     builder.Services.Configure<JwtSettings>(
         builder.Configuration.GetSection("JwtSettings"));
@@ -149,7 +129,6 @@ var builder = WebApplication.CreateBuilder(args);
             };
         });
 
-    // PostgreSQL 
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseNpgsql(
             builder.Configuration.GetConnectionString("DefaultConnection")
@@ -169,8 +148,8 @@ var builder = WebApplication.CreateBuilder(args);
         var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         return RateLimitPartition.GetFixedWindowLimiter(clientIp, _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 60,                 // 60 requests 
-                Window = TimeSpan.FromMinutes(1), // Per 1 minute
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0                    
             });
         });
@@ -185,15 +164,11 @@ var builder = WebApplication.CreateBuilder(args);
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         db.Database.Migrate();
     }
-    //swagger
-
     if (app.Environment.IsDevelopment())
     {
         app.UseSwagger();
         app.UseSwaggerUI();
     }
-//
-
     app.UseExceptionHandler(errorApp =>
     {
         errorApp.Run(async context =>
@@ -212,7 +187,6 @@ var builder = WebApplication.CreateBuilder(args);
     app.UseRateLimiter();
     app.UseHttpMetrics();   
     app.MapMetrics();
-    //
     app.UseAuthentication();
     app.UseAuthorization();
 
