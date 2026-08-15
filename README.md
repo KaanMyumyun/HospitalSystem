@@ -19,28 +19,6 @@ The project is live on free-tier cloud infrastructure — no setup needed:
 > The backend runs on a free Render instance. If inactive, it may take **30–60 seconds to spin up** on first request.
 
 ---
-
-## Deployment
-
-### Free Cloud Hosting (Primary)
-
-* **Frontend:** Hosted on [Cloudflare Pages](https://pages.cloudflare.com/)
-* **Backend API:** Hosted on [Render](https://render.com/)
-* **Database:** Serverless PostgreSQL hosted on [Neon](https://neon.tech/)
-
-### Self-Hosted (AWS EC2)
-
-* **Frontend:** React build served via Nginx container
-* **Backend API:** ASP.NET Core container on port 8080
-* **Database:** Serverless PostgreSQL hosted on [Neon](https://neon.tech/) *(Shared with the free tier — data persists across deployments)*
-* **Web Server:** Nginx reverse proxy with SSL/HTTPS via Let's Encrypt
-* **Dynamic DNS:** No-IP — hostname stays stable across EC2 restarts
-* **Monitoring:** Prometheus + Grafana (see Monitoring section below)
-* **Instance:** Amazon Linux 2023
-* **Live:** [hostpitalsyst.servebeer.com](https://hostpitalsyst.servebeer.com) *(Note: The site is only accessible when the AWS EC2 instance is active)*
-
----
-
 ## DevOps & Infrastructure
 
 ### CI/CD Pipeline (GitHub Actions)
@@ -89,6 +67,28 @@ The self-hosted deployment includes a full observability stack:
 - Full observability stack: metrics (Prometheus) + logs (Loki) in one Grafana instance
 
 ---
+
+## Deployment
+
+### Free Cloud Hosting (Primary)
+
+* **Frontend:** Hosted on [Cloudflare Pages](https://pages.cloudflare.com/)
+* **Backend API:** Hosted on [Render](https://render.com/)
+* **Database:** Serverless PostgreSQL hosted on [Neon](https://neon.tech/)
+
+### Self-Hosted (AWS EC2)
+
+* **Frontend:** React build served via Nginx container
+* **Backend API:** ASP.NET Core container on port 8080
+* **Database:** Serverless PostgreSQL hosted on [Neon](https://neon.tech/) *(Shared with the free tier — data persists across deployments)*
+* **Web Server:** Nginx reverse proxy with SSL/HTTPS via Let's Encrypt
+* **Dynamic DNS:** No-IP — hostname stays stable across EC2 restarts
+* **Monitoring:** Prometheus + Grafana (see Monitoring section below)
+* **Instance:** Amazon Linux 2023
+* **Live:** [hostpitalsyst.servebeer.com](https://hostpitalsyst.servebeer.com) *(Note: The site is only accessible when the AWS EC2 instance is active)*
+
+---
+
 
 ## Overview
 
