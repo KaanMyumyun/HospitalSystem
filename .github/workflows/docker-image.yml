@@ -10,6 +10,14 @@ jobs:
   docker:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION }}
+      ECR_REGISTRY: ${{ vars.ECR_REGISTRY || secrets.ECR_REGISTRY }}
+      BACKEND_IMAGE: ${{ vars.ECR_BACKEND_REPOSITORY || secrets.ECR_BACKEND_REPOSITORY }}
+      FRONTEND_IMAGE: ${{ vars.ECR_FRONTEND_REPOSITORY || secrets.ECR_FRONTEND_REPOSITORY }}
 
     steps:
       - name: Checkout exact upstream commit
@@ -17,33 +25,61 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Set IMAGE_TAG
-        run: echo "IMAGE_TAG=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_ENV
+      - name: Set image tags
+        run: |
+          HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
+          echo "SHA_TAG=${HEAD_SHA}" >> $GITHUB_ENV
+          echo "DATE_TAG=$(date -u +'%Y-%m-%d')-${HEAD_SHA:0:7}" >> $GITHUB_ENV
 
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build backend image
         run: |
           docker build --no-cache -f HospitalSystem/Dockerfile \
             -t kstkaan/hospital-backend:latest \
-            -t kstkaan/hospital-backend:${IMAGE_TAG} .
+            -t kstkaan/hospital-backend:${DATE_TAG} \
+            -t kstkaan/hospital-backend:${SHA_TAG} \
+            -t ${ECR_REGISTRY}/${BACKEND_IMAGE}:latest \
+            -t ${ECR_REGISTRY}/${BACKEND_IMAGE}:${DATE_TAG} \
+            -t ${ECR_REGISTRY}/${BACKEND_IMAGE}:${SHA_TAG} .
 
       - name: Push backend image
         run: |
           docker push kstkaan/hospital-backend:latest
-          docker push kstkaan/hospital-backend:${IMAGE_TAG}
+          docker push kstkaan/hospital-backend:${DATE_TAG}
+          docker push kstkaan/hospital-backend:${SHA_TAG}
+          docker push ${ECR_REGISTRY}/${BACKEND_IMAGE}:latest
+          docker push ${ECR_REGISTRY}/${BACKEND_IMAGE}:${DATE_TAG}
+          docker push ${ECR_REGISTRY}/${BACKEND_IMAGE}:${SHA_TAG}
 
       - name: Build frontend image
         run: |
           docker build --no-cache \
-            --build-arg VITE_API_URL=${{ secrets.AWS_API_URL }} \
+            --build-arg VITE_API_URL=${{ vars.VITE_API_URL || vars.AWS_API_URL || secrets.AWS_API_URL }} \
             -f hospital-frontend/Dockerfile \
             -t kstkaan/hospital-frontend:latest \
-            -t kstkaan/hospital-frontend:${IMAGE_TAG} \
+            -t kstkaan/hospital-frontend:${DATE_TAG} \
+            -t kstkaan/hospital-frontend:${SHA_TAG} \
+            -t ${ECR_REGISTRY}/${FRONTEND_IMAGE}:latest \
+            -t ${ECR_REGISTRY}/${FRONTEND_IMAGE}:${DATE_TAG} \
+            -t ${ECR_REGISTRY}/${FRONTEND_IMAGE}:${SHA_TAG} \
             ./hospital-frontend
 
       - name: Push frontend image
         run: |
           docker push kstkaan/hospital-frontend:latest
-          docker push kstkaan/hospital-frontend:${IMAGE_TAG}
+          docker push kstkaan/hospital-frontend:${DATE_TAG}
+          docker push kstkaan/hospital-frontend:${SHA_TAG}
+          docker push ${ECR_REGISTRY}/${FRONTEND_IMAGE}:latest
+          docker push ${ECR_REGISTRY}/${FRONTEND_IMAGE}:${DATE_TAG}
+          docker push ${ECR_REGISTRY}/${FRONTEND_IMAGE}:${SHA_TAG}
