@@ -1,9 +1,15 @@
 **/bin
 **/obj
 **/node_modules
+**/dist
+**/coverage
+**/.vite
+**/.vite-temp
 .git
+.gitignore
 .vscode
 .env
+*.user
 **/*.md
 Dockerfile*
 docker-compose*

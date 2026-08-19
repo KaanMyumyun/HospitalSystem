@@ -1,3 +1,5 @@
+# !!! THIS IS ONLY FOR LOCAL DEV ITS NOT USED ANYWHERE
+
 services:
   postgres:
     image: postgres:16
