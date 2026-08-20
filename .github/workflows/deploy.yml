@@ -15,12 +15,25 @@ jobs:
       contents: read
     env:
       AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION }}
-      AWS_DEPLOY_ROLE_TO_ASSUME: ${{ vars.AWS_DEPLOY_ROLE_TO_ASSUME || secrets.AWS_DEPLOY_ROLE_TO_ASSUME || vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME }}
+      AWS_DEPLOY_ROLE_TO_ASSUME: ${{ vars.AWS_DEPLOY_ROLE_TO_ASSUME || secrets.AWS_DEPLOY_ROLE_TO_ASSUME }}
       EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME || 'eks-pr1' }}
       K8S_NAMESPACE: hospitalsystem
       APP_URL: https://app.hospitalsyst.cc
 
     steps:
+      - name: Validate deploy configuration
+        run: |
+          if [ -z "$AWS_REGION" ]; then
+            echo "AWS_REGION repository variable or secret is required."
+            exit 1
+          fi
+
+          if [ -z "$AWS_DEPLOY_ROLE_TO_ASSUME" ]; then
+            echo "AWS_DEPLOY_ROLE_TO_ASSUME repository variable or secret is required."
+            echo "Set it to arn:aws:iam::147914447694:role/eks-deploy-hospitalsystem"
+            exit 1
+          fi
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
