@@ -33,7 +33,7 @@ The project is live on free-tier cloud infrastructure — no setup needed:
 - [ansiblehospitalsystem](https://github.com/KaanMyumyun/ansiblehospitalsystem) — Terraform plus Ansible deployment. Terraform creates the AWS resources, then Ansible configures the server and manages Docker Compose, Nginx, Certbot, No-IP, monitoring, and logging in a cleaner, reusable way.
 - [kubeIAchp](https://github.com/KaanMyumyun/kubeIAchp) — Kubernetes/k3s version. This is still in progress. It provisions an EC2 instance, installs k3s, and deploys the backend and frontend through Kubernetes manifests, Traefik ingress, and cert-manager.
 
-## Infrastructure & Deployment
+### Infrastructure & Deployment
 
 This application is deployed on AWS using EKS, ECR, ACM, an AWS Application Load Balancer, and Kubernetes manifests.
 
@@ -58,13 +58,6 @@ The infrastructure repository contains:
 - CI/CD deployment notes
 - future Terraform / Ansible automation work
 
-### Tech Stack
-- **CI/CD:** GitHub Actions
-- **Containerization:** Docker, Docker Compose
-- **Web Server:** Nginx + Let's Encrypt (SSL)
-- **Cloud:** AWS EC2 (Amazon Linux 2023)
-- **Registry:** Docker Hub
-- **Database:** Neon (Serverless PostgreSQL)
 
 ### Monitoring
 
