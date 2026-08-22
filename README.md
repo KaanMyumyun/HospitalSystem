@@ -22,11 +22,32 @@ The project is live on free-tier cloud infrastructure — no setup needed:
 ## DevOps & Infrastructure
 
 ### CI/CD Pipeline (GitHub Actions)
-- Branch protection on `main` — all changes require a passing pipeline before merge
-- Unit tests run automatically on every pull request
-- On merge to `main`: Docker images built and pushed to Docker Hub
-- Images tagged with both `latest` and commit SHA for easy rollback
-- Automated deployment to EC2 via SSH on successful build
+
+The application uses a three-stage GitHub Actions pipeline:
+
+1. `.NET` workflow
+   - Runs on pull requests and pushes to `main`
+   - Restores dependencies
+   - Builds the solution
+   - Runs the test project
+
+2. `Docker Image CI` workflow
+   - Runs after the `.NET` workflow succeeds on `main`
+   - Builds backend and frontend Docker images
+   - Tags images with `latest`, full commit SHA, and date-based short SHA tags
+   - Pushes images to Docker Hub and Amazon ECR
+   - Uses GitHub Actions OIDC to assume an AWS IAM role for ECR access
+
+3. `Deploy to EKS` workflow
+   - Runs after the Docker workflow succeeds
+   - Assumes a separate AWS IAM deployment role through OIDC
+   - Updates kubeconfig for the EKS cluster
+   - Sets backend and frontend Deployment images to the full commit SHA tag
+   - Waits for rollout completion when the app is scaled up
+
+If the Kubernetes deployments are scaled to `0`, the deploy workflow skips the
+rollout wait, but still updates the Deployment image fields. The next manual
+scale-up runs the exact image tag built from the commit that passed CI.
 
 ### Infrastructure as Code (Terraform)
 - [IaC](https://github.com/KaanMyumyun/IaC) — Terraform-only EC2 deployment. It provisions the AWS network, security group, and EC2 instance, then uses a bootstrap script to install Docker, Nginx, Certbot, No-IP, Prometheus, Grafana, and the application stack.
@@ -39,7 +60,7 @@ This application is deployed on AWS using EKS, ECR, ACM, an AWS Application Load
 
 Infrastructure, deployment notes, operational commands, and Kubernetes configuration are maintained in a separate repository:
 
-[HospitalSystem Infrastructure](https://github.com/KaanMyumyun/HospitalSystem-infrastructure)
+[KaanMyumyun/HospitalSystem-infrastructure](https://github.com/KaanMyumyun/HospitalSystem-infrastructure)
 
 Current deployment target:
 
@@ -52,11 +73,9 @@ Current deployment target:
 The infrastructure repository contains:
 
 - Kubernetes manifests
-- AWS/EKS operational commands
-- public ingress and HTTPS setup
 - cost scale-up / scale-down workflow
-- CI/CD deployment notes
-- future Terraform / Ansible automation work
+- Terraform configuration for AWS infrastructure
+- future Ansible automation work
 
 
 ### Monitoring
