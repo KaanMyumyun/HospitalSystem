@@ -44,7 +44,7 @@ jobs:
       - name: Set deployment image tag
         run: |
           HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
-          echo "SHA_TAG=${HEAD_SHA}" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=$(date -u +'%Y-%m-%d')-${HEAD_SHA:0:7}" >> "$GITHUB_ENV"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -61,11 +61,11 @@ jobs:
       - name: Update EKS deployment images
         run: |
           kubectl set image deployment/hospital-backend \
-            backend="${ECR_REGISTRY}/${BACKEND_IMAGE}:${SHA_TAG}" \
+            backend="${ECR_REGISTRY}/${BACKEND_IMAGE}:${IMAGE_TAG}" \
             -n "$K8S_NAMESPACE"
 
           kubectl set image deployment/hospital-frontend \
-            frontend="${ECR_REGISTRY}/${FRONTEND_IMAGE}:${SHA_TAG}" \
+            frontend="${ECR_REGISTRY}/${FRONTEND_IMAGE}:${IMAGE_TAG}" \
             -n "$K8S_NAMESPACE"
 
       - name: Check deployment scale
@@ -92,4 +92,4 @@ jobs:
         if: ${{ steps.scale.outputs.backend_replicas == '0' && steps.scale.outputs.frontend_replicas == '0' }}
         run: |
           echo "Backend and frontend deployments are scaled to 0."
-          echo "Deployment image tags were updated to ${SHA_TAG}; the next manual scale-up will run that exact image."
+          echo "Deployment image tags were updated to ${IMAGE_TAG}; the next manual scale-up will run that exact image."
