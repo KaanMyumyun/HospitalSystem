@@ -58,6 +58,10 @@ jobs:
             --region "$AWS_REGION" \
             --name "$EKS_CLUSTER_NAME"
 
+      - name: Verify Kubernetes deploy permissions
+        run: |
+          kubectl auth can-i patch deployments -n "$K8S_NAMESPACE"
+
       - name: Update EKS deployment images
         run: |
           kubectl set image deployment/hospital-backend \
