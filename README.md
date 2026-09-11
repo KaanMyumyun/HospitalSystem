@@ -25,14 +25,15 @@ The project is live on free-tier cloud infrastructure — no setup needed:
 
 The application uses a three-stage GitHub Actions pipeline:
 
-1. `.NET` workflow
+1. `CI` workflow
    - Runs on pull requests and pushes to `main`
-   - Restores dependencies
-   - Builds the solution
-   - Runs the test project
+   - Restores, builds and tests the backend
+   - Lints and builds the frontend (the build type-checks it)
+   - Builds both Docker images and scans them with Trivy; a fixable `HIGH`
+     or `CRITICAL` vulnerability fails the run
 
 2. `Docker Image CI` workflow
-   - Runs after the `.NET` workflow succeeds on `main`
+   - Runs after the `CI` workflow succeeds on `main`
    - Builds backend and frontend Docker images
    - Tags images with `latest`, full commit SHA, and date-based short SHA tags
    - Pushes images to Docker Hub and Amazon ECR
@@ -40,6 +41,7 @@ The application uses a three-stage GitHub Actions pipeline:
 
 3. `Deploy to EKS` workflow
    - Runs after the Docker workflow succeeds
+   - Waits for approval in the `production` environment
    - Assumes a separate AWS IAM deployment role through OIDC
    - Updates kubeconfig for the EKS cluster
    - Sets backend and frontend Deployment images to the full commit SHA tag
@@ -48,6 +50,35 @@ The application uses a three-stage GitHub Actions pipeline:
 If the Kubernetes deployments are scaled to `0`, the deploy workflow skips the
 rollout wait, but still updates the Deployment image fields. The next manual
 scale-up runs the exact image tag built from the commit that passed CI.
+
+Every action is pinned to a full commit SHA, because a version tag can be
+moved to different code. Dependabot (`.github/dependabot.yml`) opens a weekly
+pull request that updates the pins.
+
+The workflows read these repository variables. All but the last two can be
+secrets instead. Docker Image CI also needs the `DOCKER_USERNAME` and
+`DOCKER_PASSWORD` secrets.
+
+| Variable | Used by | Value |
+| --- | --- | --- |
+| `AWS_REGION` | Docker Image CI, Deploy | AWS region of the ECR registry and EKS cluster |
+| `AWS_ROLE_TO_ASSUME` | Docker Image CI | `github_actions_ecr_push_role_arn` Terraform output |
+| `AWS_DEPLOY_ROLE_TO_ASSUME` | Deploy | `github_actions_deploy_role_arn` Terraform output |
+| `ECR_REGISTRY` | Docker Image CI, Deploy | `ecr_registry` Terraform output |
+| `ECR_BACKEND_REPOSITORY` | Docker Image CI, Deploy | `hospital-backend` |
+| `ECR_FRONTEND_REPOSITORY` | Docker Image CI, Deploy | `hospital-frontend` |
+| `VITE_API_URL` | Docker Image CI | Public API URL baked into the frontend |
+| `EKS_CLUSTER_NAME` | Deploy | `cluster_name` Terraform output |
+| `K8S_NAMESPACE` | Deploy | `hospitalsystem` |
+
+The `production` environment (Settings, Environments) needs two protection
+rules:
+
+- Required reviewers: whoever may approve a deploy. Leave "Prevent
+  self-review" off if you approve your own deploys.
+- Deployment branches: selected branches, `main` only. The deploy role trusts
+  any job that uses this environment, so this rule is what keeps other
+  branches out of the cluster.
 
 ### Infrastructure as Code (Terraform)
 - [IaC](https://github.com/KaanMyumyun/IaC) — Terraform-only EC2 deployment. It provisions the AWS network, security group, and EC2 instance, then uses a bootstrap script to install Docker, Nginx, Certbot, No-IP, Prometheus, Grafana, and the application stack.
