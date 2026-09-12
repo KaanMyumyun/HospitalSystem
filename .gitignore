@@ -1,4 +1,26 @@
+# Editors and operating systems
 .vs/
 .vscode/
+.idea/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# Build output
+bin/
+obj/
+dist/
+node_modules/
+TestResults/
+coverage/
+
+# Local configuration and secrets
 .env
+.env.*
+!.env.example
+appsettings.Development.json
+appsettings.Local.json
+
+# Local notes that must not be published
 list.txt

@@ -2,10 +2,13 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>ef5df72e-5351-47c8-981b-415f649de315</UserSecretsId>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Template for local configuration; not copied to build or publish output. -->
+    <Content Update="appsettings.Development.example.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- ASP.NET Core -->
