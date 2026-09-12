@@ -70,7 +70,7 @@ const emptyData: HospitalData = {
   schedules: [],
   appointments: [],
 }
-const activityStorageKey = 'hospital-ui-v2-activity'
+const activityStorageKey = 'hospital-frontend-activity'
 
 function App() {
   const [session, setSession] = useState<Session | null>(() => getStoredSession())
