@@ -1,0 +1,2007 @@
+================================================================================
+HOSPITALSYSTEM - IMPROVEMENT INVENTORY
+================================================================================
+
+Generated:  2026-09-12
+Scope:      Whole repository - .NET 8 backend, both React frontends, CI/CD,
+            Docker, tests, documentation, repo hygiene.
+Method:     Direct reading of source. Every item cites a file and line that was
+            opened and confirmed. Counts were produced by commands, which are
+            quoted so they can be re-run.
+
+Nothing in this file has been acted on. It is an inventory, not a changelog.
+Items marked "VERIFY FIRST" recommend deleting something; confirm the intent
+before removing it.
+
+SEVERITY
+  [HIGH]  Wrong behaviour reaching users, or a security/availability exposure.
+  [MED]   Maintenance burden, missing safety net, or a latent failure mode.
+  [LOW]   Consistency, naming, polish.
+
+--------------------------------------------------------------------------------
+SECTION INDEX
+--------------------------------------------------------------------------------
+  [A]  Correctness bugs .............................. 17 items
+  [B]  Security & authentication ..................... 19 items
+  [C]  Duplication ................................... 10 items
+  [D]  Dead code ..................................... 10 items
+  [E]  Backend structure & consistency ............... 24 items
+  [F]  Frontend ...................................... 20 items
+  [G]  CI/CD ......................................... 14 items
+  [H]  Docker & compose ............................... 9 items
+  [I]  Tests ......................................... 7 items
+  [J]  Documentation & repo hygiene .................. 14 items
+                                                      ----------
+                                                      144 items
+
+Read SECTION K at the end before fixing anything. It lists things that are
+already correct and are easy to "fix" into a regression.
+
+
+================================================================================
+[A]  CORRECTNESS BUGS
+================================================================================
+
+A1. Creating a department produces an unusable record               [HIGH]
+    HospitalSystem/Services/Deparment/DepartmentCreationService.cs:27
+    HospitalSystem/Entities/DepartmentEntity.cs:5
+    HospitalSystem/Services/Deparment/DoctorDepartmentService.cs:36-37
+
+    The creation service inserts:
+        _context.Departments.Add(new DepartmentEntity { Department = dto.Name });
+    IsActive is never set. The entity declares it with no initializer:
+        public bool IsActive { get; set; }
+    so it defaults to false. Assigning a doctor then hits:
+        if (!department.IsActive)
+            return DepartmentActionResultDto.Fail("This Deparment isnt active");
+
+    Every department created through the API is born disabled and rejects
+    doctors. There is no endpoint that activates a department by id other than
+    ChangeDepartmentStatus, so this is recoverable but the create flow is
+    broken end to end.
+
+    FIX: set IsActive = true in the creation service, or default it on the
+         entity. Add a test asserting a freshly created department accepts a
+         doctor assignment.
+
+A2. Double-booking race condition                                   [HIGH]
+    HospitalSystem/Services/Appointments/AppointmentCreationService.cs:42-59
+    HospitalSystem/Services/Appointments/AppointmentCreationService.cs:89-100
+
+    HasOverlapAsync() runs an AnyAsync check, then execution continues to
+    _context.Appointments.Add(appointment) and SaveChangesAsync(). Nothing sits
+    between them - no transaction, no unique constraint. Two concurrent
+    requests for the same doctor and time both pass the check and both insert.
+
+    The index that exists is not unique:
+        ApplicationDbContext.cs:57
+        builder.HasIndex(a => new { a.DoctorId, a.Status, a.TimeOfAppointment });
+
+    FIX: add a filtered unique index on (DoctorId, TimeOfAppointment) where
+         Status = 'Scheduled', then catch DbUpdateException around SaveChanges
+         and return a 409. The check stays as the fast path; the constraint
+         makes it correct.
+
+A3. Schedule create and modify anchor to different base dates       [HIGH]
+    HospitalSystem/Services/Calendar/ScheduleCreationService.cs:33
+    HospitalSystem/Services/Calendar/ScheduleModificationService.cs:38
+
+    Creation:     var dummyDate = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    Modification: var baseDate = DateTime.UtcNow.Date;
+
+    Both then do baseDate.AddHours(dto.StartHour) and store the result. So a
+    created schedule lives on 2000-01-01 and an edited one lives on today. The
+    overlap query compares absolute instants:
+        u.EndTime > start && u.StartTime < end
+    which silently stops matching once the two anchors diverge. Editing a
+    schedule moves it out of the range every other schedule is compared against.
+
+    FIX: store working hours as TimeOnly (or int minutes-from-midnight) rather
+         than DateTime. If that is too large a change now, pick one anchor
+         constant and use it in both services.
+
+A4. Deploy recomputes the image tag instead of reusing it           [HIGH]
+    .github/workflows/docker-image.yml:32
+    .github/workflows/deploy.yml:53-56
+
+    Build time:
+        echo "DATE_TAG=$(date -u +'%Y-%m-%d')-${HEAD_SHA:0:7}" >> $GITHUB_ENV
+    Deploy time, independently:
+        HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
+        echo "IMAGE_TAG=$(date -u +'%Y-%m-%d')-${HEAD_SHA:0:7}" >> "$GITHUB_ENV"
+
+    deploy.yml:15 declares environment: production, which waits for a human
+    approval. If the build runs at 23:58 UTC and the approval lands after
+    midnight, `date` returns the next day and kubectl set image points at a tag
+    that was never pushed. Result: ImagePullBackOff on both deployments.
+
+    FIX: emit the tag as a job output from docker-image.yml and consume it in
+         deploy.yml, or derive the tag from the SHA alone with no date.
+
+A5. Appointment creation never consults the doctor's calendar       [HIGH]
+    HospitalSystem/Services/Appointments/AppointmentCreationService.cs:32-34
+
+        var doctorExists = await _context.Doctors.AnyAsync(d => d.Id == dto.DoctorId);
+
+    That is the only check on the doctor. ScheduleValidation exists at
+    HospitalSystem/Services/Calendar/ScheduleValidation.cs:5 and is called only
+    by the two schedule services - never here. Consequences: an appointment can
+    be booked at 03:00, on a day the doctor has no schedule, on a doctor whose
+    IsActive is false, or in a department that is inactive.
+
+    FIX: load the doctor's CalendarEntity and reject times outside
+         StartTime..EndTime; check doctor.IsActive and department.IsActive.
+
+A6. Frontend schedule grid reads UTC hours, compares local hours    [HIGH]
+    hospital-frontend/src/App.tsx:1519-1520
+    hospital-frontend/src/App.tsx:1573-1578
+    hospital-frontend/src/App.tsx:1538-1539
+
+    The hour labels come from UTC:
+        const startHour = new Date(schedule.startTime).getUTCHours()
+        const endHour = new Date(schedule.endTime).getUTCHours()
+    but the slot Date is built locally:
+        function dateAtTime(day, time) { ... date.setHours(Number(hour), ...) }
+    and the appointment match compares locally:
+        appointmentDate.getHours() === slotDate.getHours()
+
+    Any user not on UTC sees the grid shifted by their offset, and appointments
+    fail to land in the slot they belong to. Same mismatch at App.tsx:1016-1017,
+    which seeds the schedule edit form with getUTCHours().
+
+    FIX: pick one domain. Treat working hours as wall-clock numbers end to end
+         and stop round-tripping them through Date.
+
+A7. Hardcoded 15-minute slot ignores the per-doctor duration        [HIGH]
+    HospitalSystem/Services/Appointments/AppointmentCreationService.cs:14
+    HospitalSystem/Entities/CallendarEntity.cs:6
+
+        private static readonly TimeSpan AppointmentDuration = TimeSpan.FromMinutes(15);
+
+    while the calendar stores:
+        public int SlotDurationMin { get; set; }
+
+    A doctor configured for 30-minute slots can be booked at 15-minute offsets,
+    because the overlap window is computed from the constant. There is a whole
+    migration named CustomAppointmentDuration adding this column, so the
+    intent existed and the booking path was never updated.
+
+    FIX: read SlotDurationMin from the doctor's calendar in HasOverlapAsync.
+
+A8. Appointments can be created in the past                         [MED]
+    HospitalSystem/Services/Appointments/AppointmentCreationService.cs:64-87
+
+    ValidateAppointment checks the patient name, the phone number, that the
+    date of birth is present, and that DOB is not after the appointment date.
+    It never compares appointmentTime to now. Booking last week succeeds.
+
+    FIX: reject appointmentTime <= DateTime.UtcNow.
+
+A9. Hardcoded DepartmentId = 1 when promoting a user to Doctor      [MED]
+    HospitalSystem/Services/User/ChangeRoleService.cs:48
+
+        DepartmentId = 1
+
+    If department 1 does not exist - and no seed migration creates it - this is
+    a foreign key violation, which surfaces as an unlogged HTTP 500 (see B1).
+
+    FIX: require a DepartmentId on ChangeRoleDto, validate it exists, or leave
+         the doctor unassigned until DoctorDepartmentService assigns one.
+
+A10. Patients are matched on phone number alone                     [MED]
+    HospitalSystem/Services/Appointments/PatientService.cs:18-22
+
+        var existing = await _context.Patients
+            .FirstOrDefaultAsync(p => p.PhoneNumber == phoneNumber);
+        if (existing != null) return existing.Id;
+
+    The submitted name and date of birth are validated and then discarded. Two
+    people sharing a phone number - a family landline, a care home - collapse
+    into one patient record, and the appointment is attached to whoever
+    registered first. In a hospital system that is a clinical record problem,
+    not just a data problem.
+
+    FIX: match on a stronger key, or match on phone + name + DOB and surface a
+         "possible duplicate" result to the front desk rather than silently
+         merging.
+
+A11. Phone numbers are not normalized before the uniqueness lookup  [MED]
+    HospitalSystem/Services/Appointments/PatientService.cs:19
+    HospitalSystem/Services/Appointments/AppointmentCreationService.cs:76
+
+    The regex accepts spaces, parens, dots and dashes:
+        new(@"^\+?[0-9\s().-]+$", RegexOptions.Compiled)
+    but the lookup is a plain equality on the raw string. "+1 555 0100" and
+    "+15550100" are different patients, defeating both A10 and the unique index
+    at ApplicationDbContext.cs:34.
+
+    FIX: strip non-digits (keeping a leading +) before storing and comparing.
+
+A12. Trimmed values are validated, untrimmed values are persisted   [MED]
+    HospitalSystem/Services/Appointments/AppointmentCreationService.cs:66-67
+    HospitalSystem/Services/Appointments/AppointmentCreationService.cs:45-46
+
+    ValidateAppointment computes local trimmed copies:
+        var patientName = dto.PatientName?.Trim();
+        var phoneNumber = dto.PhoneNumber?.Trim();
+    then the caller passes the originals:
+        await _patientService.GetOrCreatePatientAsync(
+            dto.PatientName, dto.PhoneNumber, dto.DateOfBirth);
+
+    " 555 0100" passes validation and is stored with the leading space.
+
+    FIX: trim into the DTO (or a validated record) once, and pass that forward.
+
+A13. Patient and appointment are saved in two separate transactions [MED]
+    HospitalSystem/Services/Appointments/AppointmentCreationService.cs:45-59
+    HospitalSystem/Services/Appointments/PatientService.cs:31-32
+
+    GetOrCreatePatientAsync calls SaveChangesAsync to get the patient id, then
+    the caller calls SaveChangesAsync again for the appointment. If the second
+    fails - overlap constraint, FK violation - the patient row persists with no
+    appointment. There is no IDbContextTransaction anywhere in the codebase.
+
+    FIX: wrap both in one explicit transaction, or defer the patient insert and
+         save once.
+
+A14. "Search departments" input does nothing                        [MED]
+    hospital-frontend/src/App.tsx:1037
+
+        <input aria-label="Search departments" placeholder="Search departments" />
+
+    No value, no onChange, not bound to searchQuery. The user types and nothing
+    filters. The working search is in TopBar at App.tsx:498.
+
+    FIX: wire it to the existing searchQuery state, or delete it.
+
+A15. crypto.randomUUID() throws on plain-HTTP deployments           [MED]
+    hospital-frontend/src/App.tsx:130
+    hospital-frontend/nginx.conf:2
+
+    crypto.randomUUID is only defined in a secure context. nginx serves plain
+    HTTP on 8080. Reached over http:// on any non-localhost host, every
+    mutation throws TypeError on the success path - after the write has already
+    happened server-side.
+
+    FIX: fall back to Date.now() + Math.random() when randomUUID is undefined.
+
+A16. localStorage write inside a state updater                      [MED]
+    hospital-frontend/src/App.tsx:129-133
+
+    setActivity's updater function performs localStorage.setItem. Updaters must
+    be pure - React StrictMode double-invokes them, so this writes twice per
+    action and will misbehave under concurrent rendering.
+
+    FIX: move the write into a useEffect keyed on the activity state.
+
+A17. Unguarded JSON.parse turns proxy errors into SyntaxError       [MED]
+    hospital-frontend/src/api.ts:235-236
+
+        const text = await response.text()
+        const payload = text ? JSON.parse(text) : null
+
+    A 502 from nginx returns an HTML body, so the user sees
+    "Unexpected token '<'" instead of "Server unavailable".
+
+    FIX: check content-type, wrap in try/catch, and surface the status code.
+
+
+================================================================================
+[B]  SECURITY & AUTHENTICATION
+================================================================================
+
+B1. Nothing is logged, anywhere                                     [HIGH]
+    HospitalSystem/Program.cs:172-183
+    Whole backend
+
+        grep -rn 'ILogger' HospitalSystem --include=*.cs \
+          | grep -v /obj/ | grep -v /bin/
+        (no output)
+
+    Zero ILogger references in the entire application. The global handler is:
+
+        app.UseExceptionHandler(errorApp => {
+            errorApp.Run(async context => {
+                context.Response.StatusCode = 500;
+                await context.Response.WriteAsJsonAsync(new {
+                    error = "Something went wrong while processing the request."
+                });
+            });
+        });
+
+    It never reads IExceptionHandlerFeature, so the exception object is
+    discarded before anyone can see it. There are also zero try/catch blocks in
+    Controllers, Services, Data, Entities, Dto or Interface - the only throw in
+    the project is Program.cs:113.
+
+    Combined with A2, A9 and A13, several *expected* failure modes surface as
+    untraceable 500s. Nothing else on this list can be diagnosed in production
+    until this is fixed. This is the highest-leverage item in the file.
+
+    FIX: adopt .NET 8 IExceptionHandler + AddProblemDetails(), inject ILogger,
+         log the exception with a correlation id, keep the opaque client
+         message.
+
+B2. Prometheus /metrics is publicly readable                        [HIGH]
+    HospitalSystem/Program.cs:188-191
+
+        app.UseHttpMetrics();
+        app.MapMetrics();          // <- line 189
+        app.UseAuthentication();   // <- line 190
+        app.UseAuthorization();
+
+    MapMetrics is registered before authentication, so /metrics needs no
+    credentials. It exposes request paths, volumes, latencies and process
+    internals.
+
+    FIX: move MapMetrics after UseAuthorization and add .RequireAuthorization(),
+         or bind it to a separate internal port / IP allowlist.
+
+B3. Login is a user-enumeration timing oracle                       [HIGH]
+    HospitalSystem/Services/Auth/LoginService.cs:28-36
+
+        var user = await _context.Users.SingleOrDefaultAsync(u => u.Name == dto.Name);
+        if (user == null)
+            return LoginResultDto.Fail("Invalid credentials");     // returns immediately
+        var result = _hasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password);
+
+    When the user does not exist the request returns without hashing. When it
+    does, it spends ~100k PBKDF2 iterations. The message is identical but the
+    response time is not, so valid usernames are discoverable.
+
+    FIX: always run a verify against a fixed dummy hash when the user is
+         missing, then return the same failure.
+
+B4. Rate limiter collapses to one bucket behind a proxy             [HIGH]
+    HospitalSystem/Program.cs:146-155
+
+        var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+    There is no UseForwardedHeaders anywhere in the project. Behind the nginx
+    container, or Cloudflare, RemoteIpAddress is the proxy for every request -
+    so all clients share a single 60/min window. One noisy client denies
+    service to everyone, and per-IP limiting provides no protection at all.
+
+    FIX: add UseForwardedHeaders with a configured KnownProxies/KnownNetworks
+         list, before the rate limiter.
+
+B5. No separate rate limit on login                                 [HIGH]
+    HospitalSystem/Program.cs:146-155
+    HospitalSystem/Services/Auth/LoginService.cs:23-41
+
+    The global limiter is 60 requests/minute for everything. /api/Auth/login
+    gets the same budget as a read-only listing - 60 password guesses a minute,
+    per bucket, and see B4 for how weak that bucket is. There is no account
+    lockout, no failed-attempt counter, and login failures are not audited
+    (IAuditLogService is not injected into LoginService).
+
+    FIX: add a named, much stricter policy on the login endpoint, plus a
+         per-account failed-attempt counter with a lockout window.
+
+B6. No fallback authorization policy                                [HIGH]
+    HospitalSystem/Program.cs:191
+
+    Security depends entirely on every controller action remembering its
+    [Authorize] attribute. AddAuthorization() is never called explicitly - it
+    works only transitively via AddControllers(). A forgotten attribute ships
+    an anonymous endpoint with no signal.
+
+    FIX: AddAuthorization(o => o.FallbackPolicy = new AuthorizationPolicyBuilder()
+             .RequireAuthenticatedUser().Build());
+         then mark the login endpoint [AllowAnonymous].
+
+B7. Role changes and password resets do not invalidate tokens       [HIGH]
+    HospitalSystem/Services/Auth/LoginService.cs:58
+
+        expires: DateTime.UtcNow.AddHours(3)
+
+    The token carries no jti and there is no revocation list or refresh token.
+    Demoting an admin, disabling a doctor, or resetting a password leaves the
+    existing token fully valid for up to three hours.
+
+    FIX: shorten the access token, add a refresh token, and check a
+         revocation/"security stamp" claim on each request.
+
+B8. No ownership checks on appointment cancellation                 [HIGH]
+    HospitalSystem/Services/Appointments/AppointmentCancellationService.cs:25-35
+
+    The only guard is the role:
+        if (!_currentUser.IsInRole(UserRole.FrontDesk)) return ...
+    then the appointment is loaded by id and cancelled. Any front-desk user can
+    cancel any appointment created by anyone.
+
+    FIX: decide the rule deliberately - either any front-desk user may cancel
+         (document it) or restrict to the creator plus an admin override.
+
+B9. An admin can demote or lock out the last admin                  [MED]
+    HospitalSystem/Services/User/ChangeRoleService.cs:22-36
+    HospitalSystem/Services/User/ResetPasswordService.cs:24-37
+
+    Neither service checks dto.UserId against the current user, and neither
+    counts remaining admins. An admin can change their own role, reset their
+    own password, or demote the only other admin - with no way back in, since
+    there is no seed admin (see E22).
+
+    FIX: block self-role-change and refuse to demote the last Admin.
+
+B10. Six state-changing operations write no audit entry             [HIGH]
+    HospitalSystem/Services/Auth/UserCreationService.cs:48-49
+    HospitalSystem/Services/User/CreateDoctorService.cs:49
+    HospitalSystem/Services/Deparment/DepartmentCreationService.cs:28
+    HospitalSystem/Services/Appointments/AppointmentCreationService.cs:58-59
+    HospitalSystem/Services/Calendar/ScheduleCreationService.cs:53
+    HospitalSystem/Services/Calendar/ScheduleModificationService.cs:54
+
+    IAuditLogService is injected into 7 services and used by cancellation, role
+    change, doctor status, department status, doctor-department and password
+    reset. Creating a user, a doctor, a department, an appointment or a
+    schedule - and modifying a schedule - leaves no trace. Login and logout are
+    not audited either. In a system holding patient appointments, creation is
+    at least as audit-worthy as cancellation.
+
+    FIX: audit every write. Consider a SaveChanges interceptor so it cannot be
+         forgotten again.
+
+B11. AuditLogEntity.ActorName stores a numeric id, not a name       [MED]
+    HospitalSystem/Services/AuditLogService.cs:24
+    HospitalSystem/Services/CurrentUserService.cs:13-16
+
+        ActorName = _currentUser.UserId ?? "Unknown",
+
+    UserId returns the NameIdentifier claim, which is the integer user id. The
+    audit trail is unreadable without a join, and degrades to the literal
+    string "Unknown" when the claim is missing. The JWT carries no username
+    claim (LoginService.cs:45-49) so the name is not available at write time.
+
+    FIX: add a name claim to the token, or rename the column to ActorId and
+         resolve names at read time.
+
+B12. JWT is stored in localStorage                                  [MED]
+    hospital-frontend/src/api.ts:103-106
+
+    Readable by any injected script, persists indefinitely, survives tab close.
+    There is no Content-Security-Policy on the nginx config (H8), which is what
+    would otherwise reduce the XSS risk.
+
+    FIX: httpOnly cookie with SameSite, or in-memory token plus silent refresh.
+
+B13. Demo passwords are hardcoded in the shipped bundle             [MED]
+    hospital-frontend/src/App.tsx:346
+    hospital-frontend/src/App.tsx:349
+
+        onClick={() => void submit('DemoAdmin', '12345678')}
+        onClick={() => void submit('DemoReception', '12345678')}
+
+    These strings are in dist/assets/index-*.js for anyone to read. If the demo
+    accounts exist in production, so do the credentials.
+
+    FIX: gate the buttons behind import.meta.env.DEV, or have the backend issue
+         a demo session so no password ships to the client.
+
+B14. No 401 handling - sessions never end                           [MED]
+    hospital-frontend/src/api.ts:238-256
+
+    Only 403 is special-cased. An expired token yields a raw 401 message while
+    the UI still believes the user is logged in; clearSession() is never called
+    on 401 anywhere in the file. There is also no AbortSignal.timeout, so a
+    hung backend hangs the UI indefinitely.
+
+    FIX: on 401, clear the session and route to the login screen; add a request
+         timeout.
+
+B15. CORS origins are hardcoded in code                             [MED]
+    HospitalSystem/Program.cs:25-34
+
+        .WithOrigins("http://localhost:5173", "http://localhost:3000",
+                     "https://hospitalsystem.pages.dev",
+                     "https://hostpitalsyst.servebeer.com")
+        .AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+
+    Changing an environment requires a rebuild, and both localhost origins ship
+    to production. AllowCredentials() is unnecessary for bearer-token auth and
+    only widens exposure. Note the origin at line 29 contains the same
+    "hostpitalsyst" transposition found in README.md:156.
+
+    FIX: bind origins from configuration; drop AllowCredentials unless cookies
+         are adopted.
+
+B16. Placeholder JWT key is still reachable in git history          [MED]
+    Commit 3884c09 "Remove committed JWT secret"
+    HospitalSystem/appsettings.json (at that commit)
+
+        - "SecretKey": "THIS_SHOULD_BE_LONG_AND_SECRET_123456789",
+
+    The removal commit deletes the line going forward but the value remains in
+    history. It is self-evidently a placeholder, so severity is limited - but
+    if it was ever the deployed value it must be rotated, and a scan of history
+    also surfaces connection strings with credentials.
+
+    FIX: rotate if it was ever live. Add secret scanning to CI (G13) so the
+         next one is caught before merge.
+
+B17. No minimum-length validation on the JWT signing key            [MED]
+    HospitalSystem/Enums/JwtSettings.cs:3
+    HospitalSystem/Program.cs:109-113
+
+    SecretKey is bound from configuration and used directly as an HMAC-SHA256
+    key. Nothing validates its length. The value in .env is 40 characters; a
+    shorter one would silently produce a weak signature.
+
+    FIX: use AddOptions<JwtSettings>().Validate(...).ValidateOnStart() with a
+         32-byte minimum.
+
+B18. ClockSkew left at the 5-minute default                         [LOW]
+    HospitalSystem/Program.cs:118-129
+
+    All four Validate* flags are correctly true, but ClockSkew is not set, so
+    tokens remain accepted for five minutes past their stated expiry.
+
+    FIX: ClockSkew = TimeSpan.Zero (or a deliberate smaller value).
+
+B19. AllowedHosts is "*"                                            [LOW]
+    HospitalSystem/appsettings.json:17
+    HospitalSystem/appsettings.Development.json:19
+
+    No host-header filtering.
+
+    FIX: set the real hostnames in the production configuration.
+
+
+================================================================================
+[C]  DUPLICATION
+================================================================================
+
+C1. Eight result DTOs are byte-identical                            [HIGH]
+    HospitalSystem/Dto/ChangeRoleResultDto.cs
+    HospitalSystem/Dto/DepartmentActionResultDto.cs
+    HospitalSystem/Dto/CalendarActionResultDto.cs
+    HospitalSystem/Dto/CreateUserResultDto.cs
+    HospitalSystem/Dto/ResetPasswordResultDto.cs
+    HospitalSystem/Dto/CreateDoctorResultDto.cs
+    HospitalSystem/Dto/CancelAppointmentResultDto.cs
+    HospitalSystem/Dto/CreateAppointmentResultDto.cs
+
+    Verified by normalizing the class name out of each file and hashing the
+    remainder - all eight produce the same digest. Each is:
+
+        public bool IsSuccess { get; set; }
+        public string? Error { get; set; }
+        public static X Fail(string error) { return new X { Error = error, IsSuccess = false }; }
+        public static X Success() { return new X { IsSuccess = true }; }
+
+    Meanwhile HospitalSystem/Dto/ServiceResult.cs:1 already defines a generic
+    ServiceResult<T> - used by only 4 methods. Because each result is a
+    distinct type with no shared interface, the controller code that consumes
+    them had to be copy-pasted too (see C4).
+
+    FIX: add a non-generic ServiceResult alongside ServiceResult<T> and delete
+         all eight. ~170 lines removed, and the controllers collapse with them.
+
+C2. The Admin-only guard is repeated in ten services                [MED]
+    HospitalSystem/Services/Auth/UserCreationService.cs:23
+    HospitalSystem/Services/Calendar/ScheduleCreationService.cs:20
+    HospitalSystem/Services/Calendar/ScheduleModificationService.cs:20
+    HospitalSystem/Services/Deparment/DepartmentCreationService.cs:20
+    HospitalSystem/Services/Deparment/DepartmentStatusService.cs:22
+    HospitalSystem/Services/Deparment/DoctorDepartmentService.cs:22
+    HospitalSystem/Services/User/ChangeRoleService.cs:22
+    HospitalSystem/Services/User/CreateDoctorService.cs:20
+    HospitalSystem/Services/User/DoctorStatusService.cs:22
+    HospitalSystem/Services/User/ResetPasswordService.cs:24
+
+        if (!_currentUser.IsInRole(UserRole.Admin))
+            return X.Fail("You are not allowed to ...");
+
+    Ten copies, ten bespoke message strings, ten places to forget.
+
+    FIX: move to policy-based authorization, or a shared guard helper that
+         returns a typed failure.
+
+C3. The four-way role check is copy-pasted four times               [MED]
+    HospitalSystem/Services/Deparment/DepartmentQueryService.cs:20-23
+    HospitalSystem/Services/User/UserQueryService.cs:20-23
+    HospitalSystem/Services/User/UserQueryService.cs:42-45
+    HospitalSystem/Services/Calendar/ScheduleQueryService.cs:20-23
+
+        if (!_currentUser.IsInRole(UserRole.Admin) &&
+            !_currentUser.IsInRole(UserRole.FrontDesk) &&
+            !_currentUser.IsInRole(UserRole.DemoAdmin) &&
+            !_currentUser.IsInRole(UserRole.DemoFrontDesk))
+
+    FIX: a single "can read reference data" policy.
+
+C4. Redundant ModelState check in twelve controllers                [MED]
+    HospitalSystem/Controllers/ - 12 occurrences, confirmed by:
+        grep -rn 'ModelState.IsValid' HospitalSystem/Controllers --include=*.cs | wc -l
+        12
+
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+    Every one of these controllers carries [ApiController], which already
+    performs automatic model validation and returns a 400 ProblemDetails before
+    the action body runs. All twelve blocks are unreachable.
+
+    FIX: delete them.
+
+C5. PasswordHasher is constructed by hand in three services         [MED]
+    HospitalSystem/Services/Auth/LoginService.cs:20
+    HospitalSystem/Services/Auth/UserCreationService.cs:18
+    HospitalSystem/Services/User/ResetPasswordService.cs:19
+
+        _hasher = new PasswordHasher<UserEntity>();
+
+    A change to the algorithm, iteration count or compatibility mode has to be
+    made three times and can drift. It also makes the hasher unmockable.
+
+    FIX: register IPasswordHasher<UserEntity> in DI and inject it.
+
+C6. Identical constructor boilerplate in thirteen services          [LOW]
+    e.g. HospitalSystem/Services/Deparment/DepartmentStatusService.cs:9-18
+         HospitalSystem/Services/User/DoctorStatusService.cs:9-18
+
+    The same three fields (_context, _currentUser, _auditLog) and the same
+    constructor body, with no shared base. The two files above are identical
+    from line 9 to line 18.
+
+    FIX: a small base class, or accept it as the cost of explicit DI - but at
+         least do C1/C2 first, which is where the real weight is.
+
+C7. The schedule overlap query is written twice                     [LOW]
+    HospitalSystem/Services/Calendar/ScheduleCreationService.cs:37-43
+    HospitalSystem/Services/Calendar/ScheduleModificationService.cs:42-49
+
+    Identical apart from the extra `Id !=` clause on the modification side.
+    See also A3 - the two copies disagree about their base date, which is
+    exactly the failure mode duplication invites.
+
+    FIX: one private helper taking an optional excluded id.
+
+C8. Frontend casing-tolerance is hand-written ~25 times             [MED]
+    hospital-frontend/src/api.ts:273-325
+
+    normalizeDepartment, normalizeDoctor, normalizeUser, normalizeSchedule and
+    normalizeAppointment each spell out `item.x ?? item.X` for every field.
+    ServiceResult at api.ts:76-83 does the same for isSuccess/IsSuccess and
+    data/Data. One of them even compensates for a backend typo:
+
+        api.ts:286
+        departmentId: numberValue(item.departmentId ?? item.DepartmentId
+                                  ?? item.deparmentId ?? item.DeparmentId),
+
+    FIX: set a camelCase JsonNamingPolicy on the API (and fix E15's typo), then
+         delete ~90 lines here. Better still, generate the client from the
+         OpenAPI document.
+
+C9. The read-only guard is repeated sixteen times                   [LOW]
+    hospital-frontend/src/App.tsx:117, 809, 818, 883, 912, 1048, 1093, 1133,
+    1146, 1189, 1239, 1262, 1288, 1315, 1340, 1364
+
+        title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
+
+    always paired with a hand-written disabled={... || isReadOnly}. There are
+    also 9 separate role.startsWith('Demo') checks.
+
+    FIX: a <GuardedButton> component, or a useReadOnly() hook. One string, one
+         rule.
+
+C10. Loading/empty table block repeated four times                  [LOW]
+     hospital-frontend/src/App.tsx:1108-1109, 1157-1158, 1275-1276, 1379-1380
+
+        {loading && <SkeletonRows count={5} />}
+        {!loading && items.length === 0 && <EmptyState text="..." />}
+
+     FIX: a <DataTable items rows loading emptyText> wrapper.
+
+
+================================================================================
+[D]  DEAD CODE
+================================================================================
+
+D1. hospital-ui-v2/ is a complete duplicate of hospital-frontend/   [HIGH]
+    VERIFY FIRST
+
+        diff -rq hospital-frontend/src hospital-ui-v2/src
+        (no output - the trees are identical)
+
+    Every source file, every asset, and both built dist/ bundles are
+    md5-identical. The only difference in the entire tree is the "name" field:
+
+        hospital-frontend/package.json:2   "name": "hospital-frontend",
+        hospital-ui-v2/package.json:2      "name": "hospital-ui-v2",
+
+    Evidence that hospital-ui-v2 is the dead copy, not the live one:
+      - no Dockerfile, no nginx.conf, no .dockerignore - it cannot be built or
+        deployed
+      - docker-compose.yml:45 builds ./hospital-frontend
+      - .github/workflows/ci.yml:39 uses working-directory: hospital-frontend
+      - .github/workflows/docker-image.yml:70-77 builds hospital-frontend
+      - README.md:204 and :286 reference hospital-frontend
+      - grep for "hospital-ui-v2" across README.md, .github/ and
+        docker-compose.yml returns nothing
+      - CI never lints, type-checks, builds or scans it, so it rots silently
+
+    The copy-paste also leaked into the live app - hospital-frontend/src/api.ts
+    reads the dead project's storage keys in 8 places (api.ts:98, 99, 104, 105,
+    109, 110, 225, 248):
+
+        const token = localStorage.getItem('hospital-ui-v2-token')
+
+    FIX: delete the hospital-ui-v2 directory (~3,400 duplicated source lines
+         plus a second node_modules and lockfile), then rename the localStorage
+         keys in hospital-frontend. Check `git log hospital-ui-v2` first in
+         case it was meant to be a work in progress - if so it needs CI
+         coverage rather than deletion.
+
+D2. Twenty-one tracked zero-byte .cs files                          [MED]
+    VERIFY FIRST
+
+        git ls-files -z | xargs -0 -I{} sh -c '[ -f "{}" ] && [ ! -s "{}" ] && echo {}' | wc -l
+        21
+
+    HospitalSystem/Controllers/artefacts/     - 5 files
+    HospitalSystem/Interface/artefacts/       - 5 files
+    HospitalSystem/Services/aftefacts/        - 5 files  (note: "aftefacts")
+    MyApp.Tests/Services/artefacts/           - 5 files
+    HospitalSystem/Entities/RoleEntity.cs     - 1 file
+
+    Leftovers from the god-class to per-operation-service refactor. Note the
+    directory is misspelled two different ways - "artefacts" in three places
+    and "aftefacts" in another.
+
+    FIX: delete all four directories and RoleEntity.cs.
+
+D3. `hello` - a pasted vulnerability scan at the repo root          [MED]
+    VERIFY FIRST
+    hello (16,812 bytes, 176 lines)
+
+        file hello -> Unicode text, UTF-8 text, with very long lines
+
+    Contains 25 CVE entries copy-pasted out of a scanner UI, tab-separated,
+    first entry CVE-2026-13221 (perl), last CVE-2026-6368 (glibc). Committed
+    across two commits: 680fc3d "vunuability fixes" and 52c8d9b "f".
+
+    CI already runs Trivy properly at ci.yml:80-93, so this is a stale snapshot
+    that will mislead whoever finds it.
+
+    FIX: delete.
+
+D4. dummy.txt                                                       [LOW]
+    VERIFY FIRST
+    dummy.txt (9 bytes) - contents: "Hello\nsss"
+
+    FIX: delete.
+
+D5. Three DTOs are referenced only by their own declaration         [MED]
+    HospitalSystem/Dto/AppointmentQueryDto.cs
+    HospitalSystem/Dto/UpdateAppointmentStatusDto.cs
+    HospitalSystem/Dto/ViewScheduleDto.cs
+
+    Each returns exactly one grep hit - itself.
+
+    AppointmentQueryDto is the interesting one: it is a filter DTO
+    (DepartmentId / DoctorId / Date) that was designed and never wired up.
+    That is why AppointmentQueryService.cs:23-36 has no Where, no OrderBy and
+    no paging, and loads every appointment ever created on every call (see E9).
+
+    FIX: delete ViewScheduleDto and UpdateAppointmentStatusDto; either wire up
+         AppointmentQueryDto or delete it and track the filtering work
+         separately.
+
+D6. UnitTest1.cs is the dotnet new scaffold                         [LOW]
+    MyApp.Tests/UnitTest1.cs:1-10
+
+        public class UnitTest1 {
+            [Fact]
+            public void Test2() { }
+        }
+
+    An empty body named Test2 in a class named UnitTest1. Always passes,
+    inflates the count by one.
+
+    FIX: delete.
+
+D7. Two appointment statuses are unreachable                        [MED]
+    HospitalSystem/Enums/AppointmentStatus.cs:5,7
+
+    Completed and NoShow are declared but no endpoint ever sets them. The DTO
+    that would have done it, UpdateAppointmentStatusDto, is dead code (D5) -
+    and contains its own typo, AppointmentStatuss.
+
+    FIX: implement the status transition endpoint, or drop the enum members.
+
+D8. UserRole.Doctor grants access to nothing                        [MED]
+    HospitalSystem/Enums/UserRole.cs:5
+
+    The Doctor role appears in no [Authorize] attribute and no service role
+    check. A user promoted to Doctor can authenticate and then reach no
+    endpoint at all.
+
+    FIX: decide what a doctor may see - their own schedule and appointments is
+         the obvious minimum - or document that Doctor is a data classification
+         rather than a login role.
+
+D9. Four unreferenced frontend assets (~31 KB per project)          [LOW]
+    hospital-frontend/src/assets/hero.png   (13 KB)
+    hospital-frontend/src/assets/react.svg  (4 KB)
+    hospital-frontend/src/assets/vite.svg   (8.7 KB)
+    hospital-frontend/public/icons.svg      (5 KB)
+
+    Referenced by nothing in src/ or index.html - only favicon.svg is used
+    (index.html:5). icons.svg is copied verbatim into dist/ by Vite. Doubled
+    across both projects while D1 stands.
+
+    FIX: delete.
+
+D10. Stray using importing cookie auth into an entity               [LOW]
+     HospitalSystem/Entities/UserEntity.cs:2
+
+        using Microsoft.AspNetCore.Authentication.Cookies;
+
+     Unused, and the project does not use cookie authentication at all.
+
+     FIX: delete.
+
+
+================================================================================
+[E]  BACKEND STRUCTURE & CONSISTENCY
+================================================================================
+
+E1. All entities, DTOs, enums and the DbContext have no namespace   [MED]
+    HospitalSystem/Entities/*.cs      (8 files)
+    HospitalSystem/Dto/*.cs           (32 files)
+    HospitalSystem/Enums/*.cs         (3 files)
+    HospitalSystem/Data/ApplicationDbContext.cs:3
+    HospitalSystem/Interface/IAuditLogService.cs
+    HospitalSystem/Program.cs
+    HospitalSystem/Services/Auth/LoginService.cs
+    HospitalSystem/Services/Auth/UserCreationService.cs
+
+    All of these types live in the global namespace. Only the Services and
+    Controllers trees declare namespaces, and inconsistently (E2).
+
+    FIX: file-scoped namespaces matching the folder structure, applied with an
+         .editorconfig rule (E20) so it stays that way.
+
+E2. Two spellings of the interface namespace coexist                [LOW]
+    HospitalSystem/Interface/Appointments/*.cs    namespace HospitalSystem.Interfaces.Appointments;
+    HospitalSystem/Interface/Auth/*.cs            namespace HospitalSystem.Interface.Auth;
+    HospitalSystem/Interface/Calendar/*.cs        namespace HospitalSystem.Interface.Calendar;
+    HospitalSystem/Interface/Department/*.cs      namespace HospitalSystem.Interface.Department;
+    HospitalSystem/Interface/User/*.cs            namespace HospitalSystem.Interface.User;
+
+    Plural in one folder, singular in four - inside a folder named Interface.
+    Program.cs has to import both spellings (Program.cs:11 and :12-15).
+
+    FIX: pick "Interfaces" (the conventional plural) and rename the folder too.
+
+E3. Services namespaces do not match their folders                  [LOW]
+    HospitalSystem/Services/Appointments/*.cs   namespace HospitalSystem.Services.Appointments;
+    HospitalSystem/Services/Calendar/*.cs       namespace HospitalSystem.Services;
+    HospitalSystem/Services/Deparment/*.cs      namespace HospitalSystem.Services;
+    HospitalSystem/Services/User/*.cs           namespace HospitalSystem.Services;
+    HospitalSystem/Services/Auth/*.cs           (none)
+
+    Three different conventions in one tree.
+
+E4. Nine files whose name does not match the type inside            [LOW]
+    Entities/PatiensEntity.cs          -> class PatientEntity
+    Entities/ApointmentsEntity.cs      -> class AppointmentsEntity
+    Entities/CallendarEntity.cs        -> class CalendarEntity
+    Entities/RoleEntity.cs             -> (empty, see D2)
+    Dto/ChangeDoctorStatus.cs          -> class ChangeDoctorsStatus
+    Dto/ChangeDoctorStatusResult.cs    -> class ChangeDoctorsStatusResult
+    Dto/CalendarActionResultDto.cs     -> class CalendarActionResult
+    Dto/VIewSchedule.cs                -> class ViewSchedule
+    Dto/ViewAppointmentsDto.cs         -> class ViewAppointmentDto
+
+    The class names are mostly correct; the filenames are misspelled
+    ("Patiens", "Apointments", "Callendar", "VIew" with a capital I).
+    AppointmentsEntity is itself plural for a single-row entity, unlike
+    UserEntity / DoctorEntity / PatientEntity.
+
+    FIX: rename files to match types; rename AppointmentsEntity to
+         AppointmentEntity while touching it.
+
+E5. Folder Services/Deparment/ is misspelled                        [LOW]
+    HospitalSystem/Services/Deparment/
+
+    while Controllers/Department/ and Interface/Department/ are spelled
+    correctly. See also E15 - the same typo reached the public API contract.
+
+E6. JwtSettings is a settings class in the Enums folder             [LOW]
+    HospitalSystem/Enums/JwtSettings.cs:1
+
+        public class JwtSettings
+
+    FIX: move to a Configuration/ or Options/ folder.
+
+E7. Route and action naming is inconsistent                         [LOW]
+    api/Users/change-role              (kebab)      ChangeRoleController.cs:8,19
+    api/Users/ListUsers                (Pascal)     UserQueryController.cs:19
+    api/Appointments/CreateAppointment (Pascal)     AppointmentCreationController.cs:21
+    api/Auth/login                     (lower)      LoginController.cs:15
+    api/schedule/create-schedule       (lower+kebab) ScheduleCreationController.cs:8,19
+    api/Department/ViewDepartment      (singular resource, Pascal action)
+
+    Four casing conventions across five resources, and Department is the only
+    singular resource name.
+
+    FIX: choose one - lowercase plural resources with kebab-case actions is the
+         common REST convention - and redirect the old routes for one release.
+
+E8. Every mutation is an HTTP POST                                  [LOW]
+    HospitalSystem/Controllers/ - all 18 actions
+
+    change-role, ChangeDepartmentStatus, change-doctor-status, change-schedule
+    and CancelAppointment are all POST. No PUT, PATCH or DELETE anywhere.
+
+    FIX: PATCH for partial updates, DELETE for cancellation, as part of E7.
+
+E9. No pagination or filtering on any list endpoint                 [HIGH]
+    HospitalSystem/Services/Appointments/AppointmentQueryService.cs:23-36
+
+        await _context.Appointments.AsNoTracking().Select(...).ToListAsync();
+
+    No Where, no OrderBy, no Skip/Take. Every call loads every appointment ever
+    created into memory and serializes it. Same shape in UserQueryService and
+    DepartmentQueryService. This is the biggest scalability problem in the
+    backend, and the DTO that would fix it already exists but is dead (D5).
+
+    FIX: add filtering (date range, doctor, department) and keyset pagination.
+
+E10. All service failures map to HTTP 400                           [MED]
+     HospitalSystem/Controllers/ - 12 identical sites, e.g.
+     HospitalSystem/Controllers/Appointments/AppointmentCancellationController.cs:28-29
+
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+     "You are not allowed to ..." should be 403. "Doctor not found" should be
+     404. "Doctor already booked" should be 409. All three are 400.
+
+     FIX: give the result type a failure kind and map it centrally. Depends on
+          C1 - once there is one result type, there is one place to map.
+
+E11. ScheduleQueryController returns authorization failures as 200  [MED]
+     HospitalSystem/Controllers/Calendar/ScheduleQueryController.cs:22-23
+
+        var schedule = await _queryService.ViewScheduleAsync();
+        return Ok(schedule);
+
+     IsSuccess is never inspected. An unauthorized caller receives HTTP 200
+     with {IsSuccess: false, Data: null}. This is the one controller that
+     breaks the pattern in E10, and it breaks it in the unsafe direction.
+
+     FIX: check IsSuccess like every sibling controller.
+
+E12. Claims are parsed in a controller despite ICurrentUserService  [LOW]
+     HospitalSystem/Controllers/Appointments/AppointmentCreationController.cs:27-28
+
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? User.FindFirst("UserId")?.Value;
+
+     then passes userId into the service - which already has ICurrentUserService
+     injected (AppointmentCreationService.cs:11). Two sources of truth for the
+     same fact, and they can disagree.
+
+     FIX: drop the parameter and use _currentUser.
+
+E13. Authorization is enforced twice, by hand, in two places        [MED]
+     e.g. HospitalSystem/Controllers/Appointments/AppointmentQueryController.cs:19
+              [Authorize(Roles = "FrontDesk,DemoFrontDesk")]
+          HospitalSystem/Services/Appointments/AppointmentQueryService.cs:20
+              if (!_currentUser.IsInRole(UserRole.FrontDesk) && ...)
+
+     Defence in depth is good; two hand-maintained copies across 14 endpoints
+     is a drift risk. There is no policy-based authorization anywhere.
+
+     FIX: named policies referenced by both layers.
+
+E14. Demo roles are read-only by convention only                    [MED]
+     HospitalSystem/Enums/UserRole.cs:7-8
+     HospitalSystem/Controllers/User/UserQueryController.cs:18,30
+
+     DemoAdmin and DemoFrontDesk are simply added to the Roles list on read
+     endpoints. Nothing structurally prevents a future write endpoint from
+     including them, and the only other enforcement is the frontend's
+     isReadOnly flag (C9), which is cosmetic.
+
+     FIX: a server-side policy that rejects non-GET requests for demo roles.
+
+E15. "Deparment" typo is in the public API contract                 [MED]
+     HospitalSystem/Dto/DoctorDisplayDto.cs:4
+     HospitalSystem/Services/User/UserQueryService.cs:56
+
+        public int DeparmentId { get; set; }
+        DeparmentId = d.DepartmentId,
+
+     This ships in the JSON, which is why the frontend carries a fallback for
+     it (C8, api.ts:286). Also present in the dead ViewScheduleDto.cs:3.
+
+     FIX: rename the property and drop the frontend fallback in the same
+          change. It is a breaking API change - version it or use
+          [JsonPropertyName] for one release.
+
+E16. User-facing error strings contain typos                        [LOW]
+     Services/Calendar/ScheduleQueryService.cs:26   "Not allowed to list deparments"
+     Services/Deparment/DepartmentQueryService.cs:25 "Not allowed to list deparments"
+     Services/Deparment/DoctorDepartmentService.cs:27 "Doctor doesnt exist "  (trailing space)
+     Services/Deparment/DoctorDepartmentService.cs:34 "Department doesnt exist"
+     Services/Deparment/DoctorDepartmentService.cs:37 "This Deparment isnt active"
+     Services/Deparment/DepartmentStatusService.cs:27 "Department doesnt exist"
+     Services/User/DoctorStatusService.cs:30         "Doctor doesnt exist"
+
+     Note ScheduleQueryService says "deparments" while listing *schedules* - a
+     copy-paste from the department service.
+
+     FIX: correct the spelling and the copy-paste; consider centralizing
+          messages so they are reviewable in one place.
+
+E17. No unique constraint behind two application-level invariants   [MED]
+     HospitalSystem/Data/ApplicationDbContext.cs:57  (appointments - not unique)
+     HospitalSystem/Data/ApplicationDbContext.cs:60-63 (calendars - no index at all)
+
+     "One schedule per doctor" is enforced only in ScheduleValidation.cs:51-52,
+     and "no double booking" only in HasOverlapAsync (A2). Both are races.
+
+     FIX: unique index on Calendars.DoctorId; filtered unique index on
+          appointments as described in A2.
+
+E18. DepartmentEntity.Department is an unbounded text column        [LOW]
+     HospitalSystem/Data/ApplicationDbContext.cs:39
+     HospitalSystem/Migrations/20260106090316_InitialCreate.cs:21
+
+        builder.Property(s => s.Department).IsRequired();
+        Department = table.Column<string>(type: "text", nullable: false)
+
+     Every other string in the model has a HasMaxLength. This one has a unique
+     index on an unbounded column.
+
+     Also: the property is named the same as its entity, so
+     DepartmentCreationService.cs:23 reads `d.Department == dto.Name`, which
+     looks like a bug even though it is not.
+
+     FIX: HasMaxLength(100) and rename the property to Name.
+
+E19. Missing indexes for the queries that are actually run          [LOW]
+     HospitalSystem/Data/ApplicationDbContext.cs:57
+     HospitalSystem/Data/ApplicationDbContext.cs:71
+
+     Appointments has (DoctorId, Status, TimeOfAppointment) - so a date-range
+     listing across all doctors cannot use it (wrong leading column).
+     AuditLogs has (EntityType, EntityId, CreatedAt) - so "everything in the
+     last hour", the most common audit query, is a full scan.
+
+     FIX: add TimeOfAppointment and CreatedAt single-column indexes. Do this
+          together with E9, since the access pattern depends on it.
+
+E20. No .editorconfig, no analyzer configuration, warnings ignored  [MED]
+     HospitalSystem/HospitalSystem.csproj:5  <Nullable>enable</Nullable>
+     No .editorconfig, no Directory.Build.props, no global.json
+
+     Nullable is enabled but nothing acts on it: entities declare non-nullable
+     navigations and strings with no initializer (CS8618 throughout), e.g.
+     ApointmentsEntity.cs:14,17,20; DoctorEntity.cs:5,8; AuditLogEntity.cs:4-8;
+     LoginResultDto.cs:4-6; JwtSettings.cs:3. There is no TreatWarningsAsErrors,
+     so the whole build is noisy and nobody reads it.
+
+        grep -rn ' $' HospitalSystem --include=*.cs | grep -v /obj/ | \
+          grep -v /bin/ | grep -v /Migrations/ | wc -l
+        270   (across 58 files)
+
+     FIX: add .editorconfig and Directory.Build.props with TreatWarningsAsErrors
+          for nullable diagnostics, fix the annotations, add global.json to pin
+          the SDK.
+
+E21. The model claims non-nullable what the code treats as nullable [LOW]
+     HospitalSystem/Services/Appointments/AppointmentQueryService.cs:29-32
+
+        DoctorName = a.Doctor != null && a.Doctor.User != null
+                     ? a.Doctor.User.Name : null,
+
+     The runtime guard proves the annotations at ApointmentsEntity.cs:14-20 are
+     wrong - and the DTO it assigns into declares those fields non-nullable
+     too (ViewAppointmentsDto.cs:5,7,8). Meanwhile DoctorStatusService.cs:40,47
+     dereferences doctor.User.Name with no guard at all.
+
+     Related: ICurrentUserService.UserId is declared `string`
+     (Interface/ICurrentUserService.cs:4) but the implementation returns
+     `string?` (CurrentUserService.cs:13-16) - the `?? "Unknown"` at the call
+     site shows the author knew.
+
+     FIX: annotate honestly, then let E20's warnings keep it honest.
+
+E22. Four migrations do nothing, and there is no seed migration     [MED]
+     HospitalSystem/Migrations/20260106163944_..cs:8
+         public partial class _ : Migration      <- migration literally named ".."
+     HospitalSystem/Migrations/20260216193104_UpdateDoctorScheduleModel.cs:11-20  (empty)
+     HospitalSystem/Migrations/20260217143525_AddCalendarScheduleS.cs:11-20       (empty)
+     HospitalSystem/Migrations/20260124105904_CheckSync.cs:8                      (debug name, real changes)
+
+     Two further data problems shipped through migrations:
+       - CheckSync.cs:17-18,24-25 adds IsActive with defaultValue: false, so
+         every pre-existing doctor and department was silently deactivated on
+         deploy, with no backfill.
+       - CustomAppointmentDuration.cs:13-18 adds SlotDurationMin with
+         defaultValue: 0, which ScheduleValidation.cs:27-28 rejects as invalid.
+         Every pre-existing calendar row became invalid data.
+
+     And there is no seed migration at all - no bootstrap admin and no
+     department 1, which ChangeRoleService.cs:48 hardcodes (A9). A fresh
+     database cannot be bootstrapped: creating a user requires an existing
+     admin.
+
+     FIX: squash the empty migrations; add a seed migration creating the first
+          admin and a default department; backfill SlotDurationMin.
+
+E23. Zero CancellationToken parameters in the codebase              [MED]
+     All 14 service methods, all 18 controller actions
+
+        grep -rn 'CancellationToken' HospitalSystem --include=*.cs \
+          | grep -v /obj/ | grep -v /bin/
+        (no output)
+
+     23 async database calls, none cancellable. A client disconnect leaves the
+     query running to completion.
+
+     FIX: thread CancellationToken from the action through to every EF call.
+
+E24. AsNoTracking missing on most read-only queries                 [LOW]
+     HospitalSystem/Services/Deparment/DepartmentQueryService.cs:28-35
+     HospitalSystem/Services/User/UserQueryService.cs:28-35
+     HospitalSystem/Services/User/UserQueryService.cs:50-61
+     HospitalSystem/Services/Calendar/ScheduleValidation.cs:34-36
+
+     Only 2 of 23 queries use it. ScheduleValidation additionally loads the
+     full Doctor + Department graph with tracking to read two booleans, and
+     queries hasAnySchedule unconditionally (ScheduleValidation.cs:47-52) while
+     only using it when currentScheduleId is null - a wasted round trip on
+     every edit.
+
+     Also UserQueryService.cs:51 has an Include before a Select, which EF
+     discards.
+
+     FIX: AsNoTracking on all read paths; project instead of Include.
+
+
+================================================================================
+[F]  FRONTEND
+================================================================================
+
+F1. TypeScript strict mode is off                                   [HIGH]
+    hospital-frontend/tsconfig.app.json
+    hospital-frontend/tsconfig.json
+    hospital-frontend/tsconfig.node.json
+
+    None of the three sets "strict": true, and TypeScript defaults it to false.
+    So the project compiles with strictNullChecks off and noImplicitAny off -
+    the two checks that catch real bugs - while the cosmetic ones are enabled
+    (tsconfig.app.json:18-21: noUnusedLocals, noUnusedParameters,
+    erasableSyntaxOnly, noFallthroughCasesInSwitch).
+
+    Unchecked today as a direct result: App.tsx:172-176, App.tsx:579,
+    api.ts:264. noUncheckedIndexedAccess is also missing, and App.tsx:576 does
+    activeDoctors[0].doctorId while App.tsx:1555 indexes [0] on a possibly
+    empty sort result.
+
+    FIX: enable strict, fix the fallout, then add noUncheckedIndexedAccess.
+         Expect real findings - this is the highest-value frontend change.
+
+F2. Zero tests                                                      [HIGH]
+    hospital-frontend/package.json:6-11
+
+        "scripts": {
+          "dev": "vite",
+          "build": "tsc -b && vite build",
+          "lint": "oxlint",
+          "preview": "vite preview"
+        }
+
+    No test script, and no test file, Vitest, Testing Library or Playwright
+    anywhere in either frontend. For an app that books medical appointments and
+    resets passwords. The pure functions are sitting there ready to be tested:
+    validateAppointmentInput (App.tsx:1592-1615), buildWeekSlots (App.tsx:1505),
+    weekDays (App.tsx:1558) - and buildWeekSlots is where bug A6 lives.
+
+    FIX: add Vitest, start with those three functions.
+
+F3. App.tsx is a 1,678-line monolith                                [MED]
+    hospital-frontend/src/App.tsx
+
+    12 components and 20 helper functions in one file:
+        App                  75-283    (209 lines, 10 useState)
+        LoginScreen         285-391    (107 lines,  4 useState)
+        Sidebar             393-471
+        TopBar              472-518
+        ReceptionDashboard  519-923    (405 lines,  9 useState)
+        AdminDashboard      925-1439   (515 lines, 14 useState)
+        Metric/StatusBadge/EmptyState/SkeletonRows/PageHint/Modal  1441-1503
+
+    37 useState calls total.
+
+    FIX: split by screen into separate files. Start with AdminDashboard (F4).
+
+F4. AdminDashboard is four screens in one component                 [MED]
+    hospital-frontend/src/App.tsx:925-971  (21-prop signature)
+    hospital-frontend/src/App.tsx:1032, 1111, 1160, 1280  (four tab branches)
+
+    11 data props plus 10 callbacks, then four mutually exclusive
+    {tab === '...' && ...} branches. Each tab owns a slice of the 14 useState
+    values, so editingScheduleId (App.tsx:983) is live while the Users tab
+    renders.
+
+    FIX: DepartmentsTab / DoctorsTab / SchedulesTab / UsersTab, each owning its
+         own state.
+
+F5. Prop drilling with inline callbacks                             [LOW]
+    hospital-frontend/src/App.tsx:235-278  (21 props to AdminDashboard)
+    hospital-frontend/src/App.tsx:215-233  (12 props to ReceptionDashboard)
+
+    Including 8 inline arrow callbacks recreated every render, which would
+    defeat React.memo if it were ever added.
+
+    FIX: context or a reducer for the shared slice; useCallback for the rest.
+
+F6. No router - navigation is useState                              [MED]
+    hospital-frontend/src/App.tsx:77-80
+
+    Screen state is held in useState, so there is no URL, no back button, no
+    deep linking, and a refresh returns the user to the default screen.
+
+    FIX: react-router, or at minimum sync the screen to the hash.
+
+F7. Refetch race with no cancellation                               [MED]
+    hospital-frontend/src/App.tsx:98-113, 141-143, 145-152
+
+    refresh() fans out to 5 endpoints and is called on mount and on every
+    window focus. There is no AbortController and no de-duplication, so rapid
+    alt-tabbing fires overlapping request fans and the slowest response wins -
+    stale data can overwrite fresh data.
+
+    FIX: AbortController per refresh, or adopt TanStack Query.
+
+F8. O(times x days x appointments) slot construction                [LOW]
+    hospital-frontend/src/App.tsx:1528-1541
+
+    appointments.find(...) nested inside days.map inside times.map, allocating
+    a new Date on every comparison. A 32-slot x 5-day grid against 100
+    appointments is ~16,000 Date allocations per rebuild.
+
+    FIX: pre-index appointments into a Map keyed by timestamp.
+
+F9. slots.flat() recomputed four times per render                   [LOW]
+    hospital-frontend/src/App.tsx:585, 587, 588, 1552
+
+    Re-flattens the whole grid on every render of ReceptionDashboard -
+    including every keystroke in the booking modal.
+
+    FIX: useMemo.
+
+F10. Search filters are unmemoized and duplicated                   [LOW]
+     hospital-frontend/src/App.tsx:988-1004
+
+     Four near-identical .filter(x => !normalizedSearch || ...) blocks,
+     recomputed on every state change rather than only on search changes.
+
+     FIX: one helper plus useMemo.
+
+F11. Dead storage keys from the duplicated project                  [LOW]
+     hospital-frontend/src/api.ts:98, 99, 104, 105, 109, 110, 225, 248
+
+        localStorage.getItem('hospital-ui-v2-token')
+
+     Eight occurrences of hospital-ui-v2-token / hospital-ui-v2-role inside
+     hospital-frontend. Confusing for anyone debugging in DevTools, and direct
+     evidence of D1.
+
+     FIX: rename the keys. Note this logs everyone out once.
+
+F12. Token reads bypass the accessor                                [LOW]
+     hospital-frontend/src/api.ts:225, 248
+
+     Read localStorage directly instead of calling getStoredSession()
+     (api.ts:97). Three places now know the key format - which is what makes
+     F11 an eight-site change rather than a one-site change.
+
+     FIX: route every read through getStoredSession().
+
+F13. Hardcoded localhost fallback in the API base URL               [MED]
+     hospital-frontend/src/api.ts:88
+
+        const base = (value?.trim() || 'http://localhost:5272/api').replace(/\/+$/, '')
+
+     If VITE_API_URL is unset at build time the production bundle silently
+     points at a developer's laptop. Dockerfile:7-8 passes it as an ARG, so a
+     forgotten --build-arg ships a broken image with no error - and ci.yml:77
+     builds the scanned image without it (G6).
+
+     FIX: throw at build time when the variable is missing.
+
+F14. Unsafe cast hides empty results                                [LOW]
+     hospital-frontend/src/api.ts:207
+
+        return (result.data ?? result.Data ?? ([] as T)) as T
+
+     A double cast through []. A null payload for a non-array T silently
+     becomes [].
+
+     FIX: make the empty case explicit per call site.
+
+F15. Unlabeled form inputs                                          [MED]
+     hospital-frontend/src/App.tsx:1283-1284  (create user - placeholder only)
+     hospital-frontend/src/App.tsx:1214, 1221, 1228 (schedule edit - no label at all)
+     hospital-frontend/src/App.tsx:1328        (password reset)
+     hospital-frontend/src/App.tsx:1130, 1312  (selects with no accessible name)
+
+        <input placeholder="Username" value={newUserName} ... />
+        <input type="password" placeholder="Password" value={newUserPassword} ... />
+
+     A placeholder is not a label - it disappears on focus and is not reliably
+     announced.
+
+     FIX: real <label for> elements, or aria-label at minimum.
+
+F16. Login form has no autocomplete, name or required attributes    [LOW]
+     hospital-frontend/src/App.tsx:331-338
+
+     The labels wrap correctly, but neither input has id, name, required or
+     autoComplete. Password managers will not fill reliably and browsers flag
+     the missing autoComplete="current-password".
+
+     FIX: add them.
+
+F17. Modal has no keyboard support                                  [MED]
+     hospital-frontend/src/App.tsx:1479-1503
+
+     No Escape handler, no focus trap, no autofocus on open, no focus restore
+     on close. The backdrop at App.tsx:1491 has role="presentation" but no
+     onClick, so click-outside does not dismiss either. Keyboard users can tab
+     straight out of the dialog into the page behind it.
+
+     FIX: use a dialog primitive, or add Escape + focus trap + restore.
+
+F18. Incomplete ARIA grid                                           [LOW]
+     hospital-frontend/src/App.tsx:716-752
+
+     role="grid" is declared but the children are plain divs and buttons with
+     no role="row" or role="gridcell". A partial grid role is worse than none -
+     a screen reader announces a grid and then finds no structure.
+
+     FIX: complete the roles or remove role="grid".
+
+F19. window.confirm for destructive actions                         [LOW]
+     hospital-frontend/src/App.tsx:1674-1676, used at 250, 255, 260, 266, 274
+
+     Blocks the main thread, cannot be styled, is suppressible by browsers, and
+     is untestable - while a <Modal tone="danger"> component already exists at
+     App.tsx:894.
+
+     FIX: route these through the existing Modal.
+
+F20. Linting is close to a no-op; nginx sets no headers             [MED]
+     hospital-frontend/.oxlintrc.json:1-8
+     hospital-frontend/nginx.conf:1-17
+     hospital-frontend/vite.config.ts:1-6
+
+     oxlint enables 2 rules, with no correctness category and no jsx-a11y
+     plugin - which would have caught F15 through F18 automatically. The lint
+     script is bare `oxlint` with no --deny-warnings, so warnings never fail CI
+     (ci.yml:57). hospital-frontend/README.md:14-30 documents how to turn on
+     type-aware linting; it was never applied. Both READMEs are still the
+     unmodified Vite template.
+
+     nginx.conf has a working SPA fallback and health endpoint but sets no
+     gzip, no Cache-Control (Vite already content-hashes assets, so they are
+     re-downloaded every visit), and none of X-Content-Type-Options,
+     X-Frame-Options, Referrer-Policy or CSP. The missing CSP matters given
+     B12.
+
+     vite.config.ts is 6 bare lines: no sourcemaps (so production stack traces
+     are unreadable), no server.proxy (dev depends on backend CORS), no
+     manualChunks (one 228 KB bundle).
+
+     FIX: enable oxlint correctness + jsx-a11y and --deny-warnings; add cache
+          and security headers to nginx; enable sourcemaps.
+
+
+================================================================================
+[G]  CI/CD
+================================================================================
+
+Read SECTION K first - the pipeline is better hardened than most, and several
+of its good properties look like omissions if you skim.
+
+G1. No concurrency group on any workflow                            [HIGH]
+    .github/workflows/deploy.yml
+    .github/workflows/docker-image.yml
+    .github/workflows/ci.yml
+
+    Nothing declares concurrency. For CI this means redundant runs pile up on
+    rapid pushes. For deploy it is worse: two runs can race on
+    kubectl set image (deploy.yml:76-82) and leave the cluster on the older
+    image.
+
+    FIX: deploy - concurrency: {group: deploy-production, cancel-in-progress: false}
+         ci     - concurrency: {group: ci-${{ github.ref }}, cancel-in-progress: true}
+
+G2. No timeout-minutes on any job                                   [MED]
+    ci.yml:14, 36, 66; deploy.yml:12; docker-image.yml:12
+
+    A hung kubectl rollout status or Docker build burns the full 6-hour
+    default.
+
+    FIX: 10-20 minutes per job.
+
+G3. No workflow-level permissions in two of three workflows         [MED]
+    .github/workflows/deploy.yml:1-9
+    .github/workflows/docker-image.yml:1-9
+
+    ci.yml:9-10 declares `permissions: contents: read`. The other two jump
+    straight from `on:` to `jobs:`. Each has a single job that declares its own
+    permissions, so the effect today is nil - but any job added later silently
+    inherits the repository default.
+
+    FIX: `permissions: {}` at workflow level in both.
+
+G4. Docker layer caching is actively disabled                       [MED]
+    .github/workflows/docker-image.yml:49
+    .github/workflows/docker-image.yml:68
+
+        docker build --no-cache ...
+
+    Combined with G5, every push to main builds both images twice from
+    scratch. This is the single biggest source of wasted pipeline minutes.
+
+    FIX: docker/build-push-action with GHA cache, or drop --no-cache.
+
+G5. The same two images are built in two workflows                  [MED]
+    .github/workflows/ci.yml:73-77        (builds hospital-backend:ci, hospital-frontend:ci)
+    .github/workflows/docker-image.yml:47-55, 66-77  (rebuilds both)
+
+    The isolation rationale at ci.yml:62-64 is legitimate - a compromised
+    scanner has nothing to steal. But see G6 for why the two builds are not
+    equivalent.
+
+    FIX: keep the isolation but make the two builds identical, or pass the
+         scanned digest forward.
+
+G6. The scanned frontend image is not the image that ships          [MED]
+    .github/workflows/ci.yml:77          (no --build-arg VITE_API_URL)
+    .github/workflows/docker-image.yml:69 (passes VITE_API_URL)
+
+    Trivy scans an image built without the API URL. The published image is
+    built with it. They are not byte-identical, so the scan result does not
+    strictly apply to what runs in production. See also F13.
+
+    FIX: pass the same build args in both places.
+
+G7. Dependabot covers only GitHub Actions                           [MED]
+    .github/dependabot.yml:3-4
+
+        - package-ecosystem: github-actions
+          directory: /
+
+    Missing: nuget for /HospitalSystem (13 PackageReferences) and /MyApp.Tests
+    (6), npm for /hospital-frontend and /hospital-ui-v2 (both have committed
+    lockfiles), and docker for the two Dockerfiles.
+
+    This matters because ci.yml:80-93 fails the build on fixable HIGH/CRITICAL
+    CVEs in the images. Without Dependabot on the base images, CI will one day
+    start failing with no automated remediation PR waiting.
+
+    The cooldown block at dependabot.yml:7-8 (default-days: 7) is a genuinely
+    good touch - skipping releases younger than a week means a hijacked
+    release is usually pulled before Dependabot proposes it. Replicate it on
+    the ecosystems you add. (As of this inventory, the uncommitted working
+    copy of dependabot.yml has removed the comments that explained this; the
+    committed version still has them. Worth keeping the explanation.)
+
+    FIX: add nuget, npm and docker entries.
+
+G8. Docker Hub uses a static password while ECR uses OIDC           [MED]
+    .github/workflows/docker-image.yml:35-36
+
+        echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "..." --password-stdin
+
+    --password-stdin is correct (no leak via ps), but this is the one remaining
+    long-lived credential in the pipeline and it is not gated behind an
+    environment:. ECR, by contrast, uses OIDC properly.
+
+    FIX: scope the token to push-only, gate it behind an environment, or drop
+         the Docker Hub push if ECR is the real registry.
+
+G9. Docker Hub namespace is hardcoded                               [LOW]
+    .github/workflows/docker-image.yml:50-52, 59-61, 71-73, 81-83
+
+    `kstkaan/` is written into the workflow while ECR is parameterised. A fork
+    or account rename breaks the push.
+
+    FIX: a repository variable, as ECR already uses.
+
+G10. :latest is still published                                     [LOW]
+     .github/workflows/docker-image.yml:59, 62, 81, 84
+
+     Deploy correctly uses the immutable date+SHA tag (deploy.yml:77,81), so
+     latest is dead weight that invites someone to pull a mutable tag.
+     README.md:38 documents it as intentional - if it stays, that is a
+     decision, not an oversight.
+
+     FIX: drop it, or document why it is kept.
+
+G11. No NuGet caching                                               [LOW]
+     .github/workflows/ci.yml:21-27
+
+     setup-dotnet is configured without cache. The frontend job does it right
+     (ci.yml:50-51, `cache: npm`), so this is an inconsistency rather than a
+     principle.
+
+     Note: `cache: true` on setup-dotnet needs a packages.lock.json, which the
+     repo does not have - so the real fix is either enabling
+     RestorePackagesWithLockFile or using actions/cache on ~/.nuget/packages.
+
+     FIX: either approach; the lockfile is worth having regardless.
+
+G12. dotnet test emits no coverage and no test report               [MED]
+     .github/workflows/ci.yml:33
+
+        run: dotnet test --no-build --verbosity normal
+
+     No --collect:"XPlat Code Coverage" and no --logger trx, despite
+     coverlet.collector being a declared dependency at MyApp.Tests.csproj:21-24.
+     85 tests run and their results are invisible in the GitHub UI - you have
+     to read raw logs to see what failed.
+
+     FIX: add both flags and publish the TRX as a check.
+
+G13. No secret scanning                                             [MED]
+     .github/workflows/ci.yml
+
+     Trivy scans images for CVEs but nothing scans the diff or history for
+     credentials. A placeholder JWT key was committed and removed by hand
+     (B16); the next one will be too.
+
+     FIX: add gitleaks or trufflehog to CI, and enable GitHub push protection.
+
+G14. No workflow_dispatch and no paths-ignore                       [LOW]
+     .github/workflows/ci.yml:3-7
+
+     Triggers on push and pull_request to main only. There is no manual rerun,
+     and a README-only commit triggers the full three-job pipeline including
+     two Docker builds and two Trivy scans.
+
+     FIX: add workflow_dispatch; add paths-ignore for docs-only changes.
+
+
+================================================================================
+[H]  DOCKER & COMPOSE
+================================================================================
+
+Both Dockerfiles are the strongest part of this repository. See SECTION K.
+
+H1. Frontend base image tag is fully floating                       [MED]
+    hospital-frontend/Dockerfile:11
+
+        FROM nginxinc/nginx-unprivileged:alpine
+
+    No version at all - this can shift major nginx versions underneath you. The
+    backend is better (8.0 / 8.0-alpine at HospitalSystem/Dockerfile:1,11) but
+    still not digest-pinned, so --no-cache builds (G4) are not reproducible.
+
+    FIX: pin by digest and let Dependabot's docker ecosystem (G7) bump them.
+
+H2. Only postgres has a restart policy                              [MED]
+    docker-compose.yml:7   (restart: always)
+    docker-compose.yml:22-41, 43-60  (backend and frontend - none)
+
+    A crashed backend stays down.
+
+    FIX: restart: unless-stopped on all three.
+
+H3. Database password hardcoded in two places                       [MED]
+    docker-compose.yml:11  POSTGRES_PASSWORD: strongpassword
+    docker-compose.yml:33  ConnectionStrings__DefaultConnection: ...Password=strongpassword
+
+    Meanwhile the gitignored .env already defines Database, Username and
+    Password - and nothing consumes them.
+
+    Mitigating: docker-compose.yml:1 says
+        # !!! THIS IS ONLY FOR LOCAL DEV ITS NOT USED ANYWHERE
+    which is honest and materially lowers the severity.
+
+    FIX: ${POSTGRES_PASSWORD} from .env, and add .env.example (J1).
+
+H4. Backend and frontend ports bind to all interfaces               [LOW]
+    docker-compose.yml:35  "5272:8080"
+    docker-compose.yml:54  "3000:8080"
+    docker-compose.yml:15  "127.0.0.1:5432:5432"   <- correct
+
+    Postgres is correctly loopback-bound; the two app containers are exposed on
+    the LAN. Inconsistent with the care taken on the database.
+
+    FIX: bind to 127.0.0.1 for local dev.
+
+H5. Root .dockerignore misses .env.* and hospital-ui-v2/            [LOW]
+    .dockerignore:11  (.env only)
+    hospital-frontend/.dockerignore:10  (.env.* - the per-context one is better)
+
+    The backend build context is the repository root (ci.yml:74,
+    docker-compose.yml:24), so the entire unused hospital-ui-v2 tree - about
+    3,400 lines plus a lockfile - is shipped into the backend build context on
+    every build.
+
+    FIX: add both patterns to the root .dockerignore.
+
+H6. Backend Dockerfile loses part of its restore cache              [LOW]
+    HospitalSystem/Dockerfile:4-5, 7, 9
+
+    Only HospitalSystem/*.csproj is copied before restore, but line 9 runs
+    dotnet publish without --no-restore after COPY . ., so any source change
+    re-restores.
+
+    FIX: copy both csproj files, restore, then publish --no-restore.
+
+H7. USER 101 appears after the HEALTHCHECK and all COPYs            [LOW]
+    hospital-frontend/Dockerfile:19
+
+    Functionally fine today because the COPYs use --chown, but the ordering is
+    fragile: any RUN inserted between lines 13 and 19 executes as root.
+
+    FIX: move USER earlier.
+
+H8. nginx serves no cache or security headers                       [MED]
+    hospital-frontend/nginx.conf:1-17
+
+    See F20 - listed here too because it is a deployment artifact, not just a
+    frontend concern.
+
+H9. Trailing whitespace in docker-compose.yml                       [LOW]
+    docker-compose.yml:42
+
+    FIX: covered by adding .editorconfig (E20).
+
+
+================================================================================
+[I]  TESTS
+================================================================================
+
+The test suite is substantially better than README.md claims. See SECTION K.
+
+I1. Zero controller and integration tests                           [HIGH]
+    MyApp.Tests/Controllers/   (empty directory)
+    MyApp.Tests/MyApp.Tests.csproj  (no Microsoft.AspNetCore.Mvc.Testing)
+
+    85 tests cover services directly. Nothing exercises the HTTP layer, so
+    none of the following is tested end to end:
+      - the [Authorize] attributes on every controller
+      - the JWT middleware and its validation parameters
+      - the rate limiter
+      - the E10/E11 status-code mapping
+      - the global exception handler
+
+    Given B6 (no fallback policy), a missing [Authorize] would not be caught by
+    anything in the suite.
+
+    FIX: add WebApplicationFactory integration tests, starting with one
+         asserting that every endpoint rejects an anonymous request.
+
+I2. Four services are completely untested                           [MED]
+    HospitalSystem/Services/Calendar/ScheduleValidation.cs
+    HospitalSystem/Services/CurrentUserService.cs
+    HospitalSystem/Services/AuditLogService.cs
+    HospitalSystem/Services/Appointments/PatientService.cs
+
+    ScheduleValidation is pure logic with no dependencies - the cheapest thing
+    in the codebase to test - and both schedule services depend on it.
+    CurrentUserService is the authorization seam that every other service
+    trusts. PatientService holds the A10/A11 matching bugs.
+
+    FIX: start with ScheduleValidation and CurrentUserService.
+
+I3. Zero frontend tests                                             [HIGH]
+    See F2.
+
+I4. No coverage threshold                                           [MED]
+    .github/workflows/ci.yml:33
+    MyApp.Tests/MyApp.Tests.csproj:21-24
+
+    coverlet.collector is declared but never invoked (G12), and no minimum is
+    enforced anywhere.
+
+    FIX: collect coverage, publish it, then set a floor that ratchets upward.
+
+I5. DepartmentQueryService is thinly covered                        [LOW]
+    MyApp.Tests/Services/Department/DepartmentQueryServiceTests.cs  (2 facts)
+
+    Two tests against 4-8 for comparable services.
+
+I6. TestAuditLogService is a hand-rolled fake despite Moq           [LOW]
+    MyApp.Tests/TestAuditLogService.cs:1-24
+
+    Implements IAuditLogService against the in-memory context, hardcoding
+    ActorName = "Test" at line 18. Works, but a Mock<IAuditLogService> would
+    let tests assert that auditing actually happened - which is exactly what
+    B10 needs to stop regressing. It also declares no namespace (E1).
+
+    FIX: keep the fake for integration-ish tests, add a mock where the
+         assertion is "was this audited".
+
+I7. UnitTest1.cs placeholder                                        [LOW]
+    See D6.
+
+
+================================================================================
+[J]  DOCUMENTATION & REPO HYGIENE
+================================================================================
+
+J1. No .env.example - a fresh clone cannot run                      [HIGH]
+    .env is correctly gitignored (.gitignore:3) and was never committed:
+
+        git ls-files | grep -i env        -> no output
+        git log --all --diff-filter=A -- .env '*.env'  -> no output
+
+    That is right. But nothing tells a new contributor which six keys are
+    required, and HospitalSystem/appsettings.json:14 ships an empty connection
+    string while carrying no JwtSettings:SecretKey at all. So a literal
+    `dotnet run` dies at Program.cs:112-113:
+
+        ?? throw new Exception("JWT SecretKey is not configured");
+
+    with no guidance. This is the single highest-value missing file in the
+    repository.
+
+    FIX: commit .env.example with the six key names and placeholder values.
+
+J2. README's testing section is badly out of date                   [MED]
+    README.md:385
+
+        Unit tests are implemented for `UserService` using xUnit, Moq, and
+        EF Core InMemory.
+
+    UserService is one of the 21 zero-byte files (D2). The "Covered Methods"
+    list at README.md:388-393 describes the pre-refactor god class. Reality:
+    85 tests across 16 services in 5 domains. The README dramatically
+    *undersells* the suite, which is an unusual direction for documentation
+    drift and worth fixing for morale alone.
+
+    FIX: rewrite against the actual test tree.
+
+J3. README does not mention hospital-ui-v2 at all                   [MED]
+    README.md:202-243  (project structure)
+
+    The 20-file second frontend appears nowhere. A reader cannot tell whether
+    it is the future, the past, or dead. The structure also lists
+    MyApp.Tests/Controllers/ (README.md:235), which is empty, and omits
+    .github/, .env and LICENSE.
+
+    FIX: resolve D1 first, then update the tree.
+
+J4. Three contradictory deployment stories coexist                  [MED]
+    README.md:9-19    Cloudflare Pages + Render + Neon
+    README.md:88-102  AWS EKS + ECR + ALB at https://app.hospitalsyst.cc
+    README.md:147-156 self-hosted EC2 + Nginx + No-IP at hostpitalsyst.servebeer.com
+
+    Nothing says which is current. The Live Demo badge at README.md:3 points at
+    hospitalsystem.pages.dev, while deploy.yml only ever deploys to EKS.
+
+    Note README.md:156 has the same "hostpitalsyst" transposition found in
+    Program.cs:29, while README.md:98 spells it "hospitalsyst".
+
+    FIX: one "Current deployment" section; move the rest under History.
+
+J5. README deploy description contradicts deploy.yml                [LOW]
+    README.md:47
+
+        Sets backend and frontend Deployment images to the full commit SHA tag
+
+    deploy.yml:53-56 uses the date + short SHA tag, not the full SHA. Related
+    to A4 - the documentation describes the behaviour that would not have the
+    bug.
+
+J6. Node version requirement is understated                         [MED]
+    README.md:195, 251   (Node.js 18+)
+    .github/workflows/ci.yml:49  (node-version: 20)
+    hospital-frontend/Dockerfile:1  (node:20-alpine)
+    hospital-frontend/package.json:24  (vite ^8.2.0, which needs Node 20.19+)
+
+    A contributor following the README on Node 18 fails at npm install.
+
+    FIX: say Node 20; add an engines field to package.json.
+
+J7. Backend setup instructions are incomplete                       [MED]
+    README.md:263-269
+
+    Says only `dotnet restore && dotnet run`. Missing:
+      - any mention of .env or required configuration (see J1)
+      - the migration step, and that Database__RunMigrationsOnStartup exists
+        (Program.cs:161)
+      - dotnet user-secrets, despite HospitalSystem.csproj:7 declaring a
+        UserSecretsId
+      - that `docker compose up postgres` is the easy path to the database
+        prerequisite listed at README.md:252
+
+    FIX: a working "clone to running" sequence, verified on a clean machine.
+
+J8. Root .gitignore is three lines                                  [MED]
+    .gitignore:1-3
+
+        .vs/
+        .vscode/
+        .env
+
+    No bin/, obj/, node_modules/, dist/, TestResults/, *.user, .idea/ or
+    .DS_Store. It works today only because every subdirectory carries its own
+    (HospitalSystem/.gitignore:9-10, MyApp.Tests/.gitignore:2-3,
+    hospital-frontend/.gitignore:10-11, hospital-ui-v2/.gitignore:10-11). Any
+    new directory added at the root inherits no protection - which is plausibly
+    how `hello` and `dummy.txt` got in.
+
+    Also note .vscode/ is ignored while .vscode/launch.json exists locally; a
+    shared launch config is usually worth committing.
+
+    FIX: put the global patterns in the root file.
+
+J9. No .editorconfig                                                [MED]
+    See E20. Evidence of drift already in the tree: 270 trailing-whitespace
+    lines across 58 C# files, ragged indentation in appsettings.json:9-16,
+    trailing whitespace at docker-compose.yml:42, and .gitignore and .env both
+    missing a final newline.
+
+J10. No .gitattributes                                              [LOW]
+
+     With a mixed Windows (HospitalSystem.sln carries a BOM and
+     VisualStudioVersion = 17.0) and Linux toolchain, plus files copied into
+     Alpine containers, `* text=auto eol=lf` prevents CRLF creeping in. Also
+     worth marking the two package-lock.json files linguist-generated so they
+     stop dominating diffs and language stats.
+
+J11. Missing standard repository files                              [LOW]
+     Absent: CONTRIBUTING.md, SECURITY.md, CODEOWNERS,
+     .github/ISSUE_TEMPLATE/, .github/PULL_REQUEST_TEMPLATE.md, CHANGELOG.md,
+     global.json, Directory.Build.props, .env.example (J1), .editorconfig (J9),
+     .gitattributes (J10).
+
+     SECURITY.md is the notable one: the repository runs Trivy gating and OIDC
+     but offers no vulnerability disclosure path.
+
+J12. LICENSE copyright year is wrong                                [LOW]
+     LICENSE:3
+
+        Copyright (c) 2019
+
+     Earliest activity in this repository is 2026. Suggests a copy-pasted
+     template - worth checking the holder name too.
+
+J13. Every PR comes from the same reused branch                     [LOW]
+     git branch -a shows feature-x, feature/my-change and harden-ci-workflows
+     both locally and on origin.
+
+     PRs #46 through #62 all originate from KaanMyumyun/feature-x - the branch
+     is reused rather than deleted, which makes the PR history hard to read and
+     produces duplicate consecutive commits (the same message appears twice for
+     "security updates on the cicd pipeline", "updated the ci/cd and the read
+     me" and "updated to use data and short sha instead of latest").
+     feature/my-change looks abandoned.
+
+     FIX: one branch per change, delete on merge, enable squash-merge.
+
+J14. Commit messages carry no convention                            [LOW]
+     Recent history includes "gr", "patch", "missed this", "f", "g",
+     "vunuability fixes" (typo), and "thats what happens when you trust ai to
+     do a small change".
+
+     FIX: Conventional Commits, enforced by a CI check if it matters.
+
+
+================================================================================
+[K]  ALREADY CORRECT - DO NOT "FIX" THESE
+================================================================================
+
+Several things here look like omissions if you skim the repository. They are
+not. Changing them would be a regression.
+
+K1. Password hashing is sound.
+    Microsoft.AspNetCore.Identity.PasswordHasher<UserEntity> - PBKDF2-HMAC-
+    SHA256, 100k iterations, per-password salt. Not plaintext, not bare SHA.
+    LoginService.cs:33, UserCreationService.cs:46, ResetPasswordService.cs:37.
+    The findings against it (B3, C5) are about *how it is wired*, not the
+    algorithm.
+
+K2. JWT validation is fully enabled.
+    Program.cs:118-129 - ValidateIssuer, ValidateAudience, ValidateLifetime and
+    ValidateIssuerSigningKey are all true. None is disabled.
+
+K3. There is no SQL injection surface.
+    grep for FromSql, FromSqlRaw, ExecuteSqlRaw, SqlRaw across the project
+    returns nothing. All data access is LINQ-to-Entities, parameterized.
+
+K4. CORS does not use AllowAnyOrigin.
+    Program.cs:25-31 uses an explicit origin list. B15 is about where that list
+    lives, not about it being permissive.
+
+K5. No build artifacts are committed.
+        git ls-files | grep -cE 'node_modules|/obj/|/bin/|/dist/'
+        0
+    238 tracked files, 8.27 MiB packed. dist/ is correctly ignored in both
+    frontends (hospital-frontend/.gitignore:11, hospital-ui-v2/.gitignore:11).
+
+K6. .env was never committed.
+    Confirmed against git history, not just the working tree - see J1.
+
+K7. Every GitHub Action is SHA-pinned.
+    ci.yml:17,42,47,69,80,88; deploy.yml:59; docker-image.yml:39,45 - all use a
+    full commit SHA with a version comment. There are no floating @v3/@v4 tags
+    anywhere. persist-credentials: false is set on every checkout
+    (ci.yml:19,44,71; docker-image.yml:27).
+
+K8. Tests genuinely gate the pipeline.
+    ci.yml:32-33 runs dotnet test, which returns non-zero on failure.
+    docker-image.yml:11 and deploy.yml:11 are both gated on
+    github.event.workflow_run.conclusion == 'success', so a failing test blocks
+    both publish and deploy. The chain is sound.
+
+K9. ECR uses OIDC, not static keys.
+    docker-image.yml:13-15 and deploy.yml:16-18 declare id-token: write;
+    deploy.yml:15 uses environment: production as the approval and trust
+    boundary. (G8 concerns Docker Hub, which is the exception.)
+
+K10. Trivy fails the build on findings.
+     ci.yml:85,93 - exit-code: 1, severity CRITICAL,HIGH, ignore-unfixed: true.
+
+K11. Both Dockerfiles are well built.
+     Multistage, non-root (backend adduser at Dockerfile:14-15 then USER
+     appuser; frontend uses nginx-unprivileged with USER 101), HEALTHCHECKs
+     pointing at endpoints that genuinely exist (/health is mapped at
+     Program.cs:193, and nginx.conf:8-12 serves its own), --chown on copies,
+     and a BuildKit cache mount on the frontend npm ci.
+
+K12. docker-compose dependency ordering is correct.
+     Healthchecks on all three services with
+     depends_on: condition: service_healthy (docker-compose.yml:27-29, 50-52).
+     Named volume, no bind mounts, postgres bound to loopback.
+
+K13. The frontend has no inline styles, no `any`, and no direct DOM access.
+     Zero `style={{`, zero `any`, zero `document.*` in App.tsx. All 14
+     data-driven .map() calls use stable keys - only two decorative lists use
+     the array index (App.tsx:383, 1462), which is harmless there. The code is
+     cleaner than its 1,678 lines suggest.
+
+K14. The frontend accessibility baseline is better than typical.
+     12 aria-* usages, role="alert"/role="status" on the toast stack
+     (App.tsx:202,207), aria-label on nav (App.tsx:416), a proper
+     role="dialog" aria-modal="true" (App.tsx:1492), :focus-visible outlines
+     (index.css:57-62), and decorative regions correctly aria-hidden. The F15-F18
+     findings are gaps in a real baseline, not an absence of one.
+
+K15. AuditLogService.LogAsync returning Task.CompletedTask is correct.
+     AuditLogService.cs:16-29 only calls Add; the row is persisted by the
+     caller's SaveChangesAsync, which makes the audit entry and the change
+     atomic. That is the right design. The finding is only that the `Async`
+     suffix misleads - do not "fix" it by adding its own SaveChangesAsync, which
+     would break the atomicity.
+
+K16. The README's DevOps sections are accurate and current.
+     README.md:24-82 correctly describes the three-stage workflow_run chain,
+     the SHA-pinning rationale (:54-56), the repository-variable table (:62-72)
+     and the production environment protection rules (:74-81). J2-J7 concern
+     the application sections only.
+
+K17. The test suite is real.
+     85 test cases (82 [Fact] + 3 [Theory] with 8 [InlineData] rows) across 18
+     files, covering 16 of 21 services, using xUnit, Moq and EF Core InMemory.
+     Do not trust README.md:385 on this point - trust the tree.
+
+
+================================================================================
+END OF INVENTORY
+================================================================================
+Commands used for the counts in this file, so they can be re-checked:
+
+  diff -rq hospital-frontend/src hospital-ui-v2/src
+  git ls-files -z | xargs -0 -I{} sh -c '[ -f "{}" ] && [ ! -s "{}" ] && echo {}' | wc -l
+  git ls-files | wc -l
+  git ls-files | grep -cE 'node_modules|/obj/|/bin/|/dist/'
+  grep -rn 'ILogger' HospitalSystem --include=*.cs | grep -v /obj/ | grep -v /bin/
+  grep -rn 'CancellationToken' HospitalSystem --include=*.cs | grep -v /obj/ | grep -v /bin/
+  grep -rn 'ModelState.IsValid' HospitalSystem/Controllers --include=*.cs | wc -l
+  grep -rn ' $' HospitalSystem --include=*.cs | grep -v /obj/ | grep -v /bin/ | grep -v /Migrations/ | wc -l
