@@ -94,20 +94,23 @@ function apiUrl(path: string) {
   return `${API_ORIGIN}${cleanPath.startsWith('/api/') ? cleanPath : `/api${cleanPath}`}`
 }
 
+const tokenStorageKey = 'hospital-frontend-token'
+const roleStorageKey = 'hospital-frontend-role'
+
 export function getStoredSession() {
-  const token = localStorage.getItem('hospital-ui-v2-token')
-  const role = localStorage.getItem('hospital-ui-v2-role') as UserRole | null
+  const token = localStorage.getItem(tokenStorageKey)
+  const role = localStorage.getItem(roleStorageKey) as UserRole | null
   return token && role ? { token, role } : null
 }
 
 export function storeSession(token: string, role: UserRole) {
-  localStorage.setItem('hospital-ui-v2-token', token)
-  localStorage.setItem('hospital-ui-v2-role', role)
+  localStorage.setItem(tokenStorageKey, token)
+  localStorage.setItem(roleStorageKey, role)
 }
 
 export function clearSession() {
-  localStorage.removeItem('hospital-ui-v2-token')
-  localStorage.removeItem('hospital-ui-v2-role')
+  localStorage.removeItem(tokenStorageKey)
+  localStorage.removeItem(roleStorageKey)
 }
 
 export async function login(name: string, password: string): Promise<LoginResult> {
@@ -222,7 +225,7 @@ async function postAction(path: string, body: unknown) {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('hospital-ui-v2-token')
+  const token = localStorage.getItem(tokenStorageKey)
   const response = await fetch(apiUrl(path), {
     ...init,
     headers: {
@@ -245,7 +248,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       payload?.Title ??
       getModelStateMessage(payload?.errors ?? payload?.Errors)
     if (response.status === 403) {
-      const role = localStorage.getItem('hospital-ui-v2-role')
+      const role = localStorage.getItem(roleStorageKey)
       throw new Error(
         role?.startsWith('Demo')
           ? 'Not allowed to do that. Demo accounts are read-only.'
