@@ -1,3 +1,5 @@
+namespace HospitalSystem.Dto;
+
 public class ViewAppointmentDto
 {
     public int AppointmentId { get; set; }

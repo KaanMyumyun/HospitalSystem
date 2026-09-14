@@ -1,3 +1,5 @@
+namespace HospitalSystem.Dto;
+
 public class ChangeDoctorsStatusResult
 {
     public bool IsSuccess { get; set; }

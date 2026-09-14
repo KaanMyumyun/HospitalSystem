@@ -1,3 +1,5 @@
+namespace HospitalSystem.Dto;
+
 public class CreateSchedule
 {
     public int DoctorId { get; set; }

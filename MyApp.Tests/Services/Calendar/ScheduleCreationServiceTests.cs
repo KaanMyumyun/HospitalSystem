@@ -1,8 +1,9 @@
-using HospitalSystem.Interface;
+using HospitalSystem.Interfaces;
 using HospitalSystem.Services;
+using HospitalSystem.Services.Calendar;
 using Microsoft.EntityFrameworkCore;
 using Moq;
-using HospitalSystem.Interface.Calendar;
+using HospitalSystem.Interfaces.Calendar;
 
 namespace HospitalSystem.Tests;
 

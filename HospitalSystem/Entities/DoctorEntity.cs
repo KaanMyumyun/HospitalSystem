@@ -1,3 +1,5 @@
+namespace HospitalSystem.Entities;
+
 public class DoctorEntity
 {
     public int Id { get; set; }  

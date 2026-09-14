@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
-using HospitalSystem.Interface;
-using HospitalSystem.Interface.Department;
+using HospitalSystem.Interfaces;
+using HospitalSystem.Interfaces.Department;
  
-namespace HospitalSystem.Services;
+namespace HospitalSystem.Services.Deparment;
  
 public class DoctorDepartmentService : IDoctorDepartmentService
 {

@@ -1,4 +1,4 @@
-namespace HospitalSystem.Interface.Calendar;
+namespace HospitalSystem.Interfaces.Calendar;
 
 public interface IScheduleModificationService
 {

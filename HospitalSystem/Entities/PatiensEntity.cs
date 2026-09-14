@@ -1,3 +1,5 @@
+namespace HospitalSystem.Entities;
+
 public class PatientEntity
 {
     public int Id { get; set; }

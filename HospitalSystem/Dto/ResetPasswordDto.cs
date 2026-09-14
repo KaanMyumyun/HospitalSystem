@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 
+namespace HospitalSystem.Dto;
+
 public class ResetPasswordDto
 {
     public int UserId { get; set; }

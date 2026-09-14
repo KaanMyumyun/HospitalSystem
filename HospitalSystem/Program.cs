@@ -1,7 +1,7 @@
     using System.Text;
     using System.Text.Json.Serialization;
     using System.Threading.RateLimiting;
-    using HospitalSystem.Interface;
+    using HospitalSystem.Interfaces;
     using HospitalSystem.Services;
     using Microsoft.AspNetCore.Diagnostics;
     using Microsoft.EntityFrameworkCore;
@@ -9,11 +9,15 @@
     using Microsoft.OpenApi.Models;
     using Prometheus;
     using HospitalSystem.Services.Appointments;
+    using HospitalSystem.Services.Auth;
+    using HospitalSystem.Services.Calendar;
+    using HospitalSystem.Services.Deparment;
+    using HospitalSystem.Services.User;
     using HospitalSystem.Interfaces.Appointments;
-using HospitalSystem.Interface.Auth;
-using HospitalSystem.Interface.Calendar;
-using HospitalSystem.Interface.Department;
-using HospitalSystem.Interface.User;
+using HospitalSystem.Interfaces.Auth;
+using HospitalSystem.Interfaces.Calendar;
+using HospitalSystem.Interfaces.Department;
+using HospitalSystem.Interfaces.User;
 
 
 var builder = WebApplication.CreateBuilder(args);

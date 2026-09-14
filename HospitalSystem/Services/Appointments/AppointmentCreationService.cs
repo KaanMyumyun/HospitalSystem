@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using HospitalSystem.Interface;
+using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.Appointments;
 using System.Text.RegularExpressions;
 

@@ -1,3 +1,4 @@
+using HospitalSystem.Services.Auth;
 using Xunit;
  
 public class LoginServiceTests : AuthTestBase

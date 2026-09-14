@@ -1,8 +1,8 @@
-using HospitalSystem.Interface;
-using HospitalSystem.Interface.Calendar;
+using HospitalSystem.Interfaces;
+using HospitalSystem.Interfaces.Calendar;
 using Microsoft.EntityFrameworkCore;
 
-namespace HospitalSystem.Services;
+namespace HospitalSystem.Services.Calendar;
 
 public class ScheduleCreationService : IScheduleCreationService
 {

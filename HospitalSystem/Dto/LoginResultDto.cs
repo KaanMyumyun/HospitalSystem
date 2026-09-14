@@ -1,3 +1,5 @@
+namespace HospitalSystem.Dto;
+
 public class LoginResultDto
 {
     public bool IsSuccess { get; set; }

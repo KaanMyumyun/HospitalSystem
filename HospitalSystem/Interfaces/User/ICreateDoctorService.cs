@@ -1,4 +1,4 @@
-namespace HospitalSystem.Interface.User;
+namespace HospitalSystem.Interfaces.User;
  
 public interface ICreateDoctorService
 {

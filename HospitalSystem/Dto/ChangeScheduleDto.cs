@@ -1,3 +1,5 @@
+namespace HospitalSystem.Dto;
+
 public class ChangeScheduleDto
 {
     public int ScheduleId { get; set; }

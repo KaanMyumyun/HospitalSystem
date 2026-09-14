@@ -1,3 +1,5 @@
+namespace HospitalSystem.Dto;
+
 public class ChangeDepartmentStatusDto
 {
     public int DepartmentId { get; set; }

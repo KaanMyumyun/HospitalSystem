@@ -1,4 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+
+namespace HospitalSystem.Dto;
+
 public class LoginDto
 {
    [Required]

@@ -1,3 +1,5 @@
+namespace HospitalSystem.Dto;
+
 public class CreateAppointmentResultDto
 {
     public bool IsSuccess { get; set; }

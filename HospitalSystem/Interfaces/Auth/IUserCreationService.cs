@@ -1,4 +1,4 @@
-namespace HospitalSystem.Interface.Auth;
+namespace HospitalSystem.Interfaces.Auth;
  
 public interface IUserCreationService
 {

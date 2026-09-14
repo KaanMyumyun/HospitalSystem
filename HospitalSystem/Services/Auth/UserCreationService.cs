@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using HospitalSystem.Interface;
-using HospitalSystem.Interface.Auth;
+using HospitalSystem.Interfaces;
+using HospitalSystem.Interfaces.Auth;
 using System.Text.RegularExpressions;
+
+namespace HospitalSystem.Services.Auth;
 
 public class UserCreationService : IUserCreationService
 {

@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using HospitalSystem.Interface.Auth;
+using HospitalSystem.Interfaces.Auth;
+
+namespace HospitalSystem.Services.Auth;
 
 public class LoginService : ILoginService
 {

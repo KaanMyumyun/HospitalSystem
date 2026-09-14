@@ -1,3 +1,4 @@
+using HospitalSystem.Services.Auth;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
  

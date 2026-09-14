@@ -1,3 +1,5 @@
+namespace HospitalSystem.Dto;
+
 public class DoctorDisplayDto
 {
     public int DoctorId { get; set; }

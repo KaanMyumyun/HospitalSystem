@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace HospitalSystem.Services;
+namespace HospitalSystem.Services.Calendar;
 
 internal static class ScheduleValidation
 {
