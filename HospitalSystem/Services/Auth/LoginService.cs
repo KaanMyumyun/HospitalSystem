@@ -36,10 +36,25 @@ public class LoginService : ILoginService
             return LoginResultDto.Fail("Invalid credentials");
  
         var token = GenerateToken(user);
- 
+
         return LoginResultDto.Success(token, user.Role.ToString());
     }
- 
+
+    public async Task<LoginResultDto> DemoLoginAsync(UserRole role)
+    {
+        if (role != UserRole.DemoAdmin && role != UserRole.DemoFrontDesk)
+            return LoginResultDto.Fail("Invalid credentials");
+
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Role == role);
+
+        if (user == null)
+            return LoginResultDto.Fail("Invalid credentials");
+
+        var token = GenerateToken(user);
+
+        return LoginResultDto.Success(token, user.Role.ToString());
+    }
+
     private string GenerateToken(UserEntity user)
     {
         var claims = new List<Claim>

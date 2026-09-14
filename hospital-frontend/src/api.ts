@@ -96,6 +96,9 @@ function apiUrl(path: string) {
 
 const tokenStorageKey = 'hospital-frontend-token'
 const roleStorageKey = 'hospital-frontend-role'
+const requestTimeoutMs = 15000
+
+export const sessionExpiredEvent = 'hospital-frontend:session-expired'
 
 export function getStoredSession() {
   const token = localStorage.getItem(tokenStorageKey)
@@ -118,6 +121,23 @@ export async function login(name: string, password: string): Promise<LoginResult
     const result = await request<LoginResult>('/api/Auth/login', {
       method: 'POST',
       body: JSON.stringify({ name, password }),
+    })
+
+    if (result.isSuccess && result.token && result.role) {
+      storeSession(result.token, result.role)
+    }
+
+    return result
+  } catch (error) {
+    return { isSuccess: false, error: getErrorMessage(error) }
+  }
+}
+
+export async function demoLogin(role: 'DemoAdmin' | 'DemoFrontDesk'): Promise<LoginResult> {
+  try {
+    const result = await request<LoginResult>('/api/Auth/demo-login', {
+      method: 'POST',
+      body: JSON.stringify({ role }),
     })
 
     if (result.isSuccess && result.token && result.role) {
@@ -226,14 +246,24 @@ async function postAction(path: string, body: unknown) {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem(tokenStorageKey)
-  const response = await fetch(apiUrl(path), {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
-    },
-  })
+
+  let response: Response
+  try {
+    response = await fetch(apiUrl(path), {
+      ...init,
+      signal: init.signal ?? AbortSignal.timeout(requestTimeoutMs),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init.headers,
+      },
+    })
+  } catch (error) {
+    if (error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+      throw new Error('Request timed out. Please try again.')
+    }
+    throw error
+  }
 
   const text = await response.text()
   const payload = text ? JSON.parse(text) : null
@@ -247,6 +277,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       payload?.title ??
       payload?.Title ??
       getModelStateMessage(payload?.errors ?? payload?.Errors)
+    if (response.status === 401 && token) {
+      clearSession()
+      window.dispatchEvent(new Event(sessionExpiredEvent))
+      throw new Error('Your session has expired. Please sign in again.')
+    }
     if (response.status === 403) {
       const role = localStorage.getItem(roleStorageKey)
       throw new Error(

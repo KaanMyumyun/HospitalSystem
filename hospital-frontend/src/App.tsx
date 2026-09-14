@@ -24,10 +24,12 @@ import {
   createDepartment,
   createSchedule,
   createUser,
+  demoLogin,
   getStoredSession,
   loadHospitalData,
   login,
   resetPassword,
+  sessionExpiredEvent,
   type AppointmentDto,
   type ChangeScheduleInput,
   type CreateAppointmentInput,
@@ -151,6 +153,18 @@ function App() {
     return () => window.removeEventListener('focus', handleFocus)
   }, [refresh])
 
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setSession(null)
+      setData(emptyData)
+      setSelectedDoctorId(null)
+      setSelectedDepartmentId(null)
+    }
+
+    window.addEventListener(sessionExpiredEvent, handleSessionExpired)
+    return () => window.removeEventListener(sessionExpiredEvent, handleSessionExpired)
+  }, [])
+
   const handleLogin = (nextSession: Session) => {
     setSession(nextSession)
     setScreen(nextSession.role === 'Admin' || nextSession.role === 'DemoAdmin' ? 'departments' : 'reception')
@@ -162,6 +176,11 @@ function App() {
     setData(emptyData)
     setSelectedDoctorId(null)
     setSelectedDepartmentId(null)
+  }
+
+  const pathname = window.location.pathname
+  if (pathname !== '/' && pathname !== '') {
+    return <NotFoundScreen />
   }
 
   if (!session) {
@@ -302,6 +321,20 @@ function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }) {
     onLogin({ token: result.token, role: result.role })
   }
 
+  const submitDemo = async (role: 'DemoAdmin' | 'DemoFrontDesk') => {
+    setSubmitting(true)
+    setError(null)
+    const result = await demoLogin(role)
+    setSubmitting(false)
+
+    if (!result.isSuccess || !result.token || !result.role) {
+      setError(result.error ?? 'Invalid credentials')
+      return
+    }
+
+    onLogin({ token: result.token, role: result.role })
+  }
+
   return (
     <main className="login-page">
       <section className="login-card">
@@ -343,10 +376,10 @@ function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }) {
         </form>
 
         <div className="demo-row">
-          <button className="secondary-button" type="button" onClick={() => void submit('DemoAdmin', '12345678')}>
+          <button className="secondary-button" type="button" onClick={() => void submitDemo('DemoAdmin')}>
             Demo Admin
           </button>
-          <button className="secondary-button" type="button" onClick={() => void submit('DemoReception', '12345678')}>
+          <button className="secondary-button" type="button" onClick={() => void submitDemo('DemoFrontDesk')}>
             Demo Reception
           </button>
         </div>
@@ -385,6 +418,34 @@ function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }) {
             </div>
           </div>
         </div>
+      </section>
+    </main>
+  )
+}
+
+function NotFoundScreen() {
+  return (
+    <main className="login-page">
+      <section className="login-card">
+        <div className="brand compact-brand">
+          <div className="brand-mark">
+            <Activity size={20} />
+          </div>
+          <div>
+            <strong>Hospital System</strong>
+            <span>Staff operations</span>
+          </div>
+        </div>
+
+        <div className="login-heading">
+          <p className="eyebrow">404</p>
+          <h1>Page not found</h1>
+          <p>The page you're looking for doesn't exist or may have moved.</p>
+        </div>
+
+        <a className="primary-button" href="/">
+          Back to home
+        </a>
       </section>
     </main>
   )

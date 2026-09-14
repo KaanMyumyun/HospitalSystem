@@ -16,10 +16,21 @@ public class LoginController : ControllerBase
     public async Task<IActionResult> Login([FromBody] LoginDto dto)
     {
         var result = await _loginService.LoginAsync(dto);
- 
+
         if (!result.IsSuccess)
             return Unauthorized(result);
- 
+
+        return Ok(result);
+    }
+
+    [HttpPost("demo-login")]
+    public async Task<IActionResult> DemoLogin([FromBody] DemoLoginDto dto)
+    {
+        var result = await _loginService.DemoLoginAsync(dto.Role);
+
+        if (!result.IsSuccess)
+            return Unauthorized(result);
+
         return Ok(result);
     }
 }
