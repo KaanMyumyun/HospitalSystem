@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using HospitalSystem.Interface;
+using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.Appointments;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

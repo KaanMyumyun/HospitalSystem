@@ -1,3 +1,5 @@
+namespace HospitalSystem.Enums;
+
 public class JwtSettings
 {
     public string SecretKey { get; set; }

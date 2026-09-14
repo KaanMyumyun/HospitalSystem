@@ -1,3 +1,5 @@
+namespace HospitalSystem.Enums;
+
 public enum UserRole
 {
     Pending,

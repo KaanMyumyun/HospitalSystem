@@ -1,3 +1,5 @@
+namespace HospitalSystem.Entities;
+
 public class CalendarEntity
 {
     public int Id { get; set; }

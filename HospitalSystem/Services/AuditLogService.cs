@@ -1,4 +1,4 @@
-using HospitalSystem.Interface;
+using HospitalSystem.Interfaces;
 
 namespace HospitalSystem.Services;
 

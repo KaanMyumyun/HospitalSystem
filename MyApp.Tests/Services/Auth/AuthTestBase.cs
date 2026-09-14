@@ -1,4 +1,4 @@
-using HospitalSystem.Interface;
+using HospitalSystem.Interfaces;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;

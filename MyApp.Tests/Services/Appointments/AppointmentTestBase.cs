@@ -1,4 +1,4 @@
-using HospitalSystem.Interface;
+using HospitalSystem.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 using HospitalSystem.Interfaces.Appointments;

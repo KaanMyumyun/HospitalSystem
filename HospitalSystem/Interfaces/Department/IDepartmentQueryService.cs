@@ -1,4 +1,4 @@
-namespace HospitalSystem.Interface.Department;
+namespace HospitalSystem.Interfaces.Department;
  
 public interface IDepartmentQueryService
 {

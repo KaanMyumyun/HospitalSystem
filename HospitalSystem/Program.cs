@@ -1,37 +1,38 @@
     using System.Text;
     using System.Text.Json.Serialization;
     using System.Threading.RateLimiting;
-    using HospitalSystem.Interface;
+    using HospitalSystem.Interfaces;
     using HospitalSystem.Services;
+    using Microsoft.AspNetCore.Diagnostics;
     using Microsoft.EntityFrameworkCore;
     using Microsoft.IdentityModel.Tokens;
     using Microsoft.OpenApi.Models;
     using Prometheus;
     using HospitalSystem.Services.Appointments;
+    using HospitalSystem.Services.Auth;
+    using HospitalSystem.Services.Calendar;
+    using HospitalSystem.Services.Deparment;
+    using HospitalSystem.Services.User;
     using HospitalSystem.Interfaces.Appointments;
-using HospitalSystem.Interface.Auth;
-using HospitalSystem.Interface.Calendar;
-using HospitalSystem.Interface.Department;
-using HospitalSystem.Interface.User;
+using HospitalSystem.Interfaces.Auth;
+using HospitalSystem.Interfaces.Calendar;
+using HospitalSystem.Interfaces.Department;
+using HospitalSystem.Interfaces.User;
 
 
 var builder = WebApplication.CreateBuilder(args);
+
+    var corsAllowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+        ?? Array.Empty<string>();
 
     builder.Services.AddCors(options =>
     {
         options.AddPolicy("ReactPolicy", policy =>
         {
             policy
-                .WithOrigins(
-                    "http://localhost:5173",
-                    "http://localhost:3000",
-                    "https://hospitalsystem.pages.dev",
-                    "https://hostpitalsyst.servebeer.com"
-
-                )
+                .WithOrigins(corsAllowedOrigins)
                 .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowCredentials();
+                .AllowAnyMethod();
         });
     });
 
@@ -173,6 +174,15 @@ var builder = WebApplication.CreateBuilder(args);
     {
         errorApp.Run(async context =>
         {
+            var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+            if (exception is not null)
+            {
+                var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+                logger.LogError(exception,
+                    "Unhandled exception processing {Method} {Path}",
+                    context.Request.Method, context.Request.Path);
+            }
+
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsJsonAsync(new
@@ -192,5 +202,14 @@ var builder = WebApplication.CreateBuilder(args);
 
     app.MapHealthChecks("/health");
     app.MapControllers();
+    app.MapFallback(context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        context.Response.ContentType = "application/json";
+        return context.Response.WriteAsJsonAsync(new
+        {
+            error = "The requested resource was not found."
+        });
+    });
 
     app.Run();

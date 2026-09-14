@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 
+namespace HospitalSystem.Entities;
+
 public class UserEntity
 {
     public int Id { get; set; }

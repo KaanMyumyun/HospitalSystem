@@ -1,3 +1,5 @@
+namespace HospitalSystem.Dto;
+
 public class DepartmentActionResultDto
 {
     public bool IsSuccess { get; set; }

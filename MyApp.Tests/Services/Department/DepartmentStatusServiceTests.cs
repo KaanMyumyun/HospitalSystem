@@ -1,5 +1,6 @@
 using Xunit;
 using HospitalSystem.Services;
+using HospitalSystem.Services.Deparment;
  
 public class DepartmentStatusServiceTests : DepartmentTestBase
 {

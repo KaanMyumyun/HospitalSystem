@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
-using HospitalSystem.Interface;
-using HospitalSystem.Interface.User;
+using HospitalSystem.Interfaces;
+using HospitalSystem.Interfaces.User;
  
-namespace HospitalSystem.Services;
+namespace HospitalSystem.Services.User;
  
 public class ChangeRoleService : IChangeRoleService
 {

@@ -1,4 +1,4 @@
-namespace HospitalSystem.Interface;
+namespace HospitalSystem.Interfaces;
 public interface ICurrentUserService
 {
     string UserId { get; }

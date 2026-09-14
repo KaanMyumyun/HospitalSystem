@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using HospitalSystem.Interface;
+using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.Appointments;
 
 namespace HospitalSystem.Services.Appointments;

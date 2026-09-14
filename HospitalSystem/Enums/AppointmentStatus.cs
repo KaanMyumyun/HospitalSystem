@@ -1,3 +1,4 @@
+namespace HospitalSystem.Enums;
 
     public enum AppointmentStatus
 {

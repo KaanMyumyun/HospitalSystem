@@ -1,3 +1,5 @@
+namespace HospitalSystem.Dto;
+
 public class ViewSchedule
 {
     public int ScheduleId { get; set; }

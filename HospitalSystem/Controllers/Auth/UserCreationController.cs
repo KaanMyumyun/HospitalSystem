@@ -1,4 +1,4 @@
-using HospitalSystem.Interface.Auth;
+using HospitalSystem.Interfaces.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
  

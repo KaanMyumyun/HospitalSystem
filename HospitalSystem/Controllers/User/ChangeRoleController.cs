@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using HospitalSystem.Interface.User;
+using HospitalSystem.Interfaces.User;
  
 namespace HospitalSystem.Controllers;
  

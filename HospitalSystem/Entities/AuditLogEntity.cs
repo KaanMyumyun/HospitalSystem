@@ -1,3 +1,5 @@
+namespace HospitalSystem.Entities;
+
 public class AuditLogEntity
 {
     public int Id { get; set; }

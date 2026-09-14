@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using HospitalSystem.Services;
+using HospitalSystem.Services.User;
  
 public class ChangeRoleServiceTests : UserTestBase
 {

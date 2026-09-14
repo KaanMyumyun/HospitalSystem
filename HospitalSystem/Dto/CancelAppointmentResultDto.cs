@@ -1,3 +1,5 @@
+namespace HospitalSystem.Dto;
+
 public class CancelAppointmentResultDto
 {
     public bool IsSuccess { get; set; }

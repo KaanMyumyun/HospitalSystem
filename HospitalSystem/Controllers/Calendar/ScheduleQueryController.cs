@@ -1,4 +1,4 @@
-using HospitalSystem.Interface.Calendar;
+using HospitalSystem.Interfaces.Calendar;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
