@@ -19,7 +19,21 @@ public class ResetPasswordServiceTests : UserTestBase
         Assert.True(result.IsSuccess);
         Assert.NotEqual("hashed", (await db.Users.FindAsync(1))!.PasswordHash);
     }
- 
+
+    [Fact]
+    public async Task ResetPasswordAsync_Succeeds_BumpsSecurityStamp()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db);
+        var originalStamp = (await db.Users.FindAsync(1))!.SecurityStamp;
+        var service = CreateService(db);
+
+        var result = await service.ResetPasswordAsync(new ResetPasswordDto { UserId = 1, NewPassword = "newpassword" });
+
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(originalStamp, (await db.Users.FindAsync(1))!.SecurityStamp);
+    }
+
     [Fact]
     public async Task ResetPasswordAsync_NotAdmin_Fails()
     {

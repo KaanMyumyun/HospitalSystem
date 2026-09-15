@@ -22,7 +22,7 @@ public class ScheduleModificationServiceTests
     {
         var currentUserMock = new Mock<ICurrentUserService>();
         currentUserMock.Setup(x => x.IsInRole(UserRole.Admin)).Returns(isAdmin);
-        return new ScheduleModificationService(db, currentUserMock.Object);
+        return new ScheduleModificationService(db, currentUserMock.Object, new TestAuditLogService(db));
     }
 
     private async Task SeedDoctorAsync(ApplicationDbContext db)
@@ -111,5 +111,6 @@ public class ScheduleModificationServiceTests
         Assert.Equal(today.AddHours(9), updatedCalendar.StartTime);
         Assert.Equal(today.AddHours(14), updatedCalendar.EndTime);
         Assert.Equal(30, updatedCalendar.SlotDurationMin);
+        Assert.Contains(db.AuditLogs, a => a.Action == "ChangeSchedule" && a.EntityId == 1);
     }
 }

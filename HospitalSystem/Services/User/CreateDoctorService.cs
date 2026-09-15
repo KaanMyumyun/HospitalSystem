@@ -8,11 +8,13 @@ public class CreateDoctorService : ICreateDoctorService
 {
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
- 
-    public CreateDoctorService(ApplicationDbContext context, ICurrentUserService currentUser)
+    private readonly IAuditLogService _auditLog;
+
+    public CreateDoctorService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
     {
         _context = context;
         _currentUser = currentUser;
+        _auditLog = auditLog;
     }
  
     public async Task<CreateDoctorResultDto> CreateDoctorAsync(CreateDoctorDto dto)
@@ -32,22 +34,26 @@ public class CreateDoctorService : ICreateDoctorService
  
         if (doctor == null)
         {
-            _context.Doctors.Add(new DoctorEntity
+            doctor = new DoctorEntity
             {
                 UserId = dto.UserId,
                 DepartmentId = dto.DepartmentId,
                 IsActive = true
-            });
+            };
+            _context.Doctors.Add(doctor);
         }
         else
         {
             doctor.DepartmentId = dto.DepartmentId;
             doctor.IsActive = true;
         }
- 
+
         user.Role = UserRole.Doctor;
         await _context.SaveChangesAsync();
- 
+
+        await _auditLog.LogAsync("CreateDoctor", "Doctor", doctor.Id, $"User {user.Name} made a doctor in department {dto.DepartmentId}");
+        await _context.SaveChangesAsync();
+
         return CreateDoctorResultDto.Success();
     }
 }

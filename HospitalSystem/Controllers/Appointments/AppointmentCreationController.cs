@@ -31,10 +31,10 @@ public class AppointmentCreationController : ControllerBase
             return Unauthorized(new { Message = "Invalid or missing User ID claim in token." });
  
         var result = await _appointmentCreationService.CreateAppointmentAsync(dto, userId);
- 
+
         if (!result.IsSuccess)
-            return BadRequest(result);
- 
+            return result.IsConflict ? Conflict(result) : BadRequest(result);
+
         return Ok(result);
     }
 }

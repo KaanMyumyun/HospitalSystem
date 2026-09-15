@@ -23,6 +23,7 @@ public class ApplicationDbContext : DbContext
             builder.Property(s => s.PasswordHash).IsRequired().HasMaxLength(256);
             builder.Property(s => s.Role).IsRequired().HasConversion<string>();
             builder.Property(s => s.Name).IsRequired().HasMaxLength(50);
+            builder.Property(s => s.SecurityStamp).IsRequired().HasMaxLength(64);
             builder.HasIndex(s => s.Name).IsUnique();
 
 
@@ -57,6 +58,14 @@ public class ApplicationDbContext : DbContext
             builder.Property(a => a.CancellationReason).HasMaxLength(500).IsRequired(false);
             builder.Property(a => a.CancelledAt).IsRequired(false);
             builder.HasIndex(a => new { a.DoctorId, a.Status, a.TimeOfAppointment });
+            // Backstops HasOverlapAsync's check-then-insert race (A2) for the
+            // same start time: two concurrent requests can both pass the
+            // check, but only one can win this constraint. Partially
+            // overlapping times (10:00 vs 10:05) are not covered. Filtered so
+            // cancelled/completed appointments don't block reusing that slot.
+            builder.HasIndex(a => new { a.DoctorId, a.TimeOfAppointment })
+                .IsUnique()
+                .HasFilter("\"Status\" = 'Scheduled'");
         });
         
         modelBuilder.Entity<CalendarEntity>(builder =>

@@ -46,10 +46,11 @@ The application uses a three-stage GitHub Actions pipeline:
    - Runs after the Docker workflow succeeds
    - Waits for approval in the `production` environment
    - Assumes a separate AWS IAM deployment role through OIDC
-   - Updates kubeconfig for the EKS cluster
-   - Sets backend and frontend Deployment images to the date-based short SHA
-     tag (`YYYY-MM-DD-<short sha>`)
-   - Waits for rollout completion when the app is scaled up
+   - Sends the deploy SSM document to the ops instance inside the VPC, because
+     the EKS API endpoint is private
+   - On the instance, the document sets backend and frontend Deployment images
+     to the date-based short SHA tag (`YYYY-MM-DD-<short sha>`) and waits for
+     rollout completion when the app is scaled up
 
 If the Kubernetes deployments are scaled to `0`, the deploy workflow skips the
 rollout wait, but still updates the Deployment image fields. The next manual
@@ -68,12 +69,12 @@ secrets instead. Docker Image CI also needs the `DOCKER_USERNAME` and
 | `AWS_REGION` | Docker Image CI, Deploy | AWS region of the ECR registry and EKS cluster |
 | `AWS_ROLE_TO_ASSUME` | Docker Image CI | `github_actions_ecr_push_role_arn` Terraform output |
 | `AWS_DEPLOY_ROLE_TO_ASSUME` | Deploy | `github_actions_deploy_role_arn` Terraform output |
-| `ECR_REGISTRY` | Docker Image CI, Deploy | `ecr_registry` Terraform output |
-| `ECR_BACKEND_REPOSITORY` | Docker Image CI, Deploy | `hospital-backend` |
-| `ECR_FRONTEND_REPOSITORY` | Docker Image CI, Deploy | `hospital-frontend` |
+| `ECR_REGISTRY` | Docker Image CI | `ecr_registry` Terraform output |
+| `ECR_BACKEND_REPOSITORY` | Docker Image CI | `hospital-backend` |
+| `ECR_FRONTEND_REPOSITORY` | Docker Image CI | `hospital-frontend` |
 | `VITE_API_URL` | Docker Image CI | Public API URL baked into the frontend |
-| `EKS_CLUSTER_NAME` | Deploy | `cluster_name` Terraform output |
-| `K8S_NAMESPACE` | Deploy | `hospitalsystem` |
+| `DEPLOY_SSM_DOCUMENT` | Deploy | `deploy_ssm_document_name` Terraform output |
+| `DEPLOY_INSTANCE_NAME` | Deploy | `ops_instance_name` Terraform output |
 
 The `production` environment (Settings, Environments) needs two protection
 rules:

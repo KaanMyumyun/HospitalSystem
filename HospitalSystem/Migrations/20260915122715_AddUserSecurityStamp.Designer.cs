@@ -3,6 +3,7 @@ using System;
 using HospitalSystem.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace HospitalSystem.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260915122715_AddUserSecurityStamp")]
+    partial class AddUserSecurityStamp
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -61,10 +64,6 @@ namespace HospitalSystem.Migrations
                     b.HasIndex("CreatedByTheFrontDeskId");
 
                     b.HasIndex("PatientId");
-
-                    b.HasIndex("DoctorId", "TimeOfAppointment")
-                        .IsUnique()
-                        .HasFilter("\"Status\" = 'Scheduled'");
 
                     b.HasIndex("DoctorId", "Status", "TimeOfAppointment");
 

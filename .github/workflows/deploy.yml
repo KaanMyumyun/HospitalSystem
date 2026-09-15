@@ -17,11 +17,8 @@ jobs:
     env:
       AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION }}
       AWS_DEPLOY_ROLE_TO_ASSUME: ${{ vars.AWS_DEPLOY_ROLE_TO_ASSUME || secrets.AWS_DEPLOY_ROLE_TO_ASSUME }}
-      ECR_REGISTRY: ${{ vars.ECR_REGISTRY || secrets.ECR_REGISTRY }}
-      BACKEND_IMAGE: ${{ vars.ECR_BACKEND_REPOSITORY || secrets.ECR_BACKEND_REPOSITORY }}
-      FRONTEND_IMAGE: ${{ vars.ECR_FRONTEND_REPOSITORY || secrets.ECR_FRONTEND_REPOSITORY }}
-      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
-      K8S_NAMESPACE: ${{ vars.K8S_NAMESPACE }}
+      DEPLOY_SSM_DOCUMENT: ${{ vars.DEPLOY_SSM_DOCUMENT }}
+      DEPLOY_INSTANCE_NAME: ${{ vars.DEPLOY_INSTANCE_NAME }}
 
     steps:
       - name: Validate deploy configuration
@@ -37,14 +34,9 @@ jobs:
             exit 1
           fi
 
-          if [ -z "$ECR_REGISTRY" ] || [ -z "$BACKEND_IMAGE" ] || [ -z "$FRONTEND_IMAGE" ]; then
-            echo "ECR_REGISTRY, ECR_BACKEND_REPOSITORY, and ECR_FRONTEND_REPOSITORY repository variables or secrets are required."
-            exit 1
-          fi
-
-          if [ -z "$EKS_CLUSTER_NAME" ] || [ -z "$K8S_NAMESPACE" ]; then
-            echo "EKS_CLUSTER_NAME and K8S_NAMESPACE repository variables are required."
-            echo "Set them to the cluster_name Terraform output and the k8s_namespace Ansible variable."
+          if [ -z "$DEPLOY_SSM_DOCUMENT" ] || [ -z "$DEPLOY_INSTANCE_NAME" ]; then
+            echo "DEPLOY_SSM_DOCUMENT and DEPLOY_INSTANCE_NAME repository variables are required."
+            echo "Set them to the deploy_ssm_document_name and ops_instance_name Terraform outputs."
             exit 1
           fi
 
@@ -59,48 +51,53 @@ jobs:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Configure kubeconfig
+      # The EKS API endpoint is private. The deploy runs on the ops instance
+      # inside the VPC, through an SSM document whose only input is the tag.
+      - name: Find the ops instance
         run: |
-          aws eks update-kubeconfig \
-            --region "$AWS_REGION" \
-            --name "$EKS_CLUSTER_NAME"
+          INSTANCE_IDS=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${DEPLOY_INSTANCE_NAME}" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[].Instances[].InstanceId' \
+            --output text)
 
-      - name: Verify Kubernetes deploy permissions
+          COUNT=$(wc -w <<< "$INSTANCE_IDS")
+          if [ "$COUNT" -ne 1 ]; then
+            echo "Expected one running instance named ${DEPLOY_INSTANCE_NAME}, found ${COUNT}."
+            exit 1
+          fi
+
+          echo "INSTANCE_ID=${INSTANCE_IDS}" >> "$GITHUB_ENV"
+
+      - name: Deploy through SSM
         run: |
-          kubectl auth can-i patch deployments -n "$K8S_NAMESPACE"
+          COMMAND_ID=$(aws ssm send-command \
+            --document-name "$DEPLOY_SSM_DOCUMENT" \
+            --instance-ids "$INSTANCE_ID" \
+            --parameters "ImageTag=${IMAGE_TAG}" \
+            --comment "Deploy ${IMAGE_TAG}" \
+            --query Command.CommandId \
+            --output text)
+          echo "SSM command ${COMMAND_ID} on ${INSTANCE_ID}"
 
-      - name: Update EKS deployment images
-        run: |
-          kubectl set image deployment/hospital-backend \
-            backend="${ECR_REGISTRY}/${BACKEND_IMAGE}:${IMAGE_TAG}" \
-            -n "$K8S_NAMESPACE"
+          # The document times out after 600 seconds; poll a little longer.
+          for _ in $(seq 1 70); do
+            STATUS=$(aws ssm list-commands \
+              --command-id "$COMMAND_ID" \
+              --query 'Commands[0].Status' \
+              --output text)
+            case "$STATUS" in
+              Pending | InProgress | Delayed) sleep 10 ;;
+              *) break ;;
+            esac
+          done
 
-          kubectl set image deployment/hospital-frontend \
-            frontend="${ECR_REGISTRY}/${FRONTEND_IMAGE}:${IMAGE_TAG}" \
-            -n "$K8S_NAMESPACE"
+          aws ssm list-command-invocations \
+            --command-id "$COMMAND_ID" \
+            --details \
+            --query 'CommandInvocations[0].CommandPlugins[0].Output' \
+            --output text
 
-      - name: Check deployment scale
-        id: scale
-        run: |
-          BACKEND_REPLICAS=$(kubectl get deployment hospital-backend \
-            -n "$K8S_NAMESPACE" \
-            -o jsonpath='{.spec.replicas}')
-
-          FRONTEND_REPLICAS=$(kubectl get deployment hospital-frontend \
-            -n "$K8S_NAMESPACE" \
-            -o jsonpath='{.spec.replicas}')
-
-          echo "backend_replicas=${BACKEND_REPLICAS:-0}" >> "$GITHUB_OUTPUT"
-          echo "frontend_replicas=${FRONTEND_REPLICAS:-0}" >> "$GITHUB_OUTPUT"
-
-      - name: Wait for EKS rollouts
-        if: ${{ steps.scale.outputs.backend_replicas != '0' || steps.scale.outputs.frontend_replicas != '0' }}
-        run: |
-          kubectl rollout status deployment/hospital-backend -n "$K8S_NAMESPACE" --timeout=180s
-          kubectl rollout status deployment/hospital-frontend -n "$K8S_NAMESPACE" --timeout=180s
-
-      - name: Skip deployment because app is scaled down
-        if: ${{ steps.scale.outputs.backend_replicas == '0' && steps.scale.outputs.frontend_replicas == '0' }}
-        run: |
-          echo "Backend and frontend deployments are scaled to 0."
-          echo "Deployment image tags were updated to ${IMAGE_TAG}; the next manual scale-up will run that exact image."
+          if [ "$STATUS" != "Success" ]; then
+            echo "Deploy command ended with status ${STATUS}."
+            exit 1
+          fi

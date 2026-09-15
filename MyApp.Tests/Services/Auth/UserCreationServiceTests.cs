@@ -5,7 +5,7 @@ using Xunit;
 public class UserCreationServiceTests : AuthTestBase
 {
     private UserCreationService CreateService(ApplicationDbContext db, bool isAdmin = true)
-        => new(db, CreateCurrentUser(isAdmin));
+        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db));
  
     [Fact]
     public async Task CreateUserAsync_NotAdmin_Fails()
@@ -83,5 +83,6 @@ public class UserCreationServiceTests : AuthTestBase
         Assert.Equal(UserRole.Pending, saved!.Role);
         Assert.NotNull(saved.PasswordHash);
         Assert.NotEqual("Password123", saved.PasswordHash);
+        Assert.Contains(db.AuditLogs, a => a.Action == "CreateUser" && a.EntityId == saved.Id);
     }
 }

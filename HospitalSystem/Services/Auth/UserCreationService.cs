@@ -10,13 +10,15 @@ public class UserCreationService : IUserCreationService
 {
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
+    private readonly IAuditLogService _auditLog;
     private readonly PasswordHasher<UserEntity> _hasher;
     private static readonly Regex ValidUsername = new(@"^[A-Za-z][A-Za-z0-9_.-]{2,39}$", RegexOptions.Compiled);
- 
-    public UserCreationService(ApplicationDbContext context, ICurrentUserService currentUser)
+
+    public UserCreationService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
     {
         _context = context;
         _currentUser = currentUser;
+        _auditLog = auditLog;
         _hasher = new PasswordHasher<UserEntity>();
     }
  
@@ -49,7 +51,10 @@ public class UserCreationService : IUserCreationService
  
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
- 
+
+        await _auditLog.LogAsync("CreateUser", "User", user.Id, $"Created user {user.Name}");
+        await _context.SaveChangesAsync();
+
         return CreateUserResultDto.Success();
     }
 }

@@ -33,6 +33,8 @@ public class DoctorStatusService : IDoctorStatusService
             return ChangeDoctorsStatusResult.Fail("Doctor already has this status");
  
         doctor.IsActive = dto.IsActive;
+        if (!dto.IsActive)
+            doctor.User.SecurityStamp = Guid.NewGuid().ToString();
         await _auditLog.LogAsync(
             "ChangeDoctorStatus",
             "Doctor",
