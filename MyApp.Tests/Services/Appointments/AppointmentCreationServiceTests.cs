@@ -8,7 +8,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
     private AppointmentCreationService CreateService(ApplicationDbContext db, bool isFrontDesk = true)
     {
         var patientService = new PatientService(db);
-        return new AppointmentCreationService(db, CreateCurrentUser(isFrontDesk), patientService);
+        return new AppointmentCreationService(db, CreateCurrentUser(isFrontDesk), patientService, new TestAuditLogService(db));
     }
  
     [Fact]
@@ -46,8 +46,9 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.Equal(5, appointment.CreatedByTheFrontDeskId);
         Assert.Null(appointment.CancelledAt);
         Assert.True(appointment.CreatedAt <= DateTime.UtcNow);
+        Assert.Contains(db.AuditLogs, a => a.Action == "CreateAppointment" && a.EntityId == appointment.Id);
     }
- 
+
     [Fact]
     public async Task CreateAppointmentAsync_ExistingPatient_ReusesPatient()
     {

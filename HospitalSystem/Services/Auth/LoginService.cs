@@ -71,17 +71,25 @@ public class LoginService : ILoginService
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Role, user.Role.ToString())
+            new Claim(ClaimTypes.Role, user.Role.ToString()),
+            new Claim(SecurityStampClaims.ClaimType, user.SecurityStamp)
         };
- 
+
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.SecretKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
- 
+
         var token = new JwtSecurityToken(
             issuer: _jwtSettings.Issuer,
             audience: _jwtSettings.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddHours(3),
+            // Shortened from 3 hours: the security-stamp check below now
+            // revokes tokens immediately on role change/password
+            // reset/doctor-disable, but a shorter window still limits
+            // exposure for a leaked token whose triggering account never
+            // changes. Full refresh-token rotation is a bigger feature
+            // (new endpoint, storage, frontend silent-refresh UX) and is
+            // not implemented here.
+            expires: DateTime.UtcNow.AddHours(1),
             signingCredentials: creds
         );
  

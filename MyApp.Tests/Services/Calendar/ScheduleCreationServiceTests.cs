@@ -21,7 +21,7 @@ public class ScheduleCreationServiceTests
     {
         var currentUserMock = new Mock<ICurrentUserService>();
         currentUserMock.Setup(x => x.IsInRole(UserRole.Admin)).Returns(isAdmin);
-        return new ScheduleCreationService(db, currentUserMock.Object);
+        return new ScheduleCreationService(db, currentUserMock.Object, new TestAuditLogService(db));
     }
 
     private async Task SeedDoctorAsync(ApplicationDbContext db, bool doctorActive = true, bool departmentActive = true)
@@ -89,6 +89,7 @@ public class ScheduleCreationServiceTests
         Assert.Equal(new DateTime(2000, 1, 1, 9, 0, 0, DateTimeKind.Utc), newCalendar.StartTime);
         Assert.Equal(new DateTime(2000, 1, 1, 17, 0, 0, DateTimeKind.Utc), newCalendar.EndTime);
         Assert.Equal(30, newCalendar.SlotDurationMin);
+        Assert.Contains(db.AuditLogs, a => a.Action == "CreateSchedule" && a.EntityId == newCalendar.Id);
     }
 
     [Theory]

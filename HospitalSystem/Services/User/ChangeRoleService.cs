@@ -31,10 +31,21 @@ public class ChangeRoleService : IChangeRoleService
  
         if (user.Role == dto.NewRole)
             return ChangeRoleResultDto.Fail("User already has this role");
- 
+
+        if (_currentUser.UserId == user.Id.ToString())
+            return ChangeRoleResultDto.Fail("You cannot change your own role");
+
+        if (user.Role == UserRole.Admin && dto.NewRole != UserRole.Admin)
+        {
+            var otherAdmins = await _context.Users.CountAsync(u => u.Role == UserRole.Admin && u.Id != user.Id);
+            if (otherAdmins == 0)
+                return ChangeRoleResultDto.Fail("Cannot demote the last remaining admin");
+        }
+
         var oldRole = user.Role;
         user.Role = dto.NewRole;
- 
+        user.SecurityStamp = Guid.NewGuid().ToString();
+
         var doctor = await _context.Doctors.FirstOrDefaultAsync(d => d.UserId == user.Id);
  
         if (dto.NewRole == UserRole.Doctor)

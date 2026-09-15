@@ -68,4 +68,32 @@ public class DoctorStatusServiceTests : UserTestBase
         Assert.True(result.IsSuccess);
         Assert.False(db.Doctors.First().IsActive);
     }
+
+    [Fact]
+    public async Task ChangeDoctorsStatusAsync_Deactivate_BumpsSecurityStamp()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db, isDoctorActive: true);
+        var originalStamp = (await db.Users.FindAsync(1))!.SecurityStamp;
+        var service = CreateService(db);
+
+        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorsStatus { DoctorId = 1, IsActive = false });
+
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(originalStamp, (await db.Users.FindAsync(1))!.SecurityStamp);
+    }
+
+    [Fact]
+    public async Task ChangeDoctorsStatusAsync_Activate_DoesNotBumpSecurityStamp()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db, isDoctorActive: false);
+        var originalStamp = (await db.Users.FindAsync(1))!.SecurityStamp;
+        var service = CreateService(db);
+
+        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorsStatus { DoctorId = 1, IsActive = true });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(originalStamp, (await db.Users.FindAsync(1))!.SecurityStamp);
+    }
 }

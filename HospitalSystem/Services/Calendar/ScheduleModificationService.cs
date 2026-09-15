@@ -8,11 +8,13 @@ public class ScheduleModificationService : IScheduleModificationService
 {
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
+    private readonly IAuditLogService _auditLog;
 
-    public ScheduleModificationService(ApplicationDbContext context, ICurrentUserService currentUser)
+    public ScheduleModificationService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
     {
         _context = context;
         _currentUser = currentUser;
+        _auditLog = auditLog;
     }
 
     public async Task<CalendarActionResult> ChangeScheduleAsync(ChangeScheduleDto dto)
@@ -51,6 +53,7 @@ public class ScheduleModificationService : IScheduleModificationService
         calendar.StartTime = start;
         calendar.EndTime = end;
         calendar.SlotDurationMin = dto.SlotDurationMin;
+        await _auditLog.LogAsync("ChangeSchedule", "Calendar", calendar.Id, $"Updated schedule for doctor {calendar.DoctorId}");
         await _context.SaveChangesAsync();
         return CalendarActionResult.Success();
     }

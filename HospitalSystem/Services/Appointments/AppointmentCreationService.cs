@@ -10,18 +10,21 @@ public class AppointmentCreationService : IAppointmentCreationService
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
     private readonly IPatientService _patientService;
- 
+    private readonly IAuditLogService _auditLog;
+
     private static readonly TimeSpan AppointmentDuration = TimeSpan.FromMinutes(15);
     private static readonly Regex AllowedPhoneCharacters = new(@"^\+?[0-9\s().-]+$", RegexOptions.Compiled);
- 
+
     public AppointmentCreationService(
         ApplicationDbContext context,
         ICurrentUserService currentUser,
-        IPatientService patientService)
+        IPatientService patientService,
+        IAuditLogService auditLog)
     {
         _context = context;
         _currentUser = currentUser;
         _patientService = patientService;
+        _auditLog = auditLog;
     }
  
     public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppointmentDto dto, int frontDeskUserId)
@@ -57,7 +60,10 @@ public class AppointmentCreationService : IAppointmentCreationService
  
         _context.Appointments.Add(appointment);
         await _context.SaveChangesAsync();
- 
+
+        await _auditLog.LogAsync("CreateAppointment", "Appointment", appointment.Id, $"Created appointment for doctor {dto.DoctorId}");
+        await _context.SaveChangesAsync();
+
         return CreateAppointmentResultDto.Success();
     }
 

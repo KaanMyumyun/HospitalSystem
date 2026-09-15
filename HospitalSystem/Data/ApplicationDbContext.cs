@@ -23,6 +23,7 @@ public class ApplicationDbContext : DbContext
             builder.Property(s => s.PasswordHash).IsRequired().HasMaxLength(256);
             builder.Property(s => s.Role).IsRequired().HasConversion<string>();
             builder.Property(s => s.Name).IsRequired().HasMaxLength(50);
+            builder.Property(s => s.SecurityStamp).IsRequired().HasMaxLength(64);
             builder.HasIndex(s => s.Name).IsUnique();
 
 

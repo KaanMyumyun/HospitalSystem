@@ -35,6 +35,7 @@ public class ResetPasswordService : IResetPasswordService
             return ResetPasswordResultDto.Fail("User not found");
  
         user.PasswordHash = _hasher.HashPassword(user, dto.NewPassword);
+        user.SecurityStamp = Guid.NewGuid().ToString();
         await _auditLog.LogAsync(
             "ResetPassword",
             "User",

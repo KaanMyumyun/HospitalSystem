@@ -1,7 +1,9 @@
     using System.Net;
+    using System.Security.Claims;
     using System.Text;
     using System.Text.Json.Serialization;
     using System.Threading.RateLimiting;
+    using Microsoft.AspNetCore.Authentication.JwtBearer;
     using Microsoft.AspNetCore.Authorization;
     using Microsoft.AspNetCore.HttpOverrides;
     using HospitalSystem.Interfaces;
@@ -130,6 +132,32 @@ var builder = WebApplication.CreateBuilder(args);
                 IssuerSigningKey = new SymmetricSecurityKey(
                     Encoding.UTF8.GetBytes(jwtSecret)
                 )
+            };
+            options.Events = new JwtBearerEvents
+            {
+                // Rejects an otherwise-valid, unexpired token once the
+                // user's role changes, their password is reset, or (for a
+                // doctor) their account is disabled - see B7.
+                OnTokenValidated = async context =>
+                {
+                    var userIdClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                    var stampClaim = context.Principal?.FindFirst(SecurityStampClaims.ClaimType)?.Value;
+
+                    if (!int.TryParse(userIdClaim, out var userId))
+                    {
+                        context.Fail("Invalid token");
+                        return;
+                    }
+
+                    var db = context.HttpContext.RequestServices.GetRequiredService<ApplicationDbContext>();
+                    var currentStamp = await db.Users
+                        .Where(u => u.Id == userId)
+                        .Select(u => u.SecurityStamp)
+                        .FirstOrDefaultAsync();
+
+                    if (currentStamp == null || currentStamp != stampClaim)
+                        context.Fail("Token has been revoked");
+                }
             };
         });
 

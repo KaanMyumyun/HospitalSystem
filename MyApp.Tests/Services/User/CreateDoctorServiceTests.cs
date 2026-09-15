@@ -6,7 +6,7 @@ using HospitalSystem.Services.User;
 public class CreateDoctorServiceTests : UserTestBase
 {
     private CreateDoctorService CreateService(ApplicationDbContext db, bool isAdmin = true)
-        => new(db, CreateCurrentUser(isAdmin));
+        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db));
  
     [Fact]
     public async Task CreateDoctorAsync_Admin_Succeeds()
@@ -25,6 +25,7 @@ public class CreateDoctorServiceTests : UserTestBase
         Assert.True(doctor!.IsActive);
         Assert.Equal(1, doctor.DepartmentId);
         Assert.Equal(UserRole.Doctor, (await db.Users.FindAsync(1))!.Role);
+        Assert.Contains(db.AuditLogs, a => a.Action == "CreateDoctor" && a.EntityId == doctor.Id);
     }
  
     [Fact]

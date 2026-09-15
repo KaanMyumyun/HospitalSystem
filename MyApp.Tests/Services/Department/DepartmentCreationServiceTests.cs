@@ -6,7 +6,7 @@ using HospitalSystem.Services.Deparment;
 public class DepartmentCreationServiceTests : DepartmentTestBase
 {
     private DepartmentCreationService CreateService(ApplicationDbContext db, bool isAdmin = true)
-        => new(db, CreateCurrentUser(isAdmin));
+        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db));
  
     [Fact]
     public async Task CreateDepartmentAsync_Admin_Succeeds()
@@ -16,10 +16,12 @@ public class DepartmentCreationServiceTests : DepartmentTestBase
         var service = CreateService(db);
  
         var result = await service.CreateDepartmentAsync(new CreateDepartmentDto { Name = "DDD" });
- 
+
         Assert.True(result.IsSuccess);
+        var department = await db.Departments.SingleAsync(d => d.Department == "DDD");
+        Assert.Contains(db.AuditLogs, a => a.Action == "CreateDepartment" && a.EntityId == department.Id);
     }
- 
+
     [Fact]
     public async Task CreateDepartmentAsync_NotAdmin_Fails()
     {
