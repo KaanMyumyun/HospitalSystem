@@ -28,7 +28,8 @@ This is the only deployment that runs permanently. The AWS deployments described
 The application uses a three-stage GitHub Actions pipeline:
 
 1. `CI` workflow
-   - Runs on pull requests and pushes to `main`
+   - Runs on pull requests, pushes to `main`, and weekly (Mondays 03:00 UTC)
+     so published images pick up base image security fixes
    - Restores, builds and tests the backend
    - Lints and builds the frontend (the build type-checks it)
    - Builds both Docker images and scans them with Trivy; a fixable `HIGH`
@@ -530,6 +531,14 @@ backend container reads the key from that file.
 
 ```bash
 docker compose up --build
+```
+
+Compose pulls fresh base images on every build. Docker still reuses the cached
+`apk upgrade` layer, so to pick up Alpine security fixes released since your last
+build, rebuild without the cache:
+
+```bash
+docker compose build --no-cache
 ```
 
 The frontend is served at `http://localhost:3000` and the API at

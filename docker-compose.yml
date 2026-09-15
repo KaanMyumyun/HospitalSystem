@@ -23,6 +23,7 @@ services:
     build:
       context: .
       dockerfile: HospitalSystem/Dockerfile
+      pull: true
     container_name: hospital-backend
     depends_on:
       postgres:
@@ -44,6 +45,7 @@ services:
     build:
       context: ./hospital-frontend
       dockerfile: Dockerfile
+      pull: true
       args:
         VITE_API_URL: http://localhost:5272/api
     container_name: hospital-frontend

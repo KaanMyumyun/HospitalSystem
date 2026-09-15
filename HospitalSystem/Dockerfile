@@ -11,7 +11,9 @@ RUN dotnet publish -c Release -o /app/publish
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine
 WORKDIR /app
 
-RUN addgroup -S appgroup \
+# Pull Alpine security fixes published after the base image was built.
+RUN apk upgrade --no-cache \
+    && addgroup -S appgroup \
     && adduser -S -G appgroup -h /home/appuser appuser
 
 EXPOSE 8080

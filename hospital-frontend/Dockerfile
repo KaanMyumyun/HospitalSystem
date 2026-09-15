@@ -9,6 +9,10 @@ ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:alpine
+# Pull Alpine security fixes published after the base image was built.
+# The base image runs as 101, so switch to root for apk; USER 101 below restores it.
+USER root
+RUN apk upgrade --no-cache
 COPY --chown=101:101 nginx.conf /etc/nginx/conf.d/default.conf
 COPY --chown=101:101 --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 8080
