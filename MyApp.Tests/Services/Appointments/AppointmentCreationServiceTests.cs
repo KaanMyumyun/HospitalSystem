@@ -1,6 +1,7 @@
 using HospitalSystem.Services.Appointments;
 using Microsoft.EntityFrameworkCore;
 using Moq;
+using Npgsql;
 using Xunit;
  
 public class AppointmentCreationServiceTests : AppointmentTestBase
@@ -139,6 +140,81 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor already booked for that time slot", result.Error);
+        Assert.False(result.IsConflict, "the fast-path check is a normal validation failure (400), not a 409 - only a real DB constraint violation is");
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_UniqueIndexViolation_ReturnsConflict()
+    {
+        using var db = new FailingAppointmentInsertDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+        db.AppointmentInsertException = new DbUpdateException(
+            "unique violation",
+            new PostgresException("duplicate key", "ERROR", "ERROR", PostgresErrorCodes.UniqueViolation));
+
+        // 11:00 passes HasOverlapAsync; simulates a concurrent request booking
+        // the same slot between the check and the insert
+        var dto = new CreateAppointmentDto
+        {
+            DoctorId = 1,
+            PatientName = "Racing Patient",
+            PhoneNumber = "555-1100",
+            DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            AppointmentTime = new DateTime(2026, 1, 1, 11, 0, 0, DateTimeKind.Utc)
+        };
+
+        var result = await service.CreateAppointmentAsync(dto, 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.True(result.IsConflict);
+        Assert.Equal("Doctor already booked for that time slot", result.Error);
+        Assert.DoesNotContain(db.AuditLogs, a => a.Action == "CreateAppointment");
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_OtherDbUpdateError_Propagates()
+    {
+        using var db = new FailingAppointmentInsertDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+        db.AppointmentInsertException = new DbUpdateException(
+            "foreign key violation",
+            new PostgresException("fk violation", "ERROR", "ERROR", PostgresErrorCodes.ForeignKeyViolation));
+
+        var dto = new CreateAppointmentDto
+        {
+            DoctorId = 1,
+            PatientName = "Racing Patient",
+            PhoneNumber = "555-1100",
+            DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            AppointmentTime = new DateTime(2026, 1, 1, 11, 0, 0, DateTimeKind.Utc)
+        };
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => service.CreateAppointmentAsync(dto, 5));
+    }
+
+    // InMemory doesn't enforce unique indexes, so this throws what Npgsql
+    // would when an appointment insert is rejected by the database.
+    private sealed class FailingAppointmentInsertDbContext : ApplicationDbContext
+    {
+        public Exception? AppointmentInsertException { get; set; }
+
+        public FailingAppointmentInsertDbContext()
+            : base(new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options)
+        {
+        }
+
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            if (AppointmentInsertException is not null &&
+                ChangeTracker.Entries<AppointmentsEntity>().Any(e => e.State == EntityState.Added))
+                throw AppointmentInsertException;
+
+            return base.SaveChangesAsync(cancellationToken);
+        }
     }
 
     [Theory]
