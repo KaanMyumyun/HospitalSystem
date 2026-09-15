@@ -1,6 +1,9 @@
+    using System.Net;
     using System.Text;
     using System.Text.Json.Serialization;
     using System.Threading.RateLimiting;
+    using Microsoft.AspNetCore.Authorization;
+    using Microsoft.AspNetCore.HttpOverrides;
     using HospitalSystem.Interfaces;
     using HospitalSystem.Services;
     using Microsoft.AspNetCore.Diagnostics;
@@ -130,6 +133,13 @@ var builder = WebApplication.CreateBuilder(args);
             };
         });
 
+    builder.Services.AddAuthorization(options =>
+    {
+        options.FallbackPolicy = new AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
+            .Build();
+    });
+
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseNpgsql(
             builder.Configuration.GetConnectionString("DefaultConnection")
@@ -151,13 +161,44 @@ var builder = WebApplication.CreateBuilder(args);
             {
                 PermitLimit = 60,
                 Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0                    
+                QueueLimit = 0
+            });
+        });
+
+        options.AddPolicy("login", httpContext =>
+        {
+            var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            return RateLimitPartition.GetFixedWindowLimiter(clientIp, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
             });
         });
     });
 
 
     var app = builder.Build();
+
+    var forwardedHeadersOptions = new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+    };
+    foreach (var proxy in app.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+    {
+        if (IPAddress.TryParse(proxy, out var proxyIp))
+            forwardedHeadersOptions.KnownProxies.Add(proxyIp);
+    }
+    foreach (var network in app.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [])
+    {
+        var parts = network.Split('/');
+        if (parts.Length == 2 && IPAddress.TryParse(parts[0], out var prefix) && int.TryParse(parts[1], out var prefixLength))
+            forwardedHeadersOptions.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(prefix, prefixLength));
+    }
+    // KnownProxies/KnownNetworks are empty until configured per environment (see
+    // appsettings.json), so this is a safe no-op today rather than trusting an
+    // unverified proxy - populate them to actually close B4.
+    app.UseForwardedHeaders(forwardedHeadersOptions);
 
     if (app.Configuration.GetValue<bool>("Database:RunMigrationsOnStartup"))
     {
@@ -195,12 +236,12 @@ var builder = WebApplication.CreateBuilder(args);
     app.UseRouting();
     app.UseCors("ReactPolicy");
     app.UseRateLimiter();
-    app.UseHttpMetrics();   
-    app.MapMetrics();
+    app.UseHttpMetrics();
     app.UseAuthentication();
     app.UseAuthorization();
 
-    app.MapHealthChecks("/health");
+    app.MapMetrics().RequireAuthorization();
+    app.MapHealthChecks("/health").AllowAnonymous();
     app.MapControllers();
     app.MapFallback(context =>
     {
@@ -210,6 +251,6 @@ var builder = WebApplication.CreateBuilder(args);
         {
             error = "The requested resource was not found."
         });
-    });
+    }).AllowAnonymous();
 
     app.Run();

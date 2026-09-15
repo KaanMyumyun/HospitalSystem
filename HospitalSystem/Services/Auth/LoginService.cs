@@ -14,24 +14,33 @@ public class LoginService : ILoginService
     private readonly ApplicationDbContext _context;
     private readonly JwtSettings _jwtSettings;
     private readonly PasswordHasher<UserEntity> _hasher;
- 
+
+    // A fixed, valid-format hash to verify against when the user doesn't exist,
+    // so a missing username takes the same time as a wrong password (no
+    // user-enumeration timing oracle). The hashed value itself is irrelevant.
+    private static readonly string DummyPasswordHash =
+        new PasswordHasher<UserEntity>().HashPassword(new UserEntity(), Guid.NewGuid().ToString());
+
     public LoginService(ApplicationDbContext context, IOptions<JwtSettings> jwtOptions)
     {
         _context = context;
         _jwtSettings = jwtOptions.Value;
         _hasher = new PasswordHasher<UserEntity>();
     }
- 
+
     public async Task<LoginResultDto> LoginAsync(LoginDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Password))
             return LoginResultDto.Fail("Invalid credentials");
- 
+
         var user = await _context.Users.SingleOrDefaultAsync(u => u.Name == dto.Name);
- 
+
         if (user == null)
+        {
+            _hasher.VerifyHashedPassword(new UserEntity(), DummyPasswordHash, dto.Password);
             return LoginResultDto.Fail("Invalid credentials");
- 
+        }
+
         var result = _hasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password);
  
         if (result == PasswordVerificationResult.Failed)

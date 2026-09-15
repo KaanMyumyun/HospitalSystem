@@ -24,7 +24,7 @@ public class DepartmentCreationService : IDepartmentCreationService
         if (exists)
             return DepartmentActionResultDto.Fail("Department already exists");
  
-        _context.Departments.Add(new DepartmentEntity { Department = dto.Name });
+        _context.Departments.Add(new DepartmentEntity { Department = dto.Name, IsActive = true });
         await _context.SaveChangesAsync();
  
         return DepartmentActionResultDto.Success();
