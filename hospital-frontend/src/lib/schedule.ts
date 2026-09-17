@@ -50,7 +50,7 @@ export function buildWeekSlots(
   return times.map((time) =>
     days.map((day) => {
       const slotDate = dateAtTime(day, time)
-      const appointment = appointments.find((item) => {
+      const matching = appointments.filter((item) => {
         const appointmentDate = new Date(item.appointmentTime)
         return (
           item.doctorId === doctorId &&
@@ -62,9 +62,16 @@ export function buildWeekSlots(
         )
       })
 
-      if (appointment?.status === 'Cancelled') return { day, time, status: 'cancelled', appointment }
+      // A slot can hold a cancelled appointment and the booking that replaced it.
+      const appointment = matching.find((item) => item.status !== 'Cancelled')
       if (appointment) return { day, time, status: 'booked', appointment }
-      if (slotDate.getTime() < Date.now()) return { day, time, status: 'past' }
+
+      // Cancelling frees the slot. Past slots keep showing the cancellation,
+      // since they cannot be booked anyway.
+      if (slotDate.getTime() < Date.now()) {
+        const cancelled = matching[0]
+        return cancelled ? { day, time, status: 'cancelled', appointment: cancelled } : { day, time, status: 'past' }
+      }
       return { day, time, status: 'available' }
     }),
   )
@@ -80,4 +87,19 @@ export function getNextAvailableSlot(slots: Slot[][]) {
 export function coverageForDepartment(schedules: ScheduleDto[], doctors: DoctorDto[]) {
   const schedule = schedules.find((item) => doctors.some((doctor) => doctor.doctorId === item.doctorId))
   return schedule ? formatHourRange(schedule) : 'Unassigned'
+}
+
+export function canCancelAppointment(appointment: AppointmentDto, now = Date.now()) {
+  return appointment.status === 'Scheduled' && new Date(appointment.appointmentTime).getTime() > now
+}
+
+export function isInWeek(value: Date, weekOffset = 0) {
+  const days = weekDays(weekOffset)
+  const first = days[0]
+  const last = days[days.length - 1]
+  if (!first || !last) return false
+
+  const end = new Date(last)
+  end.setDate(last.getDate() + 1)
+  return value >= first && value < end
 }

@@ -1,4 +1,3 @@
-import { SlidersHorizontal } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { AppointmentDto, CreateAppointmentInput, DepartmentDto, DoctorDto, ScheduleDto } from '../api'
 import { EmptyState, Metric, Modal, StatusBadge } from '../components/ui'
@@ -12,9 +11,9 @@ import {
   isSameDay,
   slotLabel,
 } from '../lib/format'
-import { buildWeekSlots, dateAtTime, getNextAvailableSlot, weekDays } from '../lib/schedule'
-import { parseDateInput, toDateInputValue, validateAppointmentInput } from '../lib/validation'
-import type { Slot } from '../types'
+import { buildWeekSlots, canCancelAppointment, dateAtTime, getNextAvailableSlot, isInWeek, weekDays } from '../lib/schedule'
+import { toDateInputValue, validateAppointmentInput } from '../lib/validation'
+import type { ActionOutcome, Slot } from '../types'
 
 export function ReceptionDashboard({
   appointments,
@@ -39,17 +38,20 @@ export function ReceptionDashboard({
   selectedDoctorId: number | null
   searchQuery: string
   isReadOnly: boolean
-  onCancelAppointment: (appointmentId: number, reason: string) => Promise<void>
-  onCreateAppointment: (input: CreateAppointmentInput) => Promise<void>
+  onCancelAppointment: (appointmentId: number, reason: string) => Promise<ActionOutcome>
+  onCreateAppointment: (input: CreateAppointmentInput) => Promise<ActionOutcome>
   onSelectDoctor: (doctorId: number) => void
 }) {
   const [weekOffset, setWeekOffset] = useState(0)
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
-  const [selectedAppointment, setSelectedAppointment] = useState<AppointmentDto | null>(null)
+  // Selecting a booked slot shows its details; cancelling is a separate step.
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<number | null>(null)
+  const [cancellingAppointmentId, setCancellingAppointmentId] = useState<number | null>(null)
   const [patientName, setPatientName] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
   const [cancelReason, setCancelReason] = useState('')
+  const [cancelError, setCancelError] = useState<string | null>(null)
   const [bookingError, setBookingError] = useState<string | null>(null)
   const [departmentFilter, setDepartmentFilter] = useState<number | 'all'>('all')
   const activeDepartments = useMemo(() => departments.filter((department) => department.isActive), [departments])
@@ -83,11 +85,18 @@ export function ReceptionDashboard({
     [appointments, selectedDoctor?.doctorId, selectedSchedule, weekOffset],
   )
   const nextAvailableSlot = useMemo(() => getNextAvailableSlot(slots), [slots])
-  const visibleAppointment = selectedAppointment ?? slots.flat().find((slot) => slot.appointment)?.appointment ?? null
+  const visibleAppointment = appointments.find((appointment) => appointment.appointmentId === selectedAppointmentId) ?? null
+  const cancellingAppointment =
+    appointments.find((appointment) => appointment.appointmentId === cancellingAppointmentId) ?? null
   const counts = {
     booked: slots.flat().filter((slot) => slot.status === 'booked').length,
     available: slots.flat().filter((slot) => slot.status === 'available').length,
-    cancelled: appointments.filter((appointment) => appointment.status === 'Cancelled').length,
+    cancelled: appointments.filter(
+      (appointment) =>
+        appointment.doctorId === selectedDoctor?.doctorId &&
+        appointment.status === 'Cancelled' &&
+        isInWeek(new Date(appointment.appointmentTime), weekOffset),
+    ).length,
   }
   const closeBooking = () => {
     setSelectedSlot(null)
@@ -97,8 +106,9 @@ export function ReceptionDashboard({
     setBookingError(null)
   }
   const closeCancellation = () => {
-    setSelectedAppointment(null)
+    setCancellingAppointmentId(null)
     setCancelReason('')
+    setCancelError(null)
   }
   const submitBooking = async () => {
     if (!selectedSlot || !selectedDoctor) return
@@ -109,18 +119,27 @@ export function ReceptionDashboard({
       return
     }
 
-    await onCreateAppointment({
+    const outcome = await onCreateAppointment({
       DoctorId: selectedDoctor.doctorId,
       PatientName: patientName.trim(),
       PhoneNumber: phoneNumber.trim(),
-      DateOfBirth: parseDateInput(dateOfBirth).toISOString(),
+      DateOfBirth: dateOfBirth,
       AppointmentTime: appointmentTime.toISOString(),
     })
+    // Keep the dialog and what was typed if the booking failed.
+    if (!outcome.ok) {
+      if (outcome.error) setBookingError(outcome.error)
+      return
+    }
     closeBooking()
   }
   const submitCancellation = async () => {
-    if (!selectedAppointment) return
-    await onCancelAppointment(selectedAppointment.appointmentId, cancelReason)
+    if (!cancellingAppointment) return
+    const outcome = await onCancelAppointment(cancellingAppointment.appointmentId, cancelReason)
+    if (!outcome.ok) {
+      if (outcome.error) setCancelError(outcome.error)
+      return
+    }
     closeCancellation()
   }
 
@@ -132,9 +151,6 @@ export function ReceptionDashboard({
             <p className="eyebrow">Filters</p>
             <h2>Doctors</h2>
           </div>
-          <button className="icon-button" type="button" aria-label="Doctor filter">
-            <SlidersHorizontal size={16} />
-          </button>
         </div>
 
         <div className="section-label">Departments</div>
@@ -233,7 +249,7 @@ export function ReceptionDashboard({
                     disabled={slot.status === 'empty' || slot.status === 'past'}
                     onClick={() => {
                       if (slot.appointment) {
-                        setSelectedAppointment(slot.appointment)
+                        setSelectedAppointmentId(slot.appointment.appointmentId)
                         return
                       }
                       if (slot.status === 'available') setSelectedSlot(slot)
@@ -242,9 +258,10 @@ export function ReceptionDashboard({
                     key={`${slot.day.toISOString()}-${slot.time}`}
                   >
                     <span>{slot.time}</span>
+                    {/* Initials only: the grid is visible to anyone near the desk. */}
                     <small>
-                      {slot.appointment
-                        ? `${slot.appointment.patientName}${slot.appointment.patientPhoneNumber ? ` · ${slot.appointment.patientPhoneNumber}` : ''}`
+                      {slot.status === 'booked' && slot.appointment
+                        ? initials(slot.appointment.patientName)
                         : slotLabel(slot.status)}
                     </small>
                   </button>
@@ -279,7 +296,7 @@ export function ReceptionDashboard({
             <dl className="detail-list">
               <div>
                 <dt>Doctor</dt>
-                <dd>{selectedDoctor?.name ?? visibleAppointment.doctorName}</dd>
+                <dd>{visibleAppointment.doctorName || selectedDoctor?.name}</dd>
               </div>
               <div>
                 <dt>Date</dt>
@@ -315,11 +332,11 @@ export function ReceptionDashboard({
           </button>
           <button
             className="secondary-button danger"
-            disabled={!visibleAppointment || visibleAppointment.status === 'Cancelled' || isReadOnly}
+            disabled={!visibleAppointment || !canCancelAppointment(visibleAppointment) || isReadOnly}
             title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
             type="button"
             onClick={() => {
-              if (visibleAppointment) setSelectedAppointment(visibleAppointment)
+              if (visibleAppointment) setCancellingAppointmentId(visibleAppointment.appointmentId)
             }}
           >
             Cancel Appointment
@@ -339,7 +356,7 @@ export function ReceptionDashboard({
             <label>
               Patient Name
               <input
-                maxLength={80}
+                maxLength={50}
                 value={patientName}
                 onChange={(event) => {
                   setBookingError(null)
@@ -351,7 +368,7 @@ export function ReceptionDashboard({
               Phone Number
               <input
                 inputMode="tel"
-                maxLength={24}
+                maxLength={20}
                 pattern="^\+?[0-9\s().-]+$"
                 value={phoneNumber}
                 onChange={(event) => {
@@ -380,7 +397,7 @@ export function ReceptionDashboard({
             </button>
             <button
               className="primary-button"
-              disabled={!patientName || !phoneNumber || !dateOfBirth || isReadOnly}
+              disabled={!patientName || !phoneNumber || !dateOfBirth || isReadOnly || loading}
               title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
               type="button"
               onClick={() => void submitBooking()}
@@ -391,25 +408,33 @@ export function ReceptionDashboard({
         </Modal>
       )}
 
-      {selectedAppointment && (
+      {cancellingAppointment && (
         <Modal title="Cancel appointment" tone="danger" onClose={closeCancellation}>
           <div className="summary-box danger">
-            <strong>{selectedAppointment.patientName}</strong>
-            <span>{formatLongDate(new Date(selectedAppointment.appointmentTime))}</span>
+            <strong>{cancellingAppointment.patientName}</strong>
+            <span>{formatLongDate(new Date(cancellingAppointment.appointmentTime))}</span>
           </div>
           <div className="form-grid">
             <label>
               Cancellation Reason
-              <textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} />
+              <textarea
+                maxLength={500}
+                value={cancelReason}
+                onChange={(event) => {
+                  setCancelError(null)
+                  setCancelReason(event.target.value)
+                }}
+              />
             </label>
           </div>
+          {cancelError && <div className="form-error">{cancelError}</div>}
           <div className="modal-actions">
             <button className="secondary-button" type="button" onClick={closeCancellation}>
               Keep Appointment
             </button>
             <button
               className="secondary-button danger"
-              disabled={!cancelReason.trim() || isReadOnly}
+              disabled={!cancelReason.trim() || isReadOnly || loading}
               title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
               type="button"
               onClick={() => void submitCancellation()}

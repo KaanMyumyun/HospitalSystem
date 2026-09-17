@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import type { UserDto, UserRole } from '../../api'
 import { EmptyState, SkeletonRows } from '../../components/ui'
+import type { ActionOutcome } from '../../types'
+
+// Demo roles are never assigned from the app; accounts get them in the database.
+const assignableRoles: UserRole[] = ['Admin', 'Doctor', 'FrontDesk']
 
 export function UsersTab({
   users,
@@ -15,15 +19,14 @@ export function UsersTab({
   loading: boolean
   searchQuery: string
   isReadOnly: boolean
-  onChangeUserRole: (userId: number, role: UserRole) => Promise<void>
-  onCreateUser: (name: string, password: string) => Promise<void>
-  onResetPassword: (userId: number, password: string) => Promise<void>
+  onChangeUserRole: (userId: number, role: UserRole) => Promise<ActionOutcome>
+  onCreateUser: (name: string, password: string) => Promise<ActionOutcome>
+  onResetPassword: (userId: number, password: string) => Promise<ActionOutcome>
 }) {
   const [newUserName, setNewUserName] = useState('')
   const [newUserPassword, setNewUserPassword] = useState('')
   const [resetUserId, setResetUserId] = useState<number | null>(null)
   const [resetPasswordValue, setResetPasswordValue] = useState('')
-  const [resetPasswordError, setResetPasswordError] = useState<string | null>(null)
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
   const visibleUsers = users.filter(
@@ -40,11 +43,11 @@ export function UsersTab({
         <input type="password" placeholder="Password" value={newUserPassword} onChange={(event) => setNewUserPassword(event.target.value)} />
         <button
           className="secondary-button"
-          disabled={!newUserName.trim() || newUserPassword.length < 8 || isReadOnly}
+          disabled={!newUserName.trim() || newUserPassword.length < 8 || isReadOnly || loading}
           title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
           type="button"
-          onClick={() => {
-            void onCreateUser(newUserName, newUserPassword)
+          onClick={async () => {
+            if (!(await onCreateUser(newUserName, newUserPassword)).ok) return
             setNewUserName('')
             setNewUserPassword('')
           }}
@@ -67,12 +70,17 @@ export function UsersTab({
               <td>
                 <select
                   className="table-select"
-                  disabled={isReadOnly || user.role.startsWith('Demo')}
+                  disabled={isReadOnly || user.role.startsWith('Demo') || loading}
                   title={isReadOnly || user.role.startsWith('Demo') ? 'Demo accounts are read-only.' : undefined}
                   value={user.role}
                   onChange={(event) => void onChangeUserRole(user.userId, event.target.value as UserRole)}
                 >
-                  {['Admin', 'Doctor', 'FrontDesk', 'DemoAdmin', 'DemoFrontDesk'].map((role) => (
+                  {!assignableRoles.includes(user.role) && (
+                    <option disabled value={user.role}>
+                      {user.role}
+                    </option>
+                  )}
+                  {assignableRoles.map((role) => (
                     <option key={role}>{role}</option>
                   ))}
                 </select>
@@ -85,25 +93,17 @@ export function UsersTab({
                         minLength={8}
                         type="password"
                         value={resetPasswordValue}
-                        onChange={(event) => {
-                          setResetPasswordError(null)
-                          setResetPasswordValue(event.target.value)
-                        }}
+                        onChange={(event) => setResetPasswordValue(event.target.value)}
                       />
                       <button
                         className="secondary-button compact-action"
-                        disabled={resetPasswordValue.length < 8 || isReadOnly || user.role.startsWith('Demo')}
+                        disabled={resetPasswordValue.length < 8 || isReadOnly || user.role.startsWith('Demo') || loading}
                         title={isReadOnly || user.role.startsWith('Demo') ? 'Demo accounts are read-only.' : undefined}
                         type="button"
-                        onClick={() => {
-                          if (resetPasswordValue.length < 8) {
-                            setResetPasswordError('Password must be at least 8 characters long')
-                            return
-                          }
-                          void onResetPassword(user.userId, resetPasswordValue)
+                        onClick={async () => {
+                          if (!(await onResetPassword(user.userId, resetPasswordValue)).ok) return
                           setResetUserId(null)
                           setResetPasswordValue('')
-                          setResetPasswordError(null)
                         }}
                       >
                         Save
@@ -119,10 +119,7 @@ export function UsersTab({
                     disabled={isReadOnly || user.role.startsWith('Demo')}
                     title={isReadOnly || user.role.startsWith('Demo') ? 'Demo accounts are read-only.' : undefined}
                     type="button"
-                    onClick={() => {
-                      setResetPasswordError(null)
-                      setResetUserId(user.userId)
-                    }}
+                    onClick={() => setResetUserId(user.userId)}
                   >
                     Reset
                   </button>
@@ -133,8 +130,9 @@ export function UsersTab({
         </tbody>
       </table>
       {loading && <SkeletonRows count={6} />}
-      {!loading && visibleUsers.length === 0 && <EmptyState text="No users found." />}
-      {resetPasswordError && <div className="form-error inline-error">{resetPasswordError}</div>}
+      {!loading && visibleUsers.length === 0 && (
+        <EmptyState text={isReadOnly ? 'User accounts are hidden from demo accounts.' : 'No users found.'} />
+      )}
     </>
   )
 }

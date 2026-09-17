@@ -1,6 +1,7 @@
 import type { DepartmentDto, DoctorDto } from '../../api'
 import { EmptyState, SkeletonRows, StatusBadge } from '../../components/ui'
 import { departmentName } from '../../lib/format'
+import type { ActionOutcome } from '../../types'
 
 export function DoctorsTab({
   departments,
@@ -16,8 +17,8 @@ export function DoctorsTab({
   loading: boolean
   searchQuery: string
   isReadOnly: boolean
-  onAssignDoctor: (doctorId: number, departmentId: number) => Promise<void>
-  onChangeDoctorStatus: (doctor: DoctorDto, isActive: boolean) => Promise<void>
+  onAssignDoctor: (doctorId: number, departmentId: number) => Promise<ActionOutcome>
+  onChangeDoctorStatus: (doctor: DoctorDto, isActive: boolean) => Promise<ActionOutcome>
 }) {
   const normalizedSearch = searchQuery.trim().toLowerCase()
   const visibleDoctors = doctors.filter(
@@ -46,20 +47,26 @@ export function DoctorsTab({
               <td>
                 <select
                   className="table-select"
-                  disabled={isReadOnly}
+                  disabled={isReadOnly || loading}
                   title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
                   value={doctor.departmentId}
                   onChange={(event) => void onAssignDoctor(doctor.doctorId, Number(event.target.value))}
                 >
-                  {departments.map((department) => (
-                    <option key={department.id} value={department.id}>{department.name}</option>
-                  ))}
+                  {/* Doctors can only be moved into active departments; an inactive
+                      current department is still listed so the select shows it. */}
+                  {departments
+                    .filter((department) => department.isActive || department.id === doctor.departmentId)
+                    .map((department) => (
+                      <option disabled={!department.isActive} key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
                 </select>
               </td>
               <td>
                 <button
                   className="secondary-button compact-action"
-                  disabled={isReadOnly}
+                  disabled={isReadOnly || loading}
                   title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
                   type="button"
                   onClick={() => void onChangeDoctorStatus(doctor, !doctor.isActive)}

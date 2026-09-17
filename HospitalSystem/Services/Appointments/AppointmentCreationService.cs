@@ -46,6 +46,12 @@ public class AppointmentCreationService : IAppointmentCreationService
         if (await HasOverlapAsync(dto.DoctorId, appointmentTime))
             return CreateAppointmentResultDto.Fail("Doctor already booked for that time slot");
  
+        // The patient, the appointment and the audit row are saved one after
+        // another because each needs an id from the save before. One
+        // transaction keeps them all-or-nothing, so a failed booking leaves no
+        // patient row or unaudited appointment behind.
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+
         var patientId = await _patientService.GetOrCreatePatientAsync(
             dto.PatientName, dto.PhoneNumber, dto.DateOfBirth);
  
@@ -78,6 +84,7 @@ public class AppointmentCreationService : IAppointmentCreationService
 
         await _auditLog.LogAsync("CreateAppointment", "Appointment", appointment.Id, $"Created appointment for doctor {dto.DoctorId}");
         await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
 
         return CreateAppointmentResultDto.Success();
     }
@@ -100,8 +107,7 @@ public class AppointmentCreationService : IAppointmentCreationService
         if (dto.DateOfBirth == default)
             return "Date of birth is required";
 
-        var dateOfBirth = DateTime.SpecifyKind(dto.DateOfBirth, DateTimeKind.Utc).Date;
-        if (dateOfBirth > appointmentTime.Date)
+        if (dto.DateOfBirth > DateOnly.FromDateTime(appointmentTime))
             return "Date of birth cannot be after the appointment date";
 
         return null;

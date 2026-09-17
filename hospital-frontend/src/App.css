@@ -345,7 +345,6 @@ h2 {
   font-size: 14px;
 }
 
-.user-menu,
 .icon-button,
 .icon-text-button,
 .secondary-button,
@@ -361,12 +360,18 @@ h2 {
   cursor: pointer;
 }
 
-.user-menu {
+.user-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   height: 40px;
   padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
 }
 
 .avatar {
@@ -900,8 +905,7 @@ textarea {
 }
 
 .secondary-button:hover,
-.icon-button:hover,
-.user-menu:hover {
+.icon-button:hover {
   border-color: var(--slate-300);
   background: var(--slate-50);
 }

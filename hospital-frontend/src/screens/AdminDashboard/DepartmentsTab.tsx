@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { DepartmentDto, DoctorDto, ScheduleDto } from '../../api'
 import { EmptyState, SkeletonRows, StatusBadge } from '../../components/ui'
 import { coverageForDepartment } from '../../lib/schedule'
+import type { ActionOutcome } from '../../types'
 
 export function DepartmentsTab({
   departments,
@@ -23,8 +24,8 @@ export function DepartmentsTab({
   searchQuery: string
   selectedDepartmentId: number | null
   isReadOnly: boolean
-  onChangeDepartmentStatus: (departmentId: number, isActive: boolean) => Promise<void>
-  onCreateDepartment: (name: string) => Promise<void>
+  onChangeDepartmentStatus: (departmentId: number, isActive: boolean) => Promise<ActionOutcome>
+  onCreateDepartment: (name: string) => Promise<ActionOutcome>
   onSelectDepartment: (departmentId: number) => void
 }) {
   const [departmentNameInput, setDepartmentNameInput] = useState('')
@@ -48,12 +49,11 @@ export function DepartmentsTab({
           />
           <button
             className="secondary-button"
-            disabled={!departmentNameInput.trim() || isReadOnly}
+            disabled={!departmentNameInput.trim() || isReadOnly || loading}
             title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
             type="button"
-            onClick={() => {
-              void onCreateDepartment(departmentNameInput)
-              setDepartmentNameInput('')
+            onClick={async () => {
+              if ((await onCreateDepartment(departmentNameInput)).ok) setDepartmentNameInput('')
             }}
           >
             Add Department
@@ -93,7 +93,7 @@ export function DepartmentsTab({
                 <td>
                   <button
                     className="secondary-button compact-action"
-                    disabled={isReadOnly}
+                    disabled={isReadOnly || loading}
                     title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
                     type="button"
                     onClick={(event) => {

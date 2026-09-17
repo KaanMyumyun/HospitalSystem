@@ -12,6 +12,7 @@
     using Microsoft.EntityFrameworkCore;
     using Microsoft.IdentityModel.Tokens;
     using Microsoft.OpenApi.Models;
+    using Npgsql;
     using Prometheus;
     using HospitalSystem.Services.Appointments;
     using HospitalSystem.Services.Auth;
@@ -114,6 +115,8 @@ var builder = WebApplication.CreateBuilder(args);
 
     builder.Services.Configure<JwtSettings>(
         builder.Configuration.GetSection("JwtSettings"));
+    builder.Services.Configure<DemoSettings>(
+        builder.Configuration.GetSection("Demo"));
 
     var jwtSecret = builder.Configuration["JwtSettings:SecretKey"]
         ?? throw new Exception("JWT SecretKey is not configured");
@@ -244,9 +247,28 @@ var builder = WebApplication.CreateBuilder(args);
         errorApp.Run(async context =>
         {
             var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+
+            // Two requests creating the same thing at the same moment can both
+            // pass a service's "already exists" check; a unique index then
+            // rejects the second. The client should retry, so answer 409.
+            if (exception is DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } })
+            {
+                logger.LogWarning(exception,
+                    "Unique constraint violation processing {Method} {Path}",
+                    context.Request.Method, context.Request.Path);
+
+                context.Response.StatusCode = StatusCodes.Status409Conflict;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    error = "This conflicts with a change made at the same time. Refresh and try again."
+                });
+                return;
+            }
+
             if (exception is not null)
             {
-                var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
                 logger.LogError(exception,
                     "Unhandled exception processing {Method} {Path}",
                     context.Request.Method, context.Request.Path);
@@ -268,7 +290,7 @@ var builder = WebApplication.CreateBuilder(args);
     app.UseAuthentication();
     app.UseAuthorization();
 
-    app.MapMetrics().RequireAuthorization();
+    app.MapMetrics().RequireAuthorization(policy => policy.RequireRole(nameof(UserRole.Admin)));
     app.MapHealthChecks("/health").AllowAnonymous();
     app.MapControllers();
     app.MapFallback(context =>

@@ -15,7 +15,7 @@ public class UserQueryController : ControllerBase
         _userQueryService = userQueryService;
     }
  
-    [Authorize(Roles = "FrontDesk,Admin,DemoAdmin,DemoFrontDesk")]
+    [Authorize(Roles = "FrontDesk,Admin")]
     [HttpGet("ListUsers")]
     public async Task<IActionResult> ListUsers()
     {

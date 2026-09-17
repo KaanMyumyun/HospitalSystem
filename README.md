@@ -374,6 +374,31 @@ docker compose exec postgres psql -U hospitaluser -d HospitalSystemDb \
 Log in as `admin` with that password. New users created from the app start as
 `Pending` until an admin assigns them a role.
 
+### 6. Demo accounts (optional)
+
+The **Demo Admin** and **Demo Reception** buttons on the sign-in page call
+`POST /api/Auth/demo-login`, which signs in a read-only demo account without a
+password. Demo login is off by default. Turn it on only for a deployment whose
+data is fake:
+
+```bash
+Demo__Enabled=true
+```
+
+It signs in the accounts named by `Demo:AdminUserName` (default `DemoAdmin`)
+and `Demo:FrontDeskUserName` (default `DemoReception`), and only while they
+still have the `DemoAdmin` and `DemoFrontDesk` roles. Demo accounts cannot sign
+in with a password, and demo roles cannot be assigned from the app. To create a
+demo account, create the user in the app, then set its role in the database:
+
+```bash
+docker compose exec postgres psql -U hospitaluser -d HospitalSystemDb \
+  -c "UPDATE \"Users\" SET \"Role\" = 'DemoAdmin', \"SecurityStamp\" = gen_random_uuid()::text WHERE \"Name\" = 'DemoAdmin';"
+```
+
+Demo accounts can view departments, doctors and schedules, and Demo Reception
+can view appointments. Neither can view the list of user accounts.
+
 ---
 
 ## Frontend Setup
@@ -410,6 +435,7 @@ It calls the API at `http://localhost:5272/api` unless `VITE_API_URL` is set.
 | -----: | -------------------- | -------------------------------- |
 |   POST | /api/Auth/CreateUser | Create a user (Admin only)       |
 |   POST | /api/Auth/login      | Authenticate and return JWT      |
+|   POST | /api/Auth/demo-login | Sign in a demo account, if enabled |
 
 ### Users
 

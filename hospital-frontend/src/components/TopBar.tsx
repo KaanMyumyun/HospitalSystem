@@ -1,4 +1,4 @@
-import { ChevronDown, RefreshCw, Search } from 'lucide-react'
+import { LogOut, RefreshCw, Search } from 'lucide-react'
 import type { UserRole } from '../api'
 
 export function TopBar({
@@ -38,10 +38,13 @@ export function TopBar({
           <RefreshCw size={16} />
           Refresh
         </button>
-        <button className="user-menu" type="button" onClick={onLogout}>
+        <span className="user-badge">
           <span className="avatar">{userRole.slice(0, 2).toUpperCase()}</span>
           <span>{userRole}</span>
-          <ChevronDown size={16} />
+        </span>
+        <button className="icon-text-button" type="button" onClick={onLogout}>
+          <LogOut size={16} />
+          Sign out
         </button>
       </div>
     </header>
