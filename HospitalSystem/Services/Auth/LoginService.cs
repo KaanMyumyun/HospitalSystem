@@ -13,6 +13,7 @@ public class LoginService : ILoginService
 {
     private readonly ApplicationDbContext _context;
     private readonly JwtSettings _jwtSettings;
+    private readonly DemoSettings _demoSettings;
     private readonly PasswordHasher<UserEntity> _hasher;
 
     // A fixed, valid-format hash to verify against when the user doesn't exist,
@@ -21,10 +22,11 @@ public class LoginService : ILoginService
     private static readonly string DummyPasswordHash =
         new PasswordHasher<UserEntity>().HashPassword(new UserEntity(), Guid.NewGuid().ToString());
 
-    public LoginService(ApplicationDbContext context, IOptions<JwtSettings> jwtOptions)
+    public LoginService(ApplicationDbContext context, IOptions<JwtSettings> jwtOptions, IOptions<DemoSettings> demoOptions)
     {
         _context = context;
         _jwtSettings = jwtOptions.Value;
+        _demoSettings = demoOptions.Value;
         _hasher = new PasswordHasher<UserEntity>();
     }
 
@@ -45,7 +47,12 @@ public class LoginService : ILoginService
  
         if (result == PasswordVerificationResult.Failed)
             return LoginResultDto.Fail("Invalid credentials");
- 
+
+        // Demo accounts sign in only through DemoLoginAsync, so turning
+        // Demo:Enabled off shuts them out completely.
+        if (user.Role is UserRole.DemoAdmin or UserRole.DemoFrontDesk)
+            return LoginResultDto.Fail("Invalid credentials");
+
         var token = GenerateToken(user);
 
         return LoginResultDto.Success(token, user.Role.ToString());
@@ -53,10 +60,22 @@ public class LoginService : ILoginService
 
     public async Task<LoginResultDto> DemoLoginAsync(UserRole role)
     {
-        if (role != UserRole.DemoAdmin && role != UserRole.DemoFrontDesk)
+        if (!_demoSettings.Enabled)
+            return LoginResultDto.Fail("Demo login is not available");
+
+        var userName = role switch
+        {
+            UserRole.DemoAdmin => _demoSettings.AdminUserName,
+            UserRole.DemoFrontDesk => _demoSettings.FrontDeskUserName,
+            _ => null
+        };
+
+        if (string.IsNullOrWhiteSpace(userName))
             return LoginResultDto.Fail("Invalid credentials");
 
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Role == role);
+        // Match the role too: if the configured account has been given a real
+        // role, it must not be reachable without a password.
+        var user = await _context.Users.SingleOrDefaultAsync(u => u.Name == userName && u.Role == role);
 
         if (user == null)
             return LoginResultDto.Fail("Invalid credentials");

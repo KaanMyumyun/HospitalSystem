@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   cancelAppointment,
   changeDepartmentStatus,
@@ -24,7 +24,7 @@ import { AdminDashboard } from './screens/AdminDashboard'
 import { LoginScreen } from './screens/LoginScreen'
 import { NotFoundScreen } from './screens/NotFoundScreen'
 import { ReceptionDashboard } from './screens/ReceptionDashboard'
-import type { ActivityEntry, HospitalData, Screen, Session } from './types'
+import type { ActionOutcome, ActivityEntry, HospitalData, Screen, Session } from './types'
 
 const emptyData: HospitalData = {
   departments: [],
@@ -75,12 +75,19 @@ function App() {
     }
   }, [session])
 
-  const runAction = async (action: () => Promise<unknown>, successMessage: string) => {
+  const actionInFlight = useRef(false)
+
+  const runAction = async (action: () => Promise<unknown>, successMessage: string): Promise<ActionOutcome> => {
     if (session?.role.startsWith('Demo')) {
-      setError('Not allowed to do that. Demo accounts are read-only.')
+      const message = 'Not allowed to do that. Demo accounts are read-only.'
+      setError(message)
       setNotice(null)
-      return
+      return { ok: false, error: message }
     }
+
+    // A second click before the first request finishes must not send it again.
+    if (actionInFlight.current) return { ok: false }
+    actionInFlight.current = true
 
     setLoading(true)
     setError(null)
@@ -89,17 +96,23 @@ function App() {
       await action()
       await refresh()
       setNotice(successMessage)
-      setActivity((current) => {
-        const next = [{ id: crypto.randomUUID(), message: successMessage, at: new Date().toISOString() }, ...current].slice(0, 8)
-        localStorage.setItem(activityStorageKey, JSON.stringify(next))
-        return next
-      })
+      setActivity((current) =>
+        [{ id: crypto.randomUUID(), message: successMessage, at: new Date().toISOString() }, ...current].slice(0, 8),
+      )
+      return { ok: true }
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'Operation failed')
+      const message = actionError instanceof Error ? actionError.message : 'Operation failed'
+      setError(message)
+      return { ok: false, error: message }
     } finally {
+      actionInFlight.current = false
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    localStorage.setItem(activityStorageKey, JSON.stringify(activity))
+  }, [activity])
 
   useEffect(() => {
     void refresh()
@@ -117,6 +130,7 @@ function App() {
   useEffect(() => {
     const handleSessionExpired = () => {
       setSession(null)
+      setActivity([])
       setData(emptyData)
       setSelectedDoctorId(null)
       setSelectedDepartmentId(null)
@@ -126,14 +140,18 @@ function App() {
     return () => window.removeEventListener(sessionExpiredEvent, handleSessionExpired)
   }, [])
 
+  // Recent activity belongs to whoever was signed in; reception computers are
+  // shared, so the next user starts with an empty list.
   const handleLogin = (nextSession: Session) => {
     setSession(nextSession)
+    setActivity([])
     setScreen(nextSession.role === 'Admin' || nextSession.role === 'DemoAdmin' ? 'departments' : 'reception')
   }
 
   const handleLogout = () => {
     clearSession()
     setSession(null)
+    setActivity([])
     setData(emptyData)
     setSelectedDoctorId(null)
     setSelectedDepartmentId(null)
@@ -227,33 +245,28 @@ function App() {
             onNavigate={setScreen}
             onSelectDepartment={setSelectedDepartmentId}
             onAssignDoctor={async (doctorId, departmentId) => {
-              if (confirmAction('Assign doctor to this department?')) {
-                await runAction(() => changeDoctorDepartment(doctorId, departmentId), 'Doctor department updated')
-              }
+              if (!confirmAction('Assign doctor to this department?')) return { ok: false }
+              return runAction(() => changeDoctorDepartment(doctorId, departmentId), 'Doctor department updated')
             }}
             onChangeDepartmentStatus={async (departmentId, isActive) => {
-              if (confirmAction(`${isActive ? 'Activate' : 'Deactivate'} this department?`)) {
-                await runAction(() => changeDepartmentStatus(departmentId, isActive), 'Department status updated')
-              }
+              if (!confirmAction(`${isActive ? 'Activate' : 'Deactivate'} this department?`)) return { ok: false }
+              return runAction(() => changeDepartmentStatus(departmentId, isActive), 'Department status updated')
             }}
             onChangeDoctorStatus={async (doctor, isActive) => {
-              if (confirmAction(`${isActive ? 'Activate' : 'Deactivate'} ${doctor.name}?`)) {
-                await runAction(() => changeDoctorStatus(doctor, isActive), 'Doctor status updated')
-              }
+              if (!confirmAction(`${isActive ? 'Activate' : 'Deactivate'} ${doctor.name}?`)) return { ok: false }
+              return runAction(() => changeDoctorStatus(doctor, isActive), 'Doctor status updated')
             }}
             onChangeSchedule={(input) => runAction(() => changeSchedule(input), 'Schedule updated')}
             onChangeUserRole={async (userId, role) => {
-              if (confirmAction(`Change this user role to ${role}?`)) {
-                await runAction(() => changeUserRole(userId, role), 'User role updated')
-              }
+              if (!confirmAction(`Change this user role to ${role}?`)) return { ok: false }
+              return runAction(() => changeUserRole(userId, role), 'User role updated')
             }}
             onCreateDepartment={(name) => runAction(() => createDepartment(name), 'Department created')}
             onCreateSchedule={(input) => runAction(() => createSchedule(input), 'Schedule created')}
             onCreateUser={(name, password) => runAction(() => createUser(name, password), 'User created')}
             onResetPassword={async (userId, password) => {
-              if (confirmAction('Reset password for this user?')) {
-                await runAction(() => resetPassword(userId, password), 'Password reset')
-              }
+              if (!confirmAction('Reset password for this user?')) return { ok: false }
+              return runAction(() => resetPassword(userId, password), 'Password reset')
             }}
           />
         )}

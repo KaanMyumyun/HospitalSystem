@@ -22,3 +22,7 @@ export type Slot = {
   status: SlotStatus
   appointment?: AppointmentDto
 }
+// What a create/update action reports back to the form that started it, so the
+// form can stay open and keep its input when the action fails. error is absent
+// when nothing went wrong, for example when a confirmation was declined.
+export type ActionOutcome = { ok: true } | { ok: false; error?: string }

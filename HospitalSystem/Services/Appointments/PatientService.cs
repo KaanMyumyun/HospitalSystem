@@ -13,7 +13,7 @@ public class PatientService : IPatientService
         _context = context;
     }
  
-    public async Task<int> GetOrCreatePatientAsync(string name, string phoneNumber, DateTime dateOfBirth)
+    public async Task<int> GetOrCreatePatientAsync(string name, string phoneNumber, DateOnly dateOfBirth)
     {
         var existing = await _context.Patients
             .FirstOrDefaultAsync(p => p.PhoneNumber == phoneNumber);
@@ -25,7 +25,7 @@ public class PatientService : IPatientService
         {
             Name = name,
             PhoneNumber = phoneNumber,
-            DateOfBirth = DateTime.SpecifyKind(dateOfBirth, DateTimeKind.Utc)
+            DateOfBirth = dateOfBirth
         };
  
         _context.Patients.Add(patient);

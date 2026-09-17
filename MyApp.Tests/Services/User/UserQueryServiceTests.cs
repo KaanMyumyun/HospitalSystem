@@ -1,3 +1,5 @@
+using Moq;
+using HospitalSystem.Interfaces;
 using Xunit;
 using HospitalSystem.Services;
 using HospitalSystem.Services.User;
@@ -86,5 +88,21 @@ public class UserQueryServiceTests : UserTestBase
         var result = await service.ListDoctorsAsync();
  
         Assert.True(result.IsSuccess);
+    }
+
+    [Theory]
+    [InlineData(UserRole.DemoAdmin)]
+    [InlineData(UserRole.DemoFrontDesk)]
+    public async Task ListUsersAsync_DemoRole_Fails(UserRole demoRole)
+    {
+        var db = CreateDbContext();
+        var currentUser = new Mock<ICurrentUserService>();
+        currentUser.Setup(x => x.IsInRole(demoRole)).Returns(true);
+        var service = new UserQueryService(db, currentUser.Object);
+
+        var result = await service.ListUsersAsync();
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Not allowed to list users", result.Error);
     }
 }

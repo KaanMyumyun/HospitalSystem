@@ -20,7 +20,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         var service = CreateService(db);
  
         var time = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc);
-        var dob = new DateTime(2000, 1, 2, 0, 0, 0, DateTimeKind.Utc);
+        var dob = new DateOnly(2000, 1, 2);
  
         var dto = new CreateAppointmentDto
         {
@@ -64,7 +64,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DoctorId = 1,
             PatientName = "Patient One",
             PhoneNumber = "555-0001",
-            DateOfBirth = DateTime.UtcNow.AddYears(-30),
+            DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-30)),
             AppointmentTime = time
         };
  
@@ -88,7 +88,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DoctorId = 1,
             PatientName = "Ball",
             PhoneNumber = "235235",
-            DateOfBirth = DateTime.UtcNow,
+            DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow),
             AppointmentTime = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)
         };
  
@@ -109,7 +109,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DoctorId = 9999,
             PatientName = "Anyone",
             PhoneNumber = "000",
-            DateOfBirth = DateTime.UtcNow,
+            DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow),
             AppointmentTime = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)
         };
  
@@ -132,7 +132,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DoctorId = 1,
             PatientName = "New Patient",
             PhoneNumber = "123-4567",
-            DateOfBirth = DateTime.UtcNow.AddYears(-20),
+            DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-20)),
             AppointmentTime = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc)
         };
  
@@ -160,7 +160,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DoctorId = 1,
             PatientName = "Racing Patient",
             PhoneNumber = "555-1100",
-            DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            DateOfBirth = new DateOnly(1990, 1, 1),
             AppointmentTime = new DateTime(2026, 1, 1, 11, 0, 0, DateTimeKind.Utc)
         };
 
@@ -187,7 +187,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DoctorId = 1,
             PatientName = "Racing Patient",
             PhoneNumber = "555-1100",
-            DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            DateOfBirth = new DateOnly(1990, 1, 1),
             AppointmentTime = new DateTime(2026, 1, 1, 11, 0, 0, DateTimeKind.Utc)
         };
 
@@ -203,6 +203,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         public FailingAppointmentInsertDbContext()
             : base(new DbContextOptionsBuilder<ApplicationDbContext>()
                 .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
                 .Options)
         {
         }
@@ -232,7 +233,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DoctorId = 1,
             PatientName = "New Patient",
             PhoneNumber = phoneNumber,
-            DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            DateOfBirth = new DateOnly(1990, 1, 1),
             AppointmentTime = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)
         };
 
@@ -254,7 +255,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DoctorId = 1,
             PatientName = "",
             PhoneNumber = "555-7777",
-            DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            DateOfBirth = new DateOnly(1990, 1, 1),
             AppointmentTime = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)
         };
 
@@ -276,7 +277,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DoctorId = 1,
             PatientName = "New Patient",
             PhoneNumber = "555-7777",
-            DateOfBirth = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc),
+            DateOfBirth = new DateOnly(2026, 1, 3),
             AppointmentTime = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)
         };
 
@@ -300,7 +301,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DoctorId = 1,
             PatientName = "Adjacent Patient",
             PhoneNumber = $"555-{hour:D2}{minute:D2}",
-            DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            DateOfBirth = new DateOnly(1990, 1, 1),
             AppointmentTime = new DateTime(2026, 1, 1, hour, minute, 0, DateTimeKind.Utc)
         };
 

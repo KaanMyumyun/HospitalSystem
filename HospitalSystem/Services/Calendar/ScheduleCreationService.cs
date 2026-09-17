@@ -44,6 +44,10 @@ public class ScheduleCreationService : IScheduleCreationService
         if (exist)
             return CalendarActionResult.Fail("Schedule already exists for this time range");
 
+        // Saved twice because the audit row needs the new id; one transaction
+        // keeps the two saves all-or-nothing.
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+
         var calendar = new CalendarEntity
         {
             DoctorId = dto.DoctorId,
@@ -56,6 +60,7 @@ public class ScheduleCreationService : IScheduleCreationService
 
         await _auditLog.LogAsync("CreateSchedule", "Calendar", calendar.Id, $"Created schedule for doctor {dto.DoctorId}");
         await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
 
         return CalendarActionResult.Success();
     }

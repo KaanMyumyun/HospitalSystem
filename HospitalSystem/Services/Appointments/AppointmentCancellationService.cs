@@ -40,6 +40,14 @@ public class AppointmentCancellationService : IAppointmentCancellationService
  
         if (appointment.Status == AppointmentStatus.Cancelled)
             return CancelAppointmentResultDto.Fail("Appointment already canceled");
+
+        // A completed, no-show or past appointment is a record of what
+        // happened; cancelling it would overwrite that.
+        if (appointment.Status != AppointmentStatus.Scheduled)
+            return CancelAppointmentResultDto.Fail("Only scheduled appointments can be cancelled");
+
+        if (appointment.TimeOfAppointment <= DateTime.UtcNow)
+            return CancelAppointmentResultDto.Fail("Past appointments cannot be cancelled");
  
         appointment.Status = AppointmentStatus.Cancelled;
         appointment.CancellationReason = dto.Reason;

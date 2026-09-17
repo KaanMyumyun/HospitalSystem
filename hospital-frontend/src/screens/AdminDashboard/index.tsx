@@ -9,7 +9,7 @@ import type {
 } from '../../api'
 import { EmptyState, Metric, PageHint, StatusBadge } from '../../components/ui'
 import { adminTitle, formatTime, initials } from '../../lib/format'
-import type { ActivityEntry, AdminSection, Screen } from '../../types'
+import type { ActionOutcome, ActivityEntry, AdminSection, Screen } from '../../types'
 import { DepartmentsTab } from './DepartmentsTab'
 import { DoctorsTab } from './DoctorsTab'
 import { SchedulesTab } from './SchedulesTab'
@@ -50,21 +50,24 @@ export function AdminDashboard({
   isReadOnly: boolean
   activity: ActivityEntry[]
   users: UserDto[]
-  onAssignDoctor: (doctorId: number, departmentId: number) => Promise<void>
-  onChangeDepartmentStatus: (departmentId: number, isActive: boolean) => Promise<void>
-  onChangeDoctorStatus: (doctor: DoctorDto, isActive: boolean) => Promise<void>
-  onChangeSchedule: (input: ChangeScheduleInput) => Promise<void>
-  onChangeUserRole: (userId: number, role: UserRole) => Promise<void>
-  onCreateDepartment: (name: string) => Promise<void>
-  onCreateSchedule: (input: CreateScheduleInput) => Promise<void>
-  onCreateUser: (name: string, password: string) => Promise<void>
+  onAssignDoctor: (doctorId: number, departmentId: number) => Promise<ActionOutcome>
+  onChangeDepartmentStatus: (departmentId: number, isActive: boolean) => Promise<ActionOutcome>
+  onChangeDoctorStatus: (doctor: DoctorDto, isActive: boolean) => Promise<ActionOutcome>
+  onChangeSchedule: (input: ChangeScheduleInput) => Promise<ActionOutcome>
+  onChangeUserRole: (userId: number, role: UserRole) => Promise<ActionOutcome>
+  onCreateDepartment: (name: string) => Promise<ActionOutcome>
+  onCreateSchedule: (input: CreateScheduleInput) => Promise<ActionOutcome>
+  onCreateUser: (name: string, password: string) => Promise<ActionOutcome>
   onNavigate: (screen: Screen) => void
-  onResetPassword: (userId: number, password: string) => Promise<void>
+  onResetPassword: (userId: number, password: string) => Promise<ActionOutcome>
   onSelectDepartment: (departmentId: number) => void
 }) {
   const selectedDoctors = selectedDepartment
     ? doctors.filter((doctor) => doctor.departmentId === selectedDepartment.id)
     : []
+  const selectedSchedules = schedules.filter((schedule) =>
+    selectedDoctors.some((doctor) => doctor.doctorId === schedule.doctorId),
+  )
 
   return (
     <section className="screen-grid admin-grid">
@@ -107,6 +110,7 @@ export function AdminDashboard({
         {section === 'schedules' && (
           <SchedulesTab
             schedules={schedules}
+            departments={departments}
             doctors={doctors}
             loading={loading}
             searchQuery={searchQuery}
@@ -142,8 +146,8 @@ export function AdminDashboard({
 
         <div className="inspector-stats">
           <Metric label="Doctors" value={selectedDoctors.length} tone="blue" />
-          <Metric label="Schedules" value={schedules.length} tone="green" />
-          <Metric label="Users" value={users.length} tone="blue" />
+          <Metric label="Active" value={selectedDoctors.filter((doctor) => doctor.isActive).length} tone="green" />
+          <Metric label="Schedules" value={selectedSchedules.length} tone="blue" />
         </div>
 
         <div className="section-label">Doctors</div>

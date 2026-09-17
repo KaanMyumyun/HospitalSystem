@@ -25,11 +25,30 @@ public class CreateDoctorService : ICreateDoctorService
         var user = await _context.Users.FindAsync(dto.UserId);
         if (user == null)
             return CreateDoctorResultDto.Fail("User not found");
- 
+
+        // Moving an existing admin or front-desk account to Doctor is a role
+        // change, and goes through change-role.
+        if (user.Role is not (UserRole.Pending or UserRole.Doctor))
+            return CreateDoctorResultDto.Fail("Only pending users or doctors can be made a doctor");
+
         var department = await _context.Departments.FindAsync(dto.DepartmentId);
         if (department == null)
             return CreateDoctorResultDto.Fail("Department not found");
- 
+
+        if (!department.IsActive)
+            return CreateDoctorResultDto.Fail("Department is not active");
+
+        // Saved twice because the audit row needs the new id; one transaction
+        // keeps the two saves all-or-nothing.
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+
+        if (user.Role != UserRole.Doctor)
+        {
+            var roleError = await RoleChange.ApplyAsync(_context, _currentUser, user, UserRole.Doctor);
+            if (roleError is not null)
+                return CreateDoctorResultDto.Fail(roleError);
+        }
+
         var doctor = await _context.Doctors.FirstOrDefaultAsync(d => d.UserId == dto.UserId);
  
         if (doctor == null)
@@ -48,11 +67,11 @@ public class CreateDoctorService : ICreateDoctorService
             doctor.IsActive = true;
         }
 
-        user.Role = UserRole.Doctor;
         await _context.SaveChangesAsync();
 
         await _auditLog.LogAsync("CreateDoctor", "Doctor", doctor.Id, $"User {user.Name} made a doctor in department {dto.DepartmentId}");
         await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
 
         return CreateDoctorResultDto.Success();
     }

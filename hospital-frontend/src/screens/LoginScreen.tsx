@@ -10,10 +10,10 @@ export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const submit = async (loginName = name, loginPassword = password) => {
+  const submit = async () => {
     setSubmitting(true)
     setError(null)
-    const result = await login(loginName, loginPassword)
+    const result = await login(name, password)
     setSubmitting(false)
 
     if (!result.isSuccess || !result.token || !result.role) {

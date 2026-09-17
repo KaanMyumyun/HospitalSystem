@@ -12,8 +12,8 @@ public class CreateDoctorServiceTests : UserTestBase
     public async Task CreateDoctorAsync_Admin_Succeeds()
     {
         var db = CreateDbContext();
-        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology" });
-        db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.FrontDesk });
+        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true });
+        db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.Pending });
         await db.SaveChangesAsync();
         var service = CreateService(db);
  
@@ -55,7 +55,7 @@ public class CreateDoctorServiceTests : UserTestBase
     public async Task CreateDoctorAsync_DepartmentNotFound_Fails()
     {
         var db = CreateDbContext();
-        db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.FrontDesk });
+        db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.Pending });
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
@@ -70,7 +70,7 @@ public class CreateDoctorServiceTests : UserTestBase
     {
         var db = CreateDbContext();
         await SeedDoctorAsync(db, isDoctorActive: false, userRole: UserRole.Doctor);
-        db.Departments.Add(new DepartmentEntity { Id = 2, Department = "Neurology" });
+        db.Departments.Add(new DepartmentEntity { Id = 2, Department = "Neurology", IsActive = true });
         await db.SaveChangesAsync();
         var service = CreateService(db);
  
@@ -80,5 +80,58 @@ public class CreateDoctorServiceTests : UserTestBase
         var doctor = await db.Doctors.FirstOrDefaultAsync(d => d.UserId == 1);
         Assert.True(doctor!.IsActive);
         Assert.Equal(2, doctor.DepartmentId);
+    }
+
+    [Theory]
+    [InlineData(UserRole.Admin)]
+    [InlineData(UserRole.FrontDesk)]
+    [InlineData(UserRole.DemoAdmin)]
+    [InlineData(UserRole.DemoFrontDesk)]
+    public async Task CreateDoctorAsync_UserWithAnotherRole_Fails(UserRole role)
+    {
+        var db = CreateDbContext();
+        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true });
+        db.Users.Add(new UserEntity { Id = 1, Name = "Someone", PasswordHash = "hashed", Role = role });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.CreateDoctorAsync(new CreateDoctorDto { UserId = 1, DepartmentId = 1 });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Only pending users or doctors can be made a doctor", result.Error);
+        Assert.Equal(role, (await db.Users.FindAsync(1))!.Role);
+        Assert.False(await db.Doctors.AnyAsync(d => d.UserId == 1));
+    }
+
+    [Fact]
+    public async Task CreateDoctorAsync_InactiveDepartment_Fails()
+    {
+        var db = CreateDbContext();
+        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = false });
+        db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.Pending });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.CreateDoctorAsync(new CreateDoctorDto { UserId = 1, DepartmentId = 1 });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Department is not active", result.Error);
+        Assert.Equal(UserRole.Pending, (await db.Users.FindAsync(1))!.Role);
+    }
+
+    [Fact]
+    public async Task CreateDoctorAsync_PendingUser_BumpsSecurityStamp()
+    {
+        var db = CreateDbContext();
+        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true });
+        db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.Pending });
+        await db.SaveChangesAsync();
+        var originalStamp = (await db.Users.FindAsync(1))!.SecurityStamp;
+        var service = CreateService(db);
+
+        var result = await service.CreateDoctorAsync(new CreateDoctorDto { UserId = 1, DepartmentId = 1 });
+
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(originalStamp, (await db.Users.FindAsync(1))!.SecurityStamp);
     }
 }

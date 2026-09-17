@@ -182,4 +182,36 @@ public class ChangeRoleServiceTests : UserTestBase
         Assert.True(result.IsSuccess);
         Assert.NotEqual(originalStamp, (await db.Users.FindAsync(1))!.SecurityStamp);
     }
+
+    [Theory]
+    [InlineData(UserRole.DemoAdmin)]
+    [InlineData(UserRole.DemoFrontDesk)]
+    public async Task ChangeRoleAsync_ToDemoRole_Fails(UserRole demoRole)
+    {
+        var db = CreateDbContext();
+        db.Users.Add(new UserEntity { Id = 1, Name = "Real User", Role = UserRole.FrontDesk, PasswordHash = "hash" });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = demoRole });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Invalid role", result.Error);
+        Assert.Equal(UserRole.FrontDesk, (await db.Users.FindAsync(1))!.Role);
+    }
+
+    [Fact]
+    public async Task ChangeRoleAsync_DemoAccount_Fails()
+    {
+        var db = CreateDbContext();
+        db.Users.Add(new UserEntity { Id = 1, Name = "DemoAdmin", Role = UserRole.DemoAdmin, PasswordHash = "hash" });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.Admin });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Demo accounts cannot change role", result.Error);
+        Assert.Equal(UserRole.DemoAdmin, (await db.Users.FindAsync(1))!.Role);
+    }
 }

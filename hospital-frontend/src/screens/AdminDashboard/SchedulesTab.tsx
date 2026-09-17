@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import type { ChangeScheduleInput, CreateScheduleInput, DoctorDto, ScheduleDto } from '../../api'
+import type { ChangeScheduleInput, CreateScheduleInput, DepartmentDto, DoctorDto, ScheduleDto } from '../../api'
 import { EmptyState, SkeletonRows } from '../../components/ui'
 import { formatTime } from '../../lib/format'
+import type { ActionOutcome } from '../../types'
 
 export function SchedulesTab({
   schedules,
+  departments,
   doctors,
   loading,
   searchQuery,
@@ -13,12 +15,13 @@ export function SchedulesTab({
   onCreateSchedule,
 }: {
   schedules: ScheduleDto[]
+  departments: DepartmentDto[]
   doctors: DoctorDto[]
   loading: boolean
   searchQuery: string
   isReadOnly: boolean
-  onChangeSchedule: (input: ChangeScheduleInput) => Promise<void>
-  onCreateSchedule: (input: CreateScheduleInput) => Promise<void>
+  onChangeSchedule: (input: ChangeScheduleInput) => Promise<ActionOutcome>
+  onCreateSchedule: (input: CreateScheduleInput) => Promise<ActionOutcome>
 }) {
   const [scheduleDoctorId, setScheduleDoctorId] = useState<number | ''>('')
   const [scheduleStartHour, setScheduleStartHour] = useState('8')
@@ -34,6 +37,15 @@ export function SchedulesTab({
     const doctor = doctors.find((item) => item.doctorId === schedule.doctorId)
     return !normalizedSearch || (doctor?.name ?? '').toLowerCase().includes(normalizedSearch)
   })
+
+  // Only doctors the API will accept: active, in an active department, and
+  // without a schedule yet (an existing one is edited instead).
+  const schedulableDoctors = doctors.filter(
+    (doctor) =>
+      doctor.isActive &&
+      departments.some((department) => department.id === doctor.departmentId && department.isActive) &&
+      !schedules.some((schedule) => schedule.doctorId === doctor.doctorId),
+  )
 
   const scheduleInput = (): CreateScheduleInput => ({
     DoctorId: Number(scheduleDoctorId),
@@ -55,7 +67,7 @@ export function SchedulesTab({
           Doctor
           <select value={scheduleDoctorId} onChange={(event) => setScheduleDoctorId(Number(event.target.value))}>
             <option value="">Select doctor</option>
-            {doctors.map((doctor) => (
+            {schedulableDoctors.map((doctor) => (
               <option key={doctor.doctorId} value={doctor.doctorId}>{doctor.name}</option>
             ))}
           </select>
@@ -74,10 +86,13 @@ export function SchedulesTab({
         </label>
         <button
           className="secondary-button"
-          disabled={!scheduleDoctorId || Number(scheduleStartHour) >= Number(scheduleEndHour) || isReadOnly}
+          disabled={!scheduleDoctorId || Number(scheduleStartHour) >= Number(scheduleEndHour) || isReadOnly || loading}
           title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
           type="button"
-          onClick={() => void onCreateSchedule(scheduleInput())}
+          onClick={async () => {
+            // The doctor now has a schedule and drops out of the list.
+            if ((await onCreateSchedule(scheduleInput())).ok) setScheduleDoctorId('')
+          }}
         >
           Create Schedule
         </button>
@@ -124,18 +139,18 @@ export function SchedulesTab({
                     <div className="table-actions">
                       <button
                         className="secondary-button compact-action"
-                        disabled={Number(editStartHour) >= Number(editEndHour) || isReadOnly}
+                        disabled={Number(editStartHour) >= Number(editEndHour) || isReadOnly || loading}
                         title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
                         type="button"
-                        onClick={() => {
-                          void onChangeSchedule({
+                        onClick={async () => {
+                          const outcome = await onChangeSchedule({
                             ScheduleId: schedule.scheduleId,
                             DoctorId: schedule.doctorId,
                             StartHour: Number(editStartHour),
                             EndHour: Number(editEndHour),
                             SlotDurationMin: Number(editSlotDuration),
                           })
-                          setEditingScheduleId(null)
+                          if (outcome.ok) setEditingScheduleId(null)
                         }}
                       >
                         Save

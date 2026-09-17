@@ -52,6 +52,7 @@ export type CreateAppointmentInput = {
   DoctorId: number
   PatientName: string
   PhoneNumber: string
+  // YYYY-MM-DD with no time or timezone, so it cannot shift by a day.
   DateOfBirth: string
   AppointmentTime: string
 }
@@ -154,7 +155,9 @@ export async function loadHospitalData(role: UserRole) {
   const [departments, doctors, users, schedules, appointments] = await Promise.all([
     getServiceResult<unknown[]>('/api/Department/ViewDepartment').then((items) => items.map(normalizeDepartment)),
     getServiceResult<unknown[]>('/api/Users/ListDoctors').then((items) => items.map(normalizeDoctor)),
-    getServiceResult<unknown[]>('/api/Users/ListUsers').then((items) => items.map(normalizeUser)),
+    canListUsers(role)
+      ? getServiceResult<unknown[]>('/api/Users/ListUsers').then((items) => items.map(normalizeUser))
+      : Promise.resolve([]),
     getServiceResult<unknown[]>('/api/schedule/list-schedule').then((items) => items.map(normalizeSchedule)),
     canReadAppointments(role)
       ? getServiceResult<unknown[]>('/api/Appointments/ListAppointments').then((items) =>
@@ -217,6 +220,10 @@ export async function changeSchedule(input: ChangeScheduleInput) {
 
 function canReadAppointments(role: UserRole) {
   return role === 'FrontDesk' || role === 'DemoFrontDesk'
+}
+
+function canListUsers(role: UserRole) {
+  return role === 'Admin' || role === 'FrontDesk'
 }
 
 async function getServiceResult<T>(path: string): Promise<T> {
