@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY HospitalSystem/*.csproj HospitalSystem/
@@ -8,7 +8,7 @@ COPY . .
 WORKDIR /src/HospitalSystem
 RUN dotnet publish -c Release -o /app/publish
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
 WORKDIR /app
 
 # Pull Alpine security fixes published after the base image was built.
@@ -17,6 +17,8 @@ RUN apk upgrade --no-cache \
     && adduser -S -G appgroup -h /home/appuser appuser
 
 EXPOSE 8080
+# Prometheus metrics; deliberately not published by compose or the Service.
+EXPOSE 9091
 ENV ASPNETCORE_URLS=http://+:8080
 
 COPY --from=build /app/publish .
