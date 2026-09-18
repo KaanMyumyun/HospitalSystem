@@ -84,7 +84,7 @@ var builder = WebApplication.CreateBuilder(args);
         });
     });
 
-
+//test cicd
     builder.Services.AddHttpContextAccessor();
 
     builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
