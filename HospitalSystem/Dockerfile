@@ -21,9 +21,8 @@ EXPOSE 8080
 EXPOSE 9091
 ENV ASPNETCORE_URLS=http://+:8080
 
-COPY --from=build /app/publish .
+COPY --from=build --chown=appuser:appgroup /app/publish .
 
-RUN chown -R appuser:appgroup /app
 USER appuser
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
