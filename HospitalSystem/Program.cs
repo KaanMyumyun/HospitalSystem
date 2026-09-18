@@ -11,7 +11,7 @@
     using Microsoft.AspNetCore.Diagnostics;
     using Microsoft.EntityFrameworkCore;
     using Microsoft.IdentityModel.Tokens;
-    using Microsoft.OpenApi.Models;
+    using Microsoft.OpenApi;
     using Npgsql;
     using Prometheus;
     using HospitalSystem.Services.Appointments;
@@ -68,19 +68,9 @@ var builder = WebApplication.CreateBuilder(args);
             Description = "Enter 'Bearer {token}'"
         });
 
-        c.AddSecurityRequirement(new OpenApiSecurityRequirement
+        c.AddSecurityRequirement(document => new OpenApiSecurityRequirement
         {
-            {
-                new OpenApiSecurityScheme
-                {
-                    Reference = new OpenApiReference
-                    {
-                        Type = ReferenceType.SecurityScheme,
-                        Id = "Bearer"
-                    }
-                },
-                Array.Empty<string>()
-            }
+            { new OpenApiSecuritySchemeReference("Bearer", document), new List<string>() }
         });
     });
 
@@ -222,9 +212,8 @@ var builder = WebApplication.CreateBuilder(args);
     }
     foreach (var network in app.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [])
     {
-        var parts = network.Split('/');
-        if (parts.Length == 2 && IPAddress.TryParse(parts[0], out var prefix) && int.TryParse(parts[1], out var prefixLength))
-            forwardedHeadersOptions.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(prefix, prefixLength));
+        if (System.Net.IPNetwork.TryParse(network, out var ipNetwork))
+            forwardedHeadersOptions.KnownIPNetworks.Add(ipNetwork);
     }
     // KnownProxies/KnownNetworks are empty until configured per environment (see
     // appsettings.json), so this is a safe no-op today rather than trusting an
@@ -290,7 +279,6 @@ var builder = WebApplication.CreateBuilder(args);
     app.UseAuthentication();
     app.UseAuthorization();
 
-    app.MapMetrics().RequireAuthorization(policy => policy.RequireRole(nameof(UserRole.Admin)));
     app.MapHealthChecks("/health").AllowAnonymous();
     app.MapControllers();
     app.MapFallback(context =>
@@ -302,5 +290,17 @@ var builder = WebApplication.CreateBuilder(args);
             error = "The requested resource was not found."
         });
     }).AllowAnonymous();
+
+    // Metrics are served on their own port, not on the public one: Prometheus
+    // scrapes them without a token, and nothing outside the container or pod
+    // can reach the port because neither compose nor the service publishes it.
+    // Set Metrics:Port to 0 to turn the endpoint off.
+    var metricsPort = app.Configuration.GetValue("Metrics:Port", 9091);
+    if (metricsPort > 0)
+    {
+        var metricServer = new KestrelMetricServer(port: metricsPort);
+        metricServer.Start();
+        app.Lifetime.ApplicationStopping.Register(() => metricServer.Stop());
+    }
 
     app.Run();

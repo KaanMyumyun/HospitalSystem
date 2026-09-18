@@ -151,6 +151,12 @@ The self-hosted deployment includes a full observability stack:
   * Backend container health
   * Overall system status (EVERYTHING UP)
 * **Backend HTTP metrics** enabled via `app.UseHttpMetrics()` (prometheus-net middleware)
+* **Scrape target:** the backend serves `/metrics` on its own port, `9091`, not
+  on the API port. The port is deliberately not published by compose or by the
+  Kubernetes Service, so Prometheus reaches it from inside the network without
+  a token while nothing outside can. Point Prometheus at
+  `<backend-host>:9091/metrics`, and set `Metrics__Port` to change the port or
+  `0` to turn the endpoint off.
 - [Grafana Dashboards](https://github.com/KaanMyumyun/grafanadashboards) — Monitoring dashboards for Prometheus and Loki
 
 #### Logging
@@ -196,8 +202,8 @@ The system is divided into two independent layers:
 * Vite
 
 ### Tooling
-* .NET 8 SDK (pinned by `global.json`)
-* Node.js 20.19+ or 22.12+ (required by Vite 8)
+* .NET 10 SDK (pinned by `global.json`)
+* Node.js 22.12+ (Node 20 is end-of-life)
 * npm
 
 ---
@@ -267,8 +273,8 @@ The system is divided into two independent layers:
 ## Getting Started
 
 ### Prerequisites
-* .NET 8 SDK
-* Node.js 20.19+ or 22.12+
+* .NET 10 SDK
+* Node.js 22.12+
 * Docker, to run PostgreSQL locally (or your own PostgreSQL 16)
 * Python 3, to create the first admin account
 
@@ -327,7 +333,7 @@ If the API connects to a database you did not expect, run
 ### 3. Create the database schema
 
 ```bash
-dotnet tool install --global dotnet-ef --version "8.*"   # once
+dotnet tool install --global dotnet-ef --version "10.*"   # once
 cd HospitalSystem
 dotnet ef database update
 ```
