@@ -3,8 +3,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HospitalSystem.Services.User;
 
-// The only place a user's role is changed, so every endpoint that changes a
-// role applies the same guards and invalidates the user's existing tokens.
 internal static class RoleChange
 {
     public static async Task<string?> ApplyAsync(
@@ -13,8 +11,6 @@ internal static class RoleChange
         UserEntity user,
         UserRole newRole)
     {
-        // Demo roles can sign in without a password, so they are never handed
-        // to an account through the API.
         if (!Enum.IsDefined(typeof(UserRole), newRole) ||
             newRole is UserRole.Pending or UserRole.DemoAdmin or UserRole.DemoFrontDesk)
             return "Invalid role";

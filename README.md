@@ -31,7 +31,7 @@ The application uses a three-stage GitHub Actions pipeline:
    - Runs on pull requests, pushes to `main`, and weekly (Mondays 03:00 UTC)
      so published images pick up base image security fixes
    - Restores, builds and tests the backend
-   - Lints and builds the frontend (the build type-checks it)
+   - Lints, tests and builds the frontend (the build type-checks it)
    - Builds both Docker images and scans them with Trivy; a fixable `HIGH`
      or `CRITICAL` vulnerability fails the run
 
@@ -222,8 +222,12 @@ The system is divided into two independent layers:
 ├── hospital-frontend/              # Frontend (React + TypeScript + Vite)
 │   ├── public/
 │   ├── src/
-│   │   ├── App.tsx                 # Screens and UI components
+│   │   ├── components/             # Shared UI (Sidebar, TopBar, ui)
+│   │   ├── screens/                # LoginScreen, dashboards, NotFoundScreen
+│   │   ├── lib/                    # format, schedule, validation (+ tests)
+│   │   ├── App.tsx                 # Routing and session state
 │   │   ├── api.ts                  # API client and session storage
+│   │   ├── types.ts
 │   │   ├── main.tsx
 │   │   ├── App.css
 │   │   └── index.css
@@ -239,10 +243,11 @@ The system is divided into two independent layers:
 │   ├── Dto/
 │   ├── Entities/
 │   ├── Enums/
-│   ├── Interface/
+│   ├── Interfaces/
 │   ├── Migrations/
 │   ├── Properties/
 │   ├── Services/
+│   ├── GlobalUsings.cs
 │   ├── Program.cs
 │   ├── appsettings.json
 │   ├── appsettings.Development.example.json
@@ -251,11 +256,13 @@ The system is divided into two independent layers:
 │
 ├── MyApp.Tests/                    # Unit tests (xUnit, Moq, EF Core InMemory)
 │   ├── Services/
+│   ├── Dto/
 │   ├── TestAuditLogService.cs
 │   ├── GlobalUsings.cs
 │   └── MyApp.Tests.csproj
 │
 ├── .editorconfig
+├── .env.example                    # Template for docker compose's .env
 ├── .gitattributes
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
@@ -374,7 +381,7 @@ Insert the admin, replacing `<hash>` with the output:
 
 ```bash
 docker compose exec postgres psql -U hospitaluser -d HospitalSystemDb \
-  -c "INSERT INTO \"Users\" (\"Name\", \"PasswordHash\", \"Role\") VALUES ('admin', '<hash>', 'Admin');"
+  -c "INSERT INTO \"Users\" (\"Name\", \"PasswordHash\", \"Role\", \"SecurityStamp\") VALUES ('admin', '<hash>', 'Admin', gen_random_uuid()::text);"
 ```
 
 Log in as `admin` with that password. New users created from the app start as
@@ -451,7 +458,7 @@ It calls the API at `http://localhost:5272/api` unless `VITE_API_URL` is set.
 |   POST | /api/Users/create-doctor         | Create doctor                  |
 |   POST | /api/Users/change-doctor-status  | Activate or deactivate doctor  |
 |   POST | /api/Users/reset-password        | Reset password                 |
-|    GET | /api/Users/ListUsers             | List all users                 |
+|    GET | /api/Users/ListUsers             | List all users (Admin only)    |
 |    GET | /api/Users/ListDoctors           | List all doctors               |
 
 ### Departments
@@ -479,6 +486,17 @@ It calls the API at `http://localhost:5272/api` unless `VITE_API_URL` is set.
 |   POST | /api/schedule/change-schedule | Modify an existing schedule |
 |    GET | /api/schedule/list-schedule   | View all schedules          |
 
+### Health
+
+| Method | Endpoint      | Description                                              |
+| -----: | ------------- | -------------------------------------------------------- |
+|    GET | /health       | Liveness: the API process is up; checks nothing else     |
+|    GET | /health/ready | Readiness: the API can reach the database (503 if not)   |
+
+Both are anonymous. Point liveness probes at `/health` and readiness probes at
+`/health/ready`, so a database outage takes the API out of rotation without
+getting healthy containers restarted.
+
 ---
 
 ## Error Handling
@@ -488,7 +506,14 @@ It calls the API at `http://localhost:5272/api` unless `VITE_API_URL` is set.
 * 401 Unauthorized – Missing or invalid JWT
 * 403 Forbidden – Insufficient permissions
 * 404 Not Found – Resource not found
+* 409 Conflict – The doctor was booked for that time by a concurrent request
+* 429 Too Many Requests – Rate limit reached; the `Retry-After` header gives
+  the number of seconds to wait
 * 500 Internal Server Error – Unexpected server error
+
+Errors the API raises itself carry a JSON body with an `error` message. 401
+and 403 have no body, and request validation failures use ASP.NET Core's
+problem-details format.
 
 ---
 
@@ -529,8 +554,12 @@ InMemory. They cover 17 services across five areas:
 The Appointments, Auth, Department and User tests share seed data through
 `*TestBase` classes.
 
+The frontend has unit tests in `hospital-frontend/src/lib`, written with
+Vitest, covering schedule slot generation and form validation.
+
 Not covered yet: `PatientService`, `ScheduleValidation`, `AuditLogService`,
-`CurrentUserService`, the controllers, and the frontend.
+`CurrentUserService`, the controllers, and the frontend components and
+screens.
 
 ### Run Tests
 
@@ -538,11 +567,12 @@ Not covered yet: `PatientService`, `ScheduleValidation`, `AuditLogService`,
 dotnet test
 ```
 
-The frontend has no tests yet. Lint and type-check it with:
+Test, lint and type-check the frontend with:
 
 ```bash
 cd hospital-frontend
 npm run lint
+npm test
 npm run build
 ```
 
@@ -558,13 +588,18 @@ Full Docker support:
 
 ### Run with Docker
 
-Create `HospitalSystem/appsettings.Development.json` first (Backend Setup, step 2).
-The compose file sets the connection string but not the JWT signing key, so the
-backend container reads the key from that file.
+Compose sets the connection string itself and takes the JWT signing key from a
+`.env` file in the repository root. `.env` is gitignored; start from the
+template and replace the key with your own random string of at least 32
+characters:
 
 ```bash
+cp .env.example .env
 docker compose up --build
 ```
+
+`appsettings.Development.json` is not used here: it is kept out of the image so
+that no local secrets are built into it.
 
 Compose pulls fresh base images on every build. Docker still reuses the cached
 `apk upgrade` layer, so to pick up Alpine security fixes released since your last

@@ -38,8 +38,6 @@ export function SchedulesTab({
     return !normalizedSearch || (doctor?.name ?? '').toLowerCase().includes(normalizedSearch)
   })
 
-  // Only doctors the API will accept: active, in an active department, and
-  // without a schedule yet (an existing one is edited instead).
   const schedulableDoctors = doctors.filter(
     (doctor) =>
       doctor.isActive &&
@@ -90,7 +88,6 @@ export function SchedulesTab({
           title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
           type="button"
           onClick={async () => {
-            // The doctor now has a schedule and drops out of the list.
             if ((await onCreateSchedule(scheduleInput())).ok) setScheduleDoctorId('')
           }}
         >

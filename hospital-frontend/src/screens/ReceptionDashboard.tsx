@@ -44,7 +44,6 @@ export function ReceptionDashboard({
 }) {
   const [weekOffset, setWeekOffset] = useState(0)
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
-  // Selecting a booked slot shows its details; cancelling is a separate step.
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<number | null>(null)
   const [cancellingAppointmentId, setCancellingAppointmentId] = useState<number | null>(null)
   const [patientName, setPatientName] = useState('')
@@ -126,7 +125,6 @@ export function ReceptionDashboard({
       DateOfBirth: dateOfBirth,
       AppointmentTime: appointmentTime.toISOString(),
     })
-    // Keep the dialog and what was typed if the booking failed.
     if (!outcome.ok) {
       if (outcome.error) setBookingError(outcome.error)
       return

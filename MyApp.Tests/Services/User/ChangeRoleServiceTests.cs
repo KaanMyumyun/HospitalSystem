@@ -5,6 +5,8 @@ using HospitalSystem.Interfaces;
 using HospitalSystem.Services;
 using HospitalSystem.Services.User;
 
+namespace HospitalSystem.Tests;
+
 public class ChangeRoleServiceTests : UserTestBase
 {
     private ChangeRoleService CreateService(ApplicationDbContext db, bool isAdmin = true)

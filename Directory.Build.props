@@ -1,6 +1,5 @@
 <Project>
 
-  <!-- Build settings shared by every project in the solution. -->
   <PropertyGroup>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

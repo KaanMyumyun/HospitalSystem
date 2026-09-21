@@ -1,6 +1,8 @@
 using HospitalSystem.Services.Auth;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
+
+namespace HospitalSystem.Tests;
  
 public class UserCreationServiceTests : AuthTestBase
 {

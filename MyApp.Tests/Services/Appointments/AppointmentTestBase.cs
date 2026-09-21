@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Moq;
 using HospitalSystem.Interfaces.Appointments;
 
+namespace HospitalSystem.Tests;
+
 
  
 public abstract class AppointmentTestBase

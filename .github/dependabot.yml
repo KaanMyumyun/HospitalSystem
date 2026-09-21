@@ -10,3 +10,40 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  - package-ecosystem: nuget
+    directories:
+      - /HospitalSystem
+      - /MyApp.Tests
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      nuget:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: /hospital-frontend
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      npm:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directories:
+      - /HospitalSystem
+      - /hospital-frontend
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      docker:
+        patterns:
+          - "*"

@@ -1,6 +1,8 @@
 using HospitalSystem.Interfaces.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
+namespace HospitalSystem.Controllers;
  
 [ApiController]
 [Route("api/Auth")]

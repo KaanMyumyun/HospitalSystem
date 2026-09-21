@@ -11,9 +11,6 @@ public class UserEntity
     public string PasswordHash { get; set; }
     public UserRole Role { get; set; }
 
-    // Bumped whenever something should invalidate this user's existing
-    // tokens (role change, password reset, doctor disabled). Embedded in
-    // the JWT and checked on every request.
     [Required]
     public string SecurityStamp { get; set; } = Guid.NewGuid().ToString();
     public DoctorEntity Doctor { get; set; }

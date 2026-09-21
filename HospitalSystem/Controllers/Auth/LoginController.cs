@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
+namespace HospitalSystem.Controllers;
+
 [ApiController]
 [Route("api/Auth")]
 [EnableRateLimiting("login")]

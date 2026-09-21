@@ -8,11 +8,7 @@ ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
-# Pinned to a minor version so a new nginx major cannot arrive unnoticed;
-# patch releases within 1.31 still come in on rebuild.
 FROM nginxinc/nginx-unprivileged:1.31-alpine-slim
-# Pull Alpine security fixes published after the base image was built.
-# The base image runs as 101, so switch to root for apk; USER 101 below restores it.
 USER root
 RUN apk upgrade --no-cache
 COPY --chown=101:101 nginx.conf /etc/nginx/conf.d/default.conf

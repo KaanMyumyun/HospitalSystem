@@ -1,6 +1,8 @@
 using Xunit;
 using HospitalSystem.Services;
 using HospitalSystem.Services.User;
+
+namespace HospitalSystem.Tests;
  
 public class ResetPasswordServiceTests : UserTestBase
 {

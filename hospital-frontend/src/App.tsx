@@ -85,7 +85,6 @@ function App() {
       return { ok: false, error: message }
     }
 
-    // A second click before the first request finishes must not send it again.
     if (actionInFlight.current) return { ok: false }
     actionInFlight.current = true
 
@@ -140,8 +139,6 @@ function App() {
     return () => window.removeEventListener(sessionExpiredEvent, handleSessionExpired)
   }, [])
 
-  // Recent activity belongs to whoever was signed in; reception computers are
-  // shared, so the next user starts with an empty list.
   const handleLogin = (nextSession: Session) => {
     setSession(nextSession)
     setActivity([])

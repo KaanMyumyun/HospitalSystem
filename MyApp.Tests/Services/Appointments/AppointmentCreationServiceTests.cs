@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Moq;
 using Npgsql;
 using Xunit;
+
+namespace HospitalSystem.Tests;
  
 public class AppointmentCreationServiceTests : AppointmentTestBase
 {
@@ -126,7 +128,6 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await SeedStandardDataAsync(db);
         var service = CreateService(db);
  
-        // Seeded appointment is at 10:00; 10:05 overlaps within the 15-min window
         var dto = new CreateAppointmentDto
         {
             DoctorId = 1,
@@ -153,8 +154,6 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             "unique violation",
             new PostgresException("duplicate key", "ERROR", "ERROR", PostgresErrorCodes.UniqueViolation));
 
-        // 11:00 passes HasOverlapAsync; simulates a concurrent request booking
-        // the same slot between the check and the insert
         var dto = new CreateAppointmentDto
         {
             DoctorId = 1,
@@ -194,8 +193,6 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await Assert.ThrowsAsync<DbUpdateException>(() => service.CreateAppointmentAsync(dto, 5));
     }
 
-    // InMemory doesn't enforce unique indexes, so this throws what Npgsql
-    // would when an appointment insert is rejected by the database.
     private sealed class FailingAppointmentInsertDbContext : ApplicationDbContext
     {
         public Exception? AppointmentInsertException { get; set; }
@@ -285,6 +282,36 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Date of birth cannot be after the appointment date", result.Error);
+    }
+
+    [Theory]
+    [InlineData(9, 46)]
+    [InlineData(9, 50)]
+    [InlineData(9, 59)]
+    [InlineData(10, 1)]
+    [InlineData(10, 5)]
+    [InlineData(10, 14)]
+    public async Task CreateAppointmentAsync_PartiallyOverlappingTime_Fails(int hour, int minute)
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+
+        var dto = new CreateAppointmentDto
+        {
+            DoctorId = 1,
+            PatientName = "Overlapping Patient",
+            PhoneNumber = $"555-{hour:D2}{minute:D2}",
+            DateOfBirth = new DateOnly(1990, 1, 1),
+            AppointmentTime = new DateTime(2026, 1, 1, hour, minute, 0, DateTimeKind.Utc)
+        };
+
+        var result = await service.CreateAppointmentAsync(dto, 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Doctor already booked for that time slot", result.Error);
+        Assert.False(result.IsConflict);
+        Assert.False(await db.Appointments.AnyAsync(a => a.TimeOfAppointment == dto.AppointmentTime));
     }
 
     [Theory]

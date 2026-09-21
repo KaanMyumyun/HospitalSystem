@@ -1,5 +1,7 @@
 using HospitalSystem.Interfaces;
 
+namespace HospitalSystem.Tests;
+
 public class TestAuditLogService : IAuditLogService
 {
     private readonly ApplicationDbContext _context;

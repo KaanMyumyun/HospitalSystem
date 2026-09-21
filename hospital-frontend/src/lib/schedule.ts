@@ -62,12 +62,9 @@ export function buildWeekSlots(
         )
       })
 
-      // A slot can hold a cancelled appointment and the booking that replaced it.
       const appointment = matching.find((item) => item.status !== 'Cancelled')
       if (appointment) return { day, time, status: 'booked', appointment }
 
-      // Cancelling frees the slot. Past slots keep showing the cancellation,
-      // since they cannot be booked anyway.
       if (slotDate.getTime() < Date.now()) {
         const cancelled = matching[0]
         return cancelled ? { day, time, status: 'cancelled', appointment: cancelled } : { day, time, status: 'past' }

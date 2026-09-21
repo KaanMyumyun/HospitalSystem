@@ -1,5 +1,7 @@
-namespace HospitalSystem.Services.Appointments;
+using HospitalSystem.Services.Appointments;
 using Xunit;
+
+namespace HospitalSystem.Tests;
  
 public class AppointmentQueryServiceTests : AppointmentTestBase
 {

@@ -1,8 +1,14 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 using HospitalSystem.Interfaces;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Moq;
+
+namespace HospitalSystem.Tests;
  
 public abstract class AuthTestBase
 {
@@ -41,12 +47,29 @@ public abstract class AuthTestBase
  
     protected const string TestPassword = "correct-password";
  
-    protected async Task SeedUserAsync(ApplicationDbContext db, UserRole role = UserRole.Admin, string name = "Test")
+    protected async Task<UserEntity> SeedUserAsync(ApplicationDbContext db, UserRole role = UserRole.Admin, string name = "Test")
     {
         var user = new UserEntity { Id = 1, Name = name, Role = role };
         var hasher = new PasswordHasher<UserEntity>();
         user.PasswordHash = hasher.HashPassword(user, TestPassword);
         db.Users.Add(user);
         await db.SaveChangesAsync();
+        return user;
+    }
+
+    protected ClaimsPrincipal ReadValidatedToken(string token)
+    {
+        var settings = CreateJwtOptions().Value;
+
+        return new JwtSecurityTokenHandler().ValidateToken(token, new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = settings.Issuer,
+            ValidAudience = settings.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(settings.SecretKey))
+        }, out _);
     }
 }

@@ -9,8 +9,15 @@
 .gitignore
 .vscode
 .env
+.env.*
 *.user
+**/appsettings.Development.json
+**/appsettings.Local.json
 **/*.md
 Dockerfile*
 docker-compose*
 .github
+
+hospital-frontend
+MyApp.Tests
+*.txt
