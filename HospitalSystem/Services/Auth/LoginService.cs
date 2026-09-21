@@ -48,6 +48,10 @@ public class LoginService : ILoginService
         if (user.Role is UserRole.DemoAdmin or UserRole.DemoFrontDesk)
             return LoginResultDto.Fail("Invalid credentials");
 
+        // Only after the password check, so it does not reveal which usernames exist.
+        if (user.Role == UserRole.Pending)
+            return LoginResultDto.Fail("Account awaiting approval");
+
         var token = GenerateToken(user);
 
         return LoginResultDto.Success(token, user.Role.ToString());

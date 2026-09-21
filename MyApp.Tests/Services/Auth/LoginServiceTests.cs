@@ -73,6 +73,33 @@ public class LoginServiceTests : AuthTestBase
         Assert.Equal("Invalid credentials", result.Error);
     }
 
+    [Fact]
+    public async Task LoginAsync_PendingUser_FailsAwaitingApproval()
+    {
+        var db = CreateDbContext();
+        await SeedUserAsync(db, UserRole.Pending, "Newcomer");
+        var service = CreateService(db);
+
+        var result = await service.LoginAsync(new LoginDto { Name = "Newcomer", Password = TestPassword });
+
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Token);
+        Assert.Equal("Account awaiting approval", result.Error);
+    }
+
+    [Fact]
+    public async Task LoginAsync_PendingUserWrongPassword_FailsAsInvalidCredentials()
+    {
+        var db = CreateDbContext();
+        await SeedUserAsync(db, UserRole.Pending, "Newcomer");
+        var service = CreateService(db);
+
+        var result = await service.LoginAsync(new LoginDto { Name = "Newcomer", Password = "wrong" });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Invalid credentials", result.Error);
+    }
+
     [Theory]
     [InlineData(UserRole.DemoAdmin, "DemoAdmin")]
     [InlineData(UserRole.DemoFrontDesk, "DemoReception")]

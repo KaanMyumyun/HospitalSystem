@@ -46,4 +46,48 @@ public class CreateAppointmentDtoTests
         var error = Assert.Single(Validate(dto));
         Assert.Equal("Phone number must be 20 characters or fewer", error.ErrorMessage);
     }
+
+    [Fact]
+    public void MissingAppointmentTime_IsRejected()
+    {
+        var dto = ValidDto();
+        dto.AppointmentTime = null;
+
+        var error = Assert.Single(Validate(dto));
+        Assert.Contains(nameof(CreateAppointmentDto.AppointmentTime), error.MemberNames);
+    }
+
+    [Fact]
+    public void MissingDateOfBirth_IsRejected()
+    {
+        var dto = ValidDto();
+        dto.DateOfBirth = null;
+
+        var error = Assert.Single(Validate(dto));
+        Assert.Contains(nameof(CreateAppointmentDto.DateOfBirth), error.MemberNames);
+    }
+
+    [Fact]
+    public void CancelWithoutAppointmentId_IsRejected()
+    {
+        var dto = new CancelAppointmentDto { Reason = "Patient requested" };
+        var results = new List<ValidationResult>();
+
+        Validator.TryValidateObject(dto, new ValidationContext(dto), results, validateAllProperties: true);
+
+        var error = Assert.Single(results);
+        Assert.Contains(nameof(CancelAppointmentDto.AppointmentId), error.MemberNames);
+    }
+
+    [Fact]
+    public void ChangeDoctorStatusWithoutIsActive_IsRejected()
+    {
+        var dto = new ChangeDoctorStatusDto { DoctorId = 1 };
+        var results = new List<ValidationResult>();
+
+        Validator.TryValidateObject(dto, new ValidationContext(dto), results, validateAllProperties: true);
+
+        var error = Assert.Single(results);
+        Assert.Contains(nameof(ChangeDoctorStatusDto.IsActive), error.MemberNames);
+    }
 }

@@ -122,6 +122,45 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
     }
  
     [Fact]
+    public async Task CreateAppointmentAsync_InactiveDoctor_Fails()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db, isDoctorActive: false);
+        var service = CreateService(db);
+
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)), 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Doctor is not available for booking", result.Error);
+        Assert.Equal(3, await db.Appointments.CountAsync());
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_ActiveDoctorWithoutDoctorRole_Fails()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        (await db.Users.FindAsync(1))!.Role = UserRole.FrontDesk;
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)), 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Doctor is not available for booking", result.Error);
+        Assert.Equal(3, await db.Appointments.CountAsync());
+    }
+
+    private static CreateAppointmentDto NewPatientAt(DateTime time) => new()
+    {
+        DoctorId = 1,
+        PatientName = "New Patient",
+        PhoneNumber = "555-9000",
+        DateOfBirth = new DateOnly(1990, 1, 1),
+        AppointmentTime = time
+    };
+
+    [Fact]
     public async Task CreateAppointmentAsync_OverlappingTime_Fails()
     {
         using var db = CreateDbContext();
@@ -335,5 +374,35 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         var result = await service.CreateAppointmentAsync(dto, 5);
 
         Assert.True(result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_MissingAppointmentTime_Fails()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+        var dto = NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc));
+        dto.AppointmentTime = null;
+
+        var result = await service.CreateAppointmentAsync(dto, 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Appointment time is required", result.Error);
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_MissingDateOfBirth_Fails()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+        var dto = NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc));
+        dto.DateOfBirth = null;
+
+        var result = await service.CreateAppointmentAsync(dto, 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Date of birth is required", result.Error);
     }
 }

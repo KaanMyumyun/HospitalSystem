@@ -17,9 +17,13 @@ public class ScheduleQueryController : ControllerBase
 
     [Authorize(Roles = "FrontDesk,Admin,DemoAdmin,DemoFrontDesk")]
     [HttpGet("list-schedule")]
-    public async Task<ActionResult<List<ViewSchedule>>> ViewSchedule()
+    public async Task<ActionResult<ServiceResult<List<ViewSchedule>>>> ViewSchedule()
     {
-        var schedule = await _queryService.ViewScheduleAsync();
-        return Ok(schedule);
+        var result = await _queryService.ViewScheduleAsync();
+
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+        return Ok(result);
     }
 }

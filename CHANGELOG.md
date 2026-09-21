@@ -50,6 +50,19 @@ tagged releases yet, so everything is listed under Unreleased.
 
 ### Fixed
 
+- Pending accounts cannot sign in until an admin gives them a role ("Account
+  awaiting approval"), and roles with no screens, such as Doctor, see a
+  "No access for this role" page instead of an empty reception screen.
+- Only active doctors who still hold the Doctor role can be booked, and a
+  doctor record can only be re-activated for a user with the Doctor role.
+- Requests missing an appointment time, date of birth, appointment id or
+  doctor status get a validation error instead of a default value. In
+  particular, a doctor-status request without `IsActive` no longer
+  deactivates the doctor.
+- The schedule list returns 400 when the request is refused, and Swagger
+  documents its real response type.
+- The reception page fits 1280px and 1440px windows; the calendar scrolls
+  inside its panel instead.
 - Hitting a rate limit shows a readable message with how long to wait,
   instead of a JSON parse error. The API returns JSON and a `Retry-After`
   header, and the frontend no longer fails on any non-JSON response, such as

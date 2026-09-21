@@ -16,7 +16,7 @@ public class DoctorStatusServiceTests : UserTestBase
         await SeedDoctorAsync(db, isDoctorActive: false);
         var service = CreateService(db);
  
-        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorsStatus { DoctorId = 1, IsActive = true });
+        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorStatusDto { DoctorId = 1, IsActive = true });
  
         Assert.True(result.IsSuccess);
         Assert.True(db.Doctors.First().IsActive);
@@ -28,7 +28,7 @@ public class DoctorStatusServiceTests : UserTestBase
         var db = CreateDbContext();
         var service = CreateService(db, isAdmin: false);
  
-        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorsStatus { DoctorId = 1, IsActive = true });
+        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorStatusDto { DoctorId = 1, IsActive = true });
  
         Assert.False(result.IsSuccess);
     }
@@ -39,7 +39,7 @@ public class DoctorStatusServiceTests : UserTestBase
         var db = CreateDbContext();
         var service = CreateService(db);
  
-        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorsStatus { DoctorId = 999, IsActive = true });
+        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorStatusDto { DoctorId = 999, IsActive = true });
  
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor doesnt exist", result.Error);
@@ -52,7 +52,7 @@ public class DoctorStatusServiceTests : UserTestBase
         await SeedDoctorAsync(db, isDoctorActive: true);
         var service = CreateService(db);
  
-        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorsStatus { DoctorId = 1, IsActive = true });
+        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorStatusDto { DoctorId = 1, IsActive = true });
  
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor already has this status", result.Error);
@@ -65,7 +65,7 @@ public class DoctorStatusServiceTests : UserTestBase
         await SeedDoctorAsync(db, isDoctorActive: true);
         var service = CreateService(db);
  
-        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorsStatus { DoctorId = 1, IsActive = false });
+        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorStatusDto { DoctorId = 1, IsActive = false });
  
         Assert.True(result.IsSuccess);
         Assert.False(db.Doctors.First().IsActive);
@@ -79,10 +79,40 @@ public class DoctorStatusServiceTests : UserTestBase
         var originalStamp = (await db.Users.FindAsync(1))!.SecurityStamp;
         var service = CreateService(db);
 
-        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorsStatus { DoctorId = 1, IsActive = false });
+        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorStatusDto { DoctorId = 1, IsActive = false });
 
         Assert.True(result.IsSuccess);
         Assert.NotEqual(originalStamp, (await db.Users.FindAsync(1))!.SecurityStamp);
+    }
+
+    [Theory]
+    [InlineData(UserRole.FrontDesk)]
+    [InlineData(UserRole.Admin)]
+    [InlineData(UserRole.Pending)]
+    public async Task ChangeDoctorsStatusAsync_ActivateWithoutDoctorRole_Fails(UserRole role)
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db, isDoctorActive: false, userRole: role);
+        var service = CreateService(db);
+
+        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorStatusDto { DoctorId = 1, IsActive = true });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Only users with the Doctor role can be activated", result.Error);
+        Assert.False(db.Doctors.First().IsActive);
+    }
+
+    [Fact]
+    public async Task ChangeDoctorsStatusAsync_DeactivateWithoutDoctorRole_Succeeds()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db, isDoctorActive: true, userRole: UserRole.FrontDesk);
+        var service = CreateService(db);
+
+        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorStatusDto { DoctorId = 1, IsActive = false });
+
+        Assert.True(result.IsSuccess);
+        Assert.False(db.Doctors.First().IsActive);
     }
 
     [Fact]
@@ -93,9 +123,23 @@ public class DoctorStatusServiceTests : UserTestBase
         var originalStamp = (await db.Users.FindAsync(1))!.SecurityStamp;
         var service = CreateService(db);
 
-        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorsStatus { DoctorId = 1, IsActive = true });
+        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorStatusDto { DoctorId = 1, IsActive = true });
 
         Assert.True(result.IsSuccess);
         Assert.Equal(originalStamp, (await db.Users.FindAsync(1))!.SecurityStamp);
+    }
+
+    [Fact]
+    public async Task ChangeDoctorsStatusAsync_MissingIsActive_FailsAndKeepsDoctorActive()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db, isDoctorActive: true);
+        var service = CreateService(db);
+
+        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorStatusDto { DoctorId = 1 });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Doctor id and status are required", result.Error);
+        Assert.True(db.Doctors.First().IsActive);
     }
 }

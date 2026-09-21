@@ -16,12 +16,14 @@ import {
   resetPassword,
   sessionExpiredEvent,
 } from './api'
+import type { UserRole } from './api'
 import './App.css'
 import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
 import { adminTitle, confirmAction } from './lib/format'
 import { AdminDashboard } from './screens/AdminDashboard'
 import { LoginScreen } from './screens/LoginScreen'
+import { NoAccessScreen } from './screens/NoAccessScreen'
 import { NotFoundScreen } from './screens/NotFoundScreen'
 import { ReceptionDashboard } from './screens/ReceptionDashboard'
 import type { ActionOutcome, ActivityEntry, HospitalData, Screen, Session } from './types'
@@ -35,11 +37,19 @@ const emptyData: HospitalData = {
 }
 const activityStorageKey = 'hospital-frontend-activity'
 
+function canUseAdmin(role: UserRole) {
+  return role === 'Admin' || role === 'DemoAdmin'
+}
+
+function canUseReception(role: UserRole) {
+  return role === 'FrontDesk' || role === 'DemoFrontDesk'
+}
+
 function App() {
   const [session, setSession] = useState<Session | null>(() => getStoredSession())
   const [screen, setScreen] = useState<Screen>(() => {
     const stored = getStoredSession()
-    return stored?.role === 'Admin' || stored?.role === 'DemoAdmin' ? 'departments' : 'reception'
+    return stored && canUseAdmin(stored.role) ? 'departments' : 'reception'
   })
   const [data, setData] = useState<HospitalData>(emptyData)
   const [selectedDoctorId, setSelectedDoctorId] = useState<number | null>(null)
@@ -59,7 +69,7 @@ function App() {
   })
 
   const refresh = useCallback(async () => {
-    if (!session) return
+    if (!session || !(canUseAdmin(session.role) || canUseReception(session.role))) return
 
     setLoading(true)
     setError(null)
@@ -142,7 +152,7 @@ function App() {
   const handleLogin = (nextSession: Session) => {
     setSession(nextSession)
     setActivity([])
-    setScreen(nextSession.role === 'Admin' || nextSession.role === 'DemoAdmin' ? 'departments' : 'reception')
+    setScreen(canUseAdmin(nextSession.role) ? 'departments' : 'reception')
   }
 
   const handleLogout = () => {
@@ -163,20 +173,22 @@ function App() {
     return <LoginScreen onLogin={handleLogin} />
   }
 
+  if (!canUseAdmin(session.role) && !canUseReception(session.role)) {
+    return <NoAccessScreen role={session.role} onLogout={handleLogout} />
+  }
+
   const selectedDoctor =
     data.doctors.find((doctor) => doctor.doctorId === selectedDoctorId) ??
     data.doctors.find((doctor) => doctor.isActive) ??
     null
   const selectedDepartment =
     data.departments.find((department) => department.id === selectedDepartmentId) ?? data.departments[0] ?? null
-  const canUseAdmin = session.role === 'Admin' || session.role === 'DemoAdmin'
-  const canUseReception = session.role === 'FrontDesk' || session.role === 'DemoFrontDesk'
 
   return (
     <div className="app-shell">
       <Sidebar
-        canUseAdmin={canUseAdmin}
-        canUseReception={canUseReception}
+        canUseAdmin={canUseAdmin(session.role)}
+        canUseReception={canUseReception(session.role)}
         screen={screen}
         onChange={setScreen}
       />
@@ -220,7 +232,7 @@ function App() {
             onSelectDoctor={setSelectedDoctorId}
             onCancelAppointment={(appointmentId, reason) =>
               runAction(
-                () => cancelAppointment({ AppointmentId: appointmentId, Status: 'Cancelled', Reason: reason }),
+                () => cancelAppointment({ AppointmentId: appointmentId, Reason: reason }),
                 'Appointment cancelled',
               )
             }
