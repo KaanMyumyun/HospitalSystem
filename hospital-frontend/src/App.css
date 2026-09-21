@@ -265,6 +265,7 @@
 .workspace {
   min-width: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr);
 }
 
@@ -392,7 +393,13 @@ h2 {
 
 .reception-grid {
   display: grid;
-  grid-template-columns: 300px minmax(520px, 1fr) 320px;
+  grid-template-columns: 300px minmax(0, 1fr) 320px;
+}
+
+@media (max-width: 1440px) {
+  .reception-grid {
+    grid-template-columns: 240px minmax(0, 1fr) 260px;
+  }
 }
 
 .admin-grid {
@@ -466,6 +473,7 @@ h2 {
   height: 40px;
   padding: 0 12px;
   color: var(--muted);
+  white-space: nowrap;
 }
 
 .icon-text-button:disabled,

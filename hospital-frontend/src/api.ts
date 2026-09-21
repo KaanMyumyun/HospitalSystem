@@ -60,7 +60,6 @@ export type CreateAppointmentInput = {
 
 export type CancelAppointmentInput = {
   AppointmentId: number
-  Status: 'Cancelled'
   Reason: string
 }
 
@@ -202,8 +201,6 @@ export async function changeDoctorStatus(doctor: DoctorDto, isActive: boolean) {
   return postAction('/api/Users/change-doctor-status', {
     DoctorId: doctor.doctorId,
     IsActive: isActive,
-    UserId: doctor.userId,
-    UserName: doctor.name,
   })
 }
 

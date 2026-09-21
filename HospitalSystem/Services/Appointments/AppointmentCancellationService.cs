@@ -25,6 +25,9 @@ public class AppointmentCancellationService : IAppointmentCancellationService
         if (!_currentUser.IsInRole(UserRole.FrontDesk))
             return CancelAppointmentResultDto.Fail("You are not allowed to cancel appointments");
  
+        if (dto.AppointmentId is null)
+            return CancelAppointmentResultDto.Fail("Appointment id is required");
+
         if (string.IsNullOrWhiteSpace(dto.Reason))
             return CancelAppointmentResultDto.Fail("Cancellation reason is required");
  

@@ -17,8 +17,8 @@ public class CreateAppointmentDto
     public string PhoneNumber { get; set; }
     
     [Required]
-    public DateOnly DateOfBirth { get; set; }
+    public DateOnly? DateOfBirth { get; set; }
     
     [Required]
-    public DateTime AppointmentTime { get; set; }
+    public DateTime? AppointmentTime { get; set; }
 }

@@ -124,4 +124,17 @@ public class AppointmentCancellationServiceTests : AppointmentTestBase
         appointment!.TimeOfAppointment = DateTime.UtcNow.AddDays(7);
         await db.SaveChangesAsync();
     }
+
+    [Fact]
+    public async Task CancelAppointmentAsync_MissingAppointmentId_Fails()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+
+        var result = await service.CancelAppointmentAsync(new CancelAppointmentDto { Reason = "Patient requested" });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Appointment id is required", result.Error);
+    }
 }

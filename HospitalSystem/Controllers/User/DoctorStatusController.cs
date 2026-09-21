@@ -17,7 +17,7 @@ public class DoctorStatusController : ControllerBase
  
     [Authorize(Roles = "Admin")]
     [HttpPost("change-doctor-status")]
-    public async Task<IActionResult> ChangeDoctorStatus([FromBody] ChangeDoctorsStatus dto)
+    public async Task<IActionResult> ChangeDoctorStatus([FromBody] ChangeDoctorStatusDto dto)
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);

@@ -33,11 +33,20 @@ public class AppointmentCreationService : IAppointmentCreationService
         if (!_currentUser.IsInRole(UserRole.FrontDesk))
             return CreateAppointmentResultDto.Fail("You are not allowed to create appointments");
  
-        var doctorExists = await _context.Doctors.AnyAsync(d => d.Id == dto.DoctorId);
-        if (!doctorExists)
+        var doctor = await _context.Doctors
+            .Where(d => d.Id == dto.DoctorId)
+            .Select(d => new { d.IsActive, d.User.Role })
+            .FirstOrDefaultAsync();
+        if (doctor == null)
             return CreateAppointmentResultDto.Fail("Doctor not found");
+
+        if (!doctor.IsActive || doctor.Role != UserRole.Doctor)
+            return CreateAppointmentResultDto.Fail("Doctor is not available for booking");
  
-        var appointmentTime = DateTime.SpecifyKind(dto.AppointmentTime, DateTimeKind.Utc);
+        if (dto.AppointmentTime is null)
+            return CreateAppointmentResultDto.Fail("Appointment time is required");
+
+        var appointmentTime = DateTime.SpecifyKind(dto.AppointmentTime.Value, DateTimeKind.Utc);
 
         var validationError = ValidateAppointment(dto, appointmentTime);
         if (validationError is not null)
@@ -49,7 +58,7 @@ public class AppointmentCreationService : IAppointmentCreationService
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
         var patientId = await _patientService.GetOrCreatePatientAsync(
-            dto.PatientName, dto.PhoneNumber, dto.DateOfBirth);
+            dto.PatientName, dto.PhoneNumber, dto.DateOfBirth!.Value);
  
         var appointment = new AppointmentsEntity
         {
@@ -95,7 +104,7 @@ public class AppointmentCreationService : IAppointmentCreationService
         if (!AllowedPhoneCharacters.IsMatch(phoneNumber) || digitCount < 7 || digitCount > 15)
             return "Phone number must contain 7 to 15 digits and no letters";
 
-        if (dto.DateOfBirth == default)
+        if (dto.DateOfBirth is null)
             return "Date of birth is required";
 
         if (dto.DateOfBirth > DateOnly.FromDateTime(appointmentTime))
