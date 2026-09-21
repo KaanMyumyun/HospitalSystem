@@ -1,3 +1,5 @@
+import { parseBody, tooManyRequestsMessage, unreadableResponseMessage } from './lib/http'
+
 export type UserRole = 'Pending' | 'Admin' | 'Doctor' | 'FrontDesk' | 'DemoAdmin' | 'DemoFrontDesk'
 
 export type LoginResult = {
@@ -52,7 +54,6 @@ export type CreateAppointmentInput = {
   DoctorId: number
   PatientName: string
   PhoneNumber: string
-  // YYYY-MM-DD with no time or timezone, so it cannot shift by a day.
   DateOfBirth: string
   AppointmentTime: string
 }
@@ -223,7 +224,7 @@ function canReadAppointments(role: UserRole) {
 }
 
 function canListUsers(role: UserRole) {
-  return role === 'Admin' || role === 'FrontDesk'
+  return role === 'Admin'
 }
 
 async function getServiceResult<T>(path: string): Promise<T> {
@@ -273,7 +274,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   const text = await response.text()
-  const payload = text ? JSON.parse(text) : null
+  const { payload, isJson } = parseBody(text)
 
   if (!response.ok) {
     const message =
@@ -297,7 +298,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
           : 'Not allowed to do that.',
       )
     }
+    if (response.status === 429) {
+      throw new Error(tooManyRequestsMessage(response.headers.get('Retry-After')))
+    }
+    if (!isJson) {
+      throw new Error(unreadableResponseMessage(response.status))
+    }
     throw new Error(message ?? `Request failed with ${response.status}`)
+  }
+
+  if (!isJson) {
+    throw new Error(unreadableResponseMessage(response.status))
   }
 
   return payload as T

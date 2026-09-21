@@ -16,9 +16,6 @@ public class LoginService : ILoginService
     private readonly DemoSettings _demoSettings;
     private readonly PasswordHasher<UserEntity> _hasher;
 
-    // A fixed, valid-format hash to verify against when the user doesn't exist,
-    // so a missing username takes the same time as a wrong password (no
-    // user-enumeration timing oracle). The hashed value itself is irrelevant.
     private static readonly string DummyPasswordHash =
         new PasswordHasher<UserEntity>().HashPassword(new UserEntity(), Guid.NewGuid().ToString());
 
@@ -48,8 +45,6 @@ public class LoginService : ILoginService
         if (result == PasswordVerificationResult.Failed)
             return LoginResultDto.Fail("Invalid credentials");
 
-        // Demo accounts sign in only through DemoLoginAsync, so turning
-        // Demo:Enabled off shuts them out completely.
         if (user.Role is UserRole.DemoAdmin or UserRole.DemoFrontDesk)
             return LoginResultDto.Fail("Invalid credentials");
 
@@ -73,8 +68,6 @@ public class LoginService : ILoginService
         if (string.IsNullOrWhiteSpace(userName))
             return LoginResultDto.Fail("Invalid credentials");
 
-        // Match the role too: if the configured account has been given a real
-        // role, it must not be reachable without a password.
         var user = await _context.Users.SingleOrDefaultAsync(u => u.Name == userName && u.Role == role);
 
         if (user == null)
@@ -101,13 +94,6 @@ public class LoginService : ILoginService
             issuer: _jwtSettings.Issuer,
             audience: _jwtSettings.Audience,
             claims: claims,
-            // Shortened from 3 hours: the security-stamp check below now
-            // revokes tokens immediately on role change/password
-            // reset/doctor-disable, but a shorter window still limits
-            // exposure for a leaked token whose triggering account never
-            // changes. Full refresh-token rotation is a bigger feature
-            // (new endpoint, storage, frontend silent-refresh UX) and is
-            // not implemented here.
             expires: DateTime.UtcNow.AddHours(1),
             signingCredentials: creds
         );

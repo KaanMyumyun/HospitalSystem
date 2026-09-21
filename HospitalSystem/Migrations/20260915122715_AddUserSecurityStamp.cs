@@ -18,9 +18,6 @@ namespace HospitalSystem.Migrations
                 nullable: false,
                 defaultValue: "");
 
-            // Give every existing user a real random stamp instead of leaving
-            // the empty-string default in place (see list.txt E22 for why a
-            // silent bad backfill on an existing table is worth avoiding).
             migrationBuilder.Sql(
                 """UPDATE "Users" SET "SecurityStamp" = gen_random_uuid()::text;""");
         }

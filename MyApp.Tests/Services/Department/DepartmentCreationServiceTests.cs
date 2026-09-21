@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using HospitalSystem.Services;
 using HospitalSystem.Services.Deparment;
 
+namespace HospitalSystem.Tests;
+
 public class DepartmentCreationServiceTests : DepartmentTestBase
 {
     private DepartmentCreationService CreateService(ApplicationDbContext db, bool isAdmin = true)

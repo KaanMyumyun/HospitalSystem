@@ -46,10 +46,6 @@ public class AppointmentCreationService : IAppointmentCreationService
         if (await HasOverlapAsync(dto.DoctorId, appointmentTime))
             return CreateAppointmentResultDto.Fail("Doctor already booked for that time slot");
  
-        // The patient, the appointment and the audit row are saved one after
-        // another because each needs an id from the save before. One
-        // transaction keeps them all-or-nothing, so a failed booking leaves no
-        // patient row or unaudited appointment behind.
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
         var patientId = await _patientService.GetOrCreatePatientAsync(
@@ -73,11 +69,6 @@ public class AppointmentCreationService : IAppointmentCreationService
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
-            // HasOverlapAsync is only the fast path - two concurrent requests
-            // can both pass it. The only unique constraint this insert can hit
-            // is the index on (DoctorId, TimeOfAppointment) filtered to
-            // Status = 'Scheduled', so a losing request for the same start
-            // time lands here (A2). Any other DB error still propagates.
             _context.Entry(appointment).State = EntityState.Detached;
             return CreateAppointmentResultDto.FailConflict("Doctor already booked for that time slot");
         }

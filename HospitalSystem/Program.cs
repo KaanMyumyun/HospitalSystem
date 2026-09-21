@@ -9,6 +9,7 @@
     using HospitalSystem.Interfaces;
     using HospitalSystem.Services;
     using Microsoft.AspNetCore.Diagnostics;
+    using Microsoft.AspNetCore.Diagnostics.HealthChecks;
     using Microsoft.EntityFrameworkCore;
     using Microsoft.IdentityModel.Tokens;
     using Microsoft.OpenApi;
@@ -38,7 +39,8 @@ var builder = WebApplication.CreateBuilder(args);
             policy
                 .WithOrigins(corsAllowedOrigins)
                 .AllowAnyHeader()
-                .AllowAnyMethod();
+                .AllowAnyMethod()
+                .WithExposedHeaders("Retry-After");
         });
     });
 
@@ -48,7 +50,8 @@ var builder = WebApplication.CreateBuilder(args);
             options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
             options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
         });
-    builder.Services.AddHealthChecks();
+    builder.Services.AddHealthChecks()
+        .AddDbContextCheck<ApplicationDbContext>("database", tags: ["ready"]);
 
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(c =>
@@ -74,7 +77,6 @@ var builder = WebApplication.CreateBuilder(args);
         });
     });
 
-//test cicd
     builder.Services.AddHttpContextAccessor();
 
     builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
@@ -108,8 +110,9 @@ var builder = WebApplication.CreateBuilder(args);
     builder.Services.Configure<DemoSettings>(
         builder.Configuration.GetSection("Demo"));
 
-    var jwtSecret = builder.Configuration["JwtSettings:SecretKey"]
-        ?? throw new Exception("JWT SecretKey is not configured");
+    var jwtSecret = builder.Configuration["JwtSettings:SecretKey"];
+    if (string.IsNullOrWhiteSpace(jwtSecret))
+        throw new Exception("JWT SecretKey is not configured");
 
     builder.Services.AddAuthentication("Bearer")
         .AddJwtBearer(options =>
@@ -128,9 +131,6 @@ var builder = WebApplication.CreateBuilder(args);
             };
             options.Events = new JwtBearerEvents
             {
-                // Rejects an otherwise-valid, unexpired token once the
-                // user's role changes, their password is reset, or (for a
-                // doctor) their account is disabled - see B7.
                 OnTokenValidated = async context =>
                 {
                     var userIdClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -172,7 +172,14 @@ var builder = WebApplication.CreateBuilder(args);
     
     options.OnRejected = async (context, token) =>
     {
-        await context.HttpContext.Response.WriteAsync("Rate limit exceeded. API protection active. Please try again in a minute.", token);
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            var seconds = Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds));
+            context.HttpContext.Response.Headers.RetryAfter = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new { error = "Too many requests. Please wait a moment and try again." }, token);
     };
         
         options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
@@ -215,9 +222,6 @@ var builder = WebApplication.CreateBuilder(args);
         if (System.Net.IPNetwork.TryParse(network, out var ipNetwork))
             forwardedHeadersOptions.KnownIPNetworks.Add(ipNetwork);
     }
-    // KnownProxies/KnownNetworks are empty until configured per environment (see
-    // appsettings.json), so this is a safe no-op today rather than trusting an
-    // unverified proxy - populate them to actually close B4.
     app.UseForwardedHeaders(forwardedHeadersOptions);
 
     if (app.Configuration.GetValue<bool>("Database:RunMigrationsOnStartup"))
@@ -238,9 +242,6 @@ var builder = WebApplication.CreateBuilder(args);
             var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
             var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
-            // Two requests creating the same thing at the same moment can both
-            // pass a service's "already exists" check; a unique index then
-            // rejects the second. The client should retry, so answer 409.
             if (exception is DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } })
             {
                 logger.LogWarning(exception,
@@ -279,7 +280,12 @@ var builder = WebApplication.CreateBuilder(args);
     app.UseAuthentication();
     app.UseAuthorization();
 
-    app.MapHealthChecks("/health").AllowAnonymous();
+    app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false })
+        .AllowAnonymous();
+    app.MapHealthChecks("/health/ready", new HealthCheckOptions
+    {
+        Predicate = check => check.Tags.Contains("ready")
+    }).AllowAnonymous();
     app.MapControllers();
     app.MapFallback(context =>
     {
@@ -291,10 +297,6 @@ var builder = WebApplication.CreateBuilder(args);
         });
     }).AllowAnonymous();
 
-    // Metrics are served on their own port, not on the public one: Prometheus
-    // scrapes them without a token, and nothing outside the container or pod
-    // can reach the port because neither compose nor the service publishes it.
-    // Set Metrics:Port to 0 to turn the endpoint off.
     var metricsPort = app.Configuration.GetValue("Metrics:Port", 9091);
     if (metricsPort > 0)
     {

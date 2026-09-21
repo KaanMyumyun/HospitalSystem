@@ -1,5 +1,8 @@
+using System.Security.Claims;
 using HospitalSystem.Services.Auth;
 using Xunit;
+
+namespace HospitalSystem.Tests;
  
 public class LoginServiceTests : AuthTestBase
 {
@@ -136,5 +139,69 @@ public class LoginServiceTests : AuthTestBase
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Invalid credentials", result.Error);
+    }
+
+    [Fact]
+    public async Task LoginAsync_Token_CarriesSecurityStampClaim()
+    {
+        var db = CreateDbContext();
+        var user = await SeedUserAsync(db);
+        var service = CreateService(db);
+
+        var result = await service.LoginAsync(new LoginDto { Name = "Test", Password = TestPassword });
+
+        Assert.True(result.IsSuccess);
+        var principal = ReadValidatedToken(result.Token!);
+        Assert.Equal(user.SecurityStamp, principal.FindFirst(SecurityStampClaims.ClaimType)?.Value);
+    }
+
+    [Fact]
+    public async Task LoginAsync_Token_CarriesUserIdAndRole()
+    {
+        var db = CreateDbContext();
+        var user = await SeedUserAsync(db, UserRole.FrontDesk, "Reception");
+        var service = CreateService(db);
+
+        var result = await service.LoginAsync(new LoginDto { Name = "Reception", Password = TestPassword });
+
+        Assert.True(result.IsSuccess);
+        var principal = ReadValidatedToken(result.Token!);
+        Assert.Equal(user.Id.ToString(), principal.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+        Assert.Equal(UserRole.FrontDesk.ToString(), principal.FindFirst(ClaimTypes.Role)?.Value);
+    }
+
+    [Fact]
+    public async Task DemoLoginAsync_Token_CarriesSecurityStampClaim()
+    {
+        var db = CreateDbContext();
+        var user = await SeedUserAsync(db, UserRole.DemoAdmin, "DemoAdmin");
+        var service = CreateService(db);
+
+        var result = await service.DemoLoginAsync(UserRole.DemoAdmin);
+
+        Assert.True(result.IsSuccess);
+        var principal = ReadValidatedToken(result.Token!);
+        Assert.Equal(user.SecurityStamp, principal.FindFirst(SecurityStampClaims.ClaimType)?.Value);
+    }
+
+    [Fact]
+    public async Task LoginAsync_AfterStampRotation_OldTokenStampNoLongerMatchesTheUser()
+    {
+        var db = CreateDbContext();
+        var user = await SeedUserAsync(db);
+        var service = CreateService(db);
+
+        var before = await service.LoginAsync(new LoginDto { Name = "Test", Password = TestPassword });
+
+        user.SecurityStamp = Guid.NewGuid().ToString();
+        await db.SaveChangesAsync();
+
+        var after = await service.LoginAsync(new LoginDto { Name = "Test", Password = TestPassword });
+
+        var staleStamp = ReadValidatedToken(before.Token!).FindFirst(SecurityStampClaims.ClaimType)?.Value;
+        var freshStamp = ReadValidatedToken(after.Token!).FindFirst(SecurityStampClaims.ClaimType)?.Value;
+
+        Assert.NotEqual(user.SecurityStamp, staleStamp);
+        Assert.Equal(user.SecurityStamp, freshStamp);
     }
 }

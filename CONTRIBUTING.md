@@ -42,6 +42,7 @@ Frontend, if you changed it:
 ```bash
 cd hospital-frontend
 npm run lint
+npm test
 npm run build
 ```
 

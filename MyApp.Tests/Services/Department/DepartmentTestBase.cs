@@ -1,6 +1,8 @@
 using HospitalSystem.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Moq;
+
+namespace HospitalSystem.Tests;
  
 public abstract class DepartmentTestBase
 {

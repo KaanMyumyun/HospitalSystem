@@ -49,8 +49,6 @@ public class UserCreationService : IUserCreationService
  
         user.PasswordHash = _hasher.HashPassword(user, dto.Password);
  
-        // Saved twice because the audit row needs the new id; one transaction
-        // keeps the two saves all-or-nothing.
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
         _context.Users.Add(user);

@@ -6,10 +6,17 @@ on:
     types:
       - completed
 
+permissions: {}
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'workflow_run' && github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: production
     permissions:
       id-token: write
@@ -21,7 +28,24 @@ jobs:
       DEPLOY_INSTANCE_NAME: ${{ vars.DEPLOY_INSTANCE_NAME }}
 
     steps:
+      - name: Check the commit is still the tip of main
+        id: tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          MAIN_SHA=$(gh api "repos/${REPO}/commits/main" --jq .sha)
+
+          if [ "$MAIN_SHA" = "$HEAD_SHA" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping deploy: ${HEAD_SHA:0:7} is no longer the tip of main (now ${MAIN_SHA:0:7})."
+          fi
+
       - name: Validate deploy configuration
+        if: steps.tip.outputs.current == 'true'
         run: |
           if [ -z "$AWS_REGION" ]; then
             echo "AWS_REGION repository variable or secret is required."
@@ -41,19 +65,21 @@ jobs:
           fi
 
       - name: Set deployment image tag
+        if: steps.tip.outputs.current == 'true'
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
           echo "IMAGE_TAG=$(date -u +'%Y-%m-%d')-${HEAD_SHA:0:7}" >> "$GITHUB_ENV"
 
       - name: Configure AWS credentials
+        if: steps.tip.outputs.current == 'true'
         uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # The EKS API endpoint is private. The deploy runs on the ops instance
-      # inside the VPC, through an SSM document whose only input is the tag.
       - name: Find the ops instance
+        if: steps.tip.outputs.current == 'true'
         run: |
           INSTANCE_IDS=$(aws ec2 describe-instances \
             --filters "Name=tag:Name,Values=${DEPLOY_INSTANCE_NAME}" "Name=instance-state-name,Values=running" \
@@ -69,6 +95,7 @@ jobs:
           echo "INSTANCE_ID=${INSTANCE_IDS}" >> "$GITHUB_ENV"
 
       - name: Deploy through SSM
+        if: steps.tip.outputs.current == 'true'
         run: |
           COMMAND_ID=$(aws ssm send-command \
             --document-name "$DEPLOY_SSM_DOCUMENT" \

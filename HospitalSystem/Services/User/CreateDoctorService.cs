@@ -26,8 +26,6 @@ public class CreateDoctorService : ICreateDoctorService
         if (user == null)
             return CreateDoctorResultDto.Fail("User not found");
 
-        // Moving an existing admin or front-desk account to Doctor is a role
-        // change, and goes through change-role.
         if (user.Role is not (UserRole.Pending or UserRole.Doctor))
             return CreateDoctorResultDto.Fail("Only pending users or doctors can be made a doctor");
 
@@ -38,8 +36,6 @@ public class CreateDoctorService : ICreateDoctorService
         if (!department.IsActive)
             return CreateDoctorResultDto.Fail("Department is not active");
 
-        // Saved twice because the audit row needs the new id; one transaction
-        // keeps the two saves all-or-nothing.
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
         if (user.Role != UserRole.Doctor)

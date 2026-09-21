@@ -22,10 +22,6 @@ public class AppointmentCancellationService : IAppointmentCancellationService
  
     public async Task<CancelAppointmentResultDto> CancelAppointmentAsync(CancelAppointmentDto dto)
     {
-        // Deliberately no ownership check: any front-desk user may cancel any
-        // appointment, not just ones they created. Front-desk staff commonly
-        // share duties and the original booker may not be on shift when a
-        // cancellation is needed. See list.txt B8.
         if (!_currentUser.IsInRole(UserRole.FrontDesk))
             return CancelAppointmentResultDto.Fail("You are not allowed to cancel appointments");
  
@@ -41,8 +37,6 @@ public class AppointmentCancellationService : IAppointmentCancellationService
         if (appointment.Status == AppointmentStatus.Cancelled)
             return CancelAppointmentResultDto.Fail("Appointment already canceled");
 
-        // A completed, no-show or past appointment is a record of what
-        // happened; cancelling it would overwrite that.
         if (appointment.Status != AppointmentStatus.Scheduled)
             return CancelAppointmentResultDto.Fail("Only scheduled appointments can be cancelled");
 

@@ -5,7 +5,7 @@
 ## How it was tested
 
 - [ ] `dotnet test`
-- [ ] `npm run lint` and `npm run build` in `hospital-frontend` (if the frontend changed)
+- [ ] `npm run lint`, `npm test` and `npm run build` in `hospital-frontend` (if the frontend changed)
 
 ## Checklist
 

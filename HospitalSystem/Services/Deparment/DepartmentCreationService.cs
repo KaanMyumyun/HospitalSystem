@@ -26,8 +26,6 @@ public class DepartmentCreationService : IDepartmentCreationService
         if (exists)
             return DepartmentActionResultDto.Fail("Department already exists");
 
-        // Saved twice because the audit row needs the new id; one transaction
-        // keeps the two saves all-or-nothing.
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
         var department = new DepartmentEntity { Department = dto.Name, IsActive = true };

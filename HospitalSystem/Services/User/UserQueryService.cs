@@ -17,10 +17,7 @@ public class UserQueryService : IUserQueryService
  
     public async Task<ServiceResult<List<UserDisplayDto>>> ListUsersAsync()
     {
-        // Demo accounts are reachable without a password, so they do not get
-        // the list of real usernames.
-        if (!_currentUser.IsInRole(UserRole.Admin) &&
-            !_currentUser.IsInRole(UserRole.FrontDesk))
+        if (!_currentUser.IsInRole(UserRole.Admin))
         {
             return ServiceResult<List<UserDisplayDto>>.Fail("Not allowed to list users");
         }

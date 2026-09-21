@@ -6,16 +6,20 @@ on:
   pull_request:
     branches: [ "main" ]
   # Weekly rebuild so published images pick up base image security fixes.
-  # Docker Image CI and Deploy to EKS follow a successful run, as for a push.
   schedule:
     - cron: "0 3 * * 1" # Mondays 03:00 UTC
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -25,7 +29,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json # same SDK as local builds
 
       - name: Restore dependencies
         run: dotnet restore
@@ -38,6 +42,7 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: hospital-frontend
@@ -57,6 +62,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
       - name: Lint
         run: npm run lint
 
@@ -66,11 +74,9 @@ jobs:
       - name: Type-check and build
         run: npm run build
 
-  # Scans images built from the same commit and Dockerfiles that Docker Image CI
-  # pushes. It runs here, in a job with no AWS or Docker Hub credentials, so a
-  # compromised scanner has nothing to steal.
   image-scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

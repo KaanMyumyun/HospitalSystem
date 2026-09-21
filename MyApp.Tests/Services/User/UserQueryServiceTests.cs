@@ -3,6 +3,8 @@ using HospitalSystem.Interfaces;
 using Xunit;
 using HospitalSystem.Services;
 using HospitalSystem.Services.User;
+
+namespace HospitalSystem.Tests;
  
 public class UserQueryServiceTests : UserTestBase
 {
@@ -88,6 +90,20 @@ public class UserQueryServiceTests : UserTestBase
         var result = await service.ListDoctorsAsync();
  
         Assert.True(result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task ListUsersAsync_FrontDesk_Fails()
+    {
+        var db = CreateDbContext();
+        db.Users.Add(new UserEntity { Id = 1, Name = "admin", PasswordHash = "hashed", Role = UserRole.Admin });
+        await db.SaveChangesAsync();
+        var service = CreateService(db, isAdmin: false, isFrontDesk: true);
+
+        var result = await service.ListUsersAsync();
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Not allowed to list users", result.Error);
     }
 
     [Theory]
