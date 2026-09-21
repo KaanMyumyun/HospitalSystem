@@ -50,6 +50,13 @@ tagged releases yet, so everything is listed under Unreleased.
 
 ### Fixed
 
+- Appointments can only be booked inside the doctor's working hours, for a
+  doctor who has a schedule and whose department is active.
+- Working hours show the same on every screen for staff outside UTC: the
+  calendar header and the Schedules tab no longer shift them by the browser's
+  offset, and a schedule ending at 24:00 no longer shows as empty.
+- Bookings are sent with the desk's UTC offset, and the API converts them to
+  UTC instead of relabelling the local time as UTC.
 - Pending accounts cannot sign in until an admin gives them a role ("Account
   awaiting approval"), and roles with no screens, such as Doctor, see a
   "No access for this role" page instead of an empty reception screen.

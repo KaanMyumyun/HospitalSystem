@@ -35,22 +35,29 @@ public class AppointmentCreationService : IAppointmentCreationService
  
         var doctor = await _context.Doctors
             .Where(d => d.Id == dto.DoctorId)
-            .Select(d => new { d.IsActive, d.User.Role })
+            .Select(d => new { d.IsActive, d.User.Role, DepartmentIsActive = d.Department.IsActive })
             .FirstOrDefaultAsync();
         if (doctor == null)
             return CreateAppointmentResultDto.Fail("Doctor not found");
 
         if (!doctor.IsActive || doctor.Role != UserRole.Doctor)
             return CreateAppointmentResultDto.Fail("Doctor is not available for booking");
+
+        if (!doctor.DepartmentIsActive)
+            return CreateAppointmentResultDto.Fail("Doctor's department is not active");
  
-        if (dto.AppointmentTime is null)
+        if (dto.AppointmentTime is not DateTimeOffset requestedTime)
             return CreateAppointmentResultDto.Fail("Appointment time is required");
 
-        var appointmentTime = DateTime.SpecifyKind(dto.AppointmentTime.Value, DateTimeKind.Utc);
+        var appointmentTime = requestedTime.UtcDateTime;
 
-        var validationError = ValidateAppointment(dto, appointmentTime);
+        var validationError = ValidateAppointment(dto, requestedTime);
         if (validationError is not null)
             return CreateAppointmentResultDto.Fail(validationError);
+
+        var scheduleError = await CheckWorkingHoursAsync(dto.DoctorId, requestedTime);
+        if (scheduleError is not null)
+            return CreateAppointmentResultDto.Fail(scheduleError);
  
         if (await HasOverlapAsync(dto.DoctorId, appointmentTime))
             return CreateAppointmentResultDto.Fail("Doctor already booked for that time slot");
@@ -89,7 +96,7 @@ public class AppointmentCreationService : IAppointmentCreationService
         return CreateAppointmentResultDto.Success();
     }
 
-    private static string? ValidateAppointment(CreateAppointmentDto dto, DateTime appointmentTime)
+    private static string? ValidateAppointment(CreateAppointmentDto dto, DateTimeOffset requestedTime)
     {
         var patientName = dto.PatientName?.Trim();
         var phoneNumber = dto.PhoneNumber?.Trim();
@@ -107,12 +114,35 @@ public class AppointmentCreationService : IAppointmentCreationService
         if (dto.DateOfBirth is null)
             return "Date of birth is required";
 
-        if (dto.DateOfBirth > DateOnly.FromDateTime(appointmentTime))
+        if (dto.DateOfBirth > DateOnly.FromDateTime(requestedTime.DateTime))
             return "Date of birth cannot be after the appointment date";
 
         return null;
     }
  
+    // Working hours are whole wall-clock hours, compared with the time as the
+    // desk sent it, not with its UTC equivalent.
+    private async Task<string?> CheckWorkingHoursAsync(int doctorId, DateTimeOffset requestedTime)
+    {
+        var schedule = await _context.Calendars
+            .Where(c => c.DoctorId == doctorId)
+            .Select(c => new { c.StartTime, c.EndTime, c.SlotDurationMin })
+            .FirstOrDefaultAsync();
+
+        if (schedule == null)
+            return "Doctor has no schedule";
+
+        // Stored on a placeholder date; an end hour of 24 is midnight of the next day.
+        var startMinutes = (schedule.StartTime - schedule.StartTime.Date).TotalMinutes;
+        var endMinutes = (schedule.EndTime - schedule.StartTime.Date).TotalMinutes;
+        var requestedMinutes = requestedTime.TimeOfDay.TotalMinutes;
+
+        if (requestedMinutes < startMinutes || requestedMinutes + schedule.SlotDurationMin > endMinutes)
+            return "Appointment time is outside the doctor's working hours";
+
+        return null;
+    }
+
     private async Task<bool> HasOverlapAsync(int doctorId, DateTime appointmentTime)
     {
         var earliestOverlappingStart = appointmentTime.Subtract(AppointmentDuration);

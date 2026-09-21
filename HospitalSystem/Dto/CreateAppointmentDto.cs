@@ -19,6 +19,7 @@ public class CreateAppointmentDto
     [Required]
     public DateOnly? DateOfBirth { get; set; }
     
+    // The desk's wall-clock time with its UTC offset, e.g. 2026-09-22T09:00:00+03:00.
     [Required]
-    public DateTime? AppointmentTime { get; set; }
+    public DateTimeOffset? AppointmentTime { get; set; }
 }

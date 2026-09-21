@@ -12,6 +12,7 @@ import {
   slotLabel,
 } from '../lib/format'
 import { buildWeekSlots, canCancelAppointment, dateAtTime, getNextAvailableSlot, isInWeek, weekDays } from '../lib/schedule'
+import { toLocalIsoString } from '../lib/time'
 import { toDateInputValue, validateAppointmentInput } from '../lib/validation'
 import type { ActionOutcome, Slot } from '../types'
 
@@ -123,7 +124,7 @@ export function ReceptionDashboard({
       PatientName: patientName.trim(),
       PhoneNumber: phoneNumber.trim(),
       DateOfBirth: dateOfBirth,
-      AppointmentTime: appointmentTime.toISOString(),
+      AppointmentTime: toLocalIsoString(appointmentTime),
     })
     if (!outcome.ok) {
       if (outcome.error) setBookingError(outcome.error)

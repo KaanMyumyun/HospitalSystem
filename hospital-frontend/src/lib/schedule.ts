@@ -1,6 +1,7 @@
 import type { AppointmentDto, DoctorDto, ScheduleDto } from '../api'
 import type { Slot } from '../types'
 import { formatHourRange } from './format'
+import { clockLabel, scheduleWindow } from './time'
 
 export function weekDays(weekOffset = 0) {
   const today = new Date()
@@ -38,13 +39,12 @@ export function buildWeekSlots(
     )
   }
 
-  const startHour = new Date(schedule.startTime).getUTCHours()
-  const endHour = new Date(schedule.endTime).getUTCHours()
+  const { startMinutes, endMinutes } = scheduleWindow(schedule)
   const duration = schedule.slotDurationMin || 30
   const times: string[] = []
 
-  for (let minutes = startHour * 60; minutes < endHour * 60; minutes += duration) {
-    times.push(`${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`)
+  for (let minutes = startMinutes; minutes + duration <= endMinutes; minutes += duration) {
+    times.push(clockLabel(minutes))
   }
 
   return times.map((time) =>
