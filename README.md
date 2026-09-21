@@ -478,6 +478,10 @@ It calls the API at `http://localhost:5272/api` unless `VITE_API_URL` is set.
 |    GET | /api/Appointments/ListAppointments  | List appointments  |
 |   POST | /api/Appointments/CancelAppointment | Cancel appointment |
 
+`CreateAppointment` takes `appointmentTime` as the front desk's local time with
+its UTC offset, for example `2026-09-22T09:00:00+03:00`. That clock time must
+fall inside the doctor's working hours; the appointment is stored in UTC.
+
 ### Schedules
 
 | Method | Endpoint                      | Description                 |

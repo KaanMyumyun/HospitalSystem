@@ -1,5 +1,6 @@
 import type { DepartmentDto, ScheduleDto } from '../api'
 import type { AdminSection, SlotStatus } from '../types'
+import { clockLabel, scheduleWindow } from './time'
 
 export function formatDay(day: Date) {
   return day.toLocaleDateString('en-US', { weekday: 'short', day: '2-digit' })
@@ -22,7 +23,8 @@ export function formatTime(day: Date) {
 }
 
 export function formatHourRange(schedule: ScheduleDto) {
-  return `${formatTime(new Date(schedule.startTime))}-${formatTime(new Date(schedule.endTime))}`
+  const { startMinutes, endMinutes } = scheduleWindow(schedule)
+  return `${clockLabel(startMinutes)}-${clockLabel(endMinutes)}`
 }
 
 export function slotLabel(status: SlotStatus) {

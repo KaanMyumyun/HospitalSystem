@@ -405,4 +405,114 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.False(result.IsSuccess);
         Assert.Equal("Date of birth is required", result.Error);
     }
+
+    [Theory]
+    [InlineData(7, 45)]
+    [InlineData(17, 50)]
+    [InlineData(18, 0)]
+    [InlineData(3, 0)]
+    public async Task CreateAppointmentAsync_OutsideWorkingHours_Fails(int hour, int minute)
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, hour, minute, 0, DateTimeKind.Utc)), 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Appointment time is outside the doctor's working hours", result.Error);
+    }
+
+    [Theory]
+    [InlineData(8, 0)]
+    [InlineData(17, 45)]
+    public async Task CreateAppointmentAsync_FirstAndLastSlot_Succeed(int hour, int minute)
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, hour, minute, 0, DateTimeKind.Utc)), 5);
+
+        Assert.True(result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_DoctorWithoutSchedule_Fails()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        db.Calendars.RemoveRange(db.Calendars);
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)), 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Doctor has no schedule", result.Error);
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_InactiveDepartment_Fails()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        (await db.Departments.FindAsync(1))!.IsActive = false;
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)), 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Doctor's department is not active", result.Error);
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_ScheduleEndingAtMidnight_AllowsLastSlot()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var calendar = (await db.Calendars.FindAsync(1))!;
+        calendar.StartTime = new DateTime(2000, 1, 1, 20, 0, 0, DateTimeKind.Utc);
+        calendar.EndTime = new DateTime(2000, 1, 2, 0, 0, 0, DateTimeKind.Utc);
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 23, 45, 0, DateTimeKind.Utc)), 5);
+
+        Assert.True(result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_TimeWithOffset_ChecksWallClockAndStoresUtc()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+        var dto = NewPatientAt(new DateTime(2026, 1, 2, 12, 0, 0, DateTimeKind.Utc));
+        dto.AppointmentTime = new DateTimeOffset(2026, 1, 2, 12, 0, 0, TimeSpan.FromHours(3));
+
+        var result = await service.CreateAppointmentAsync(dto, 5);
+
+        Assert.True(result.IsSuccess);
+        var stored = await db.Appointments.SingleAsync(a => a.PatientId != 1 && a.PatientId != 2 && a.PatientId != 3);
+        Assert.Equal(new DateTime(2026, 1, 2, 9, 0, 0, DateTimeKind.Utc), stored.TimeOfAppointment);
+        Assert.Equal(DateTimeKind.Utc, stored.TimeOfAppointment.Kind);
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_WallClockOutsideHoursButUtcInside_Fails()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+        var dto = NewPatientAt(new DateTime(2026, 1, 2, 12, 0, 0, DateTimeKind.Utc));
+        // 20:00 at the desk is 17:00 UTC, inside 08:00-18:00 only if read as UTC.
+        dto.AppointmentTime = new DateTimeOffset(2026, 1, 2, 20, 0, 0, TimeSpan.FromHours(3));
+
+        var result = await service.CreateAppointmentAsync(dto, 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Appointment time is outside the doctor's working hours", result.Error);
+    }
 }

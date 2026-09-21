@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ChangeScheduleInput, CreateScheduleInput, DepartmentDto, DoctorDto, ScheduleDto } from '../../api'
 import { EmptyState, SkeletonRows } from '../../components/ui'
-import { formatTime } from '../../lib/format'
+import { clockLabel, scheduleWindow } from '../../lib/time'
 import type { ActionOutcome } from '../../types'
 
 export function SchedulesTab({
@@ -53,8 +53,9 @@ export function SchedulesTab({
   })
   const startScheduleEdit = (schedule: ScheduleDto) => {
     setEditingScheduleId(schedule.scheduleId)
-    setEditStartHour(String(new Date(schedule.startTime).getUTCHours()))
-    setEditEndHour(String(new Date(schedule.endTime).getUTCHours()))
+    const { startMinutes, endMinutes } = scheduleWindow(schedule)
+    setEditStartHour(String(startMinutes / 60))
+    setEditEndHour(String(endMinutes / 60))
     setEditSlotDuration(String(schedule.slotDurationMin))
   }
 
@@ -114,14 +115,14 @@ export function SchedulesTab({
                   {editingScheduleId === schedule.scheduleId ? (
                     <input className="table-input" type="number" min="0" max="23" value={editStartHour} onChange={(event) => setEditStartHour(event.target.value)} />
                   ) : (
-                    formatTime(new Date(schedule.startTime))
+                    clockLabel(scheduleWindow(schedule).startMinutes)
                   )}
                 </td>
                 <td>
                   {editingScheduleId === schedule.scheduleId ? (
                     <input className="table-input" type="number" min="1" max="24" value={editEndHour} onChange={(event) => setEditEndHour(event.target.value)} />
                   ) : (
-                    formatTime(new Date(schedule.endTime))
+                    clockLabel(scheduleWindow(schedule).endMinutes)
                   )}
                 </td>
                 <td>

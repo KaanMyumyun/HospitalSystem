@@ -29,7 +29,7 @@ public abstract class AppointmentTestBase
  
     protected async Task SeedStandardDataAsync(ApplicationDbContext db, bool isDoctorActive = true)
     {
-        var department = new DepartmentEntity { Id = 1, Department = "Cardiology" };
+        var department = new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true };
  
         var userDoctor = new UserEntity { Id = 1, Name = "Dr. Test", PasswordHash = "dummy_hash", Role = UserRole.Doctor };
         var userFrontDesk = new UserEntity { Id = 5, Name = "Front Desk Admin", PasswordHash = "dummy_hash", Role = UserRole.FrontDesk };
@@ -49,6 +49,14 @@ public abstract class AppointmentTestBase
         db.Departments.Add(department);
         db.Users.AddRange(userDoctor, userFrontDesk);
         db.Doctors.Add(doctor);
+        db.Calendars.Add(new CalendarEntity
+        {
+            Id = 1,
+            DoctorId = 1,
+            StartTime = new DateTime(2000, 1, 1, 8, 0, 0, DateTimeKind.Utc),
+            EndTime = new DateTime(2000, 1, 1, 18, 0, 0, DateTimeKind.Utc),
+            SlotDurationMin = 15
+        });
         db.Patients.AddRange(patient1, patient2, patient3);
         db.Appointments.AddRange(appointment1, appointment2, appointment3);
  
