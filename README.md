@@ -32,25 +32,32 @@ The application uses a three-stage GitHub Actions pipeline:
      so published images pick up base image security fixes
    - Restores, builds and tests the backend
    - Lints, tests and builds the frontend (the build type-checks it)
-   - Builds both Docker images and scans them with Trivy; a fixable `HIGH`
-     or `CRITICAL` vulnerability fails the run
 
 2. `Docker Image CI` workflow
    - Runs after the `CI` workflow succeeds on `main`
-   - Builds backend and frontend Docker images
-   - Tags images with `latest`, full commit SHA, and date-based short SHA tags
-   - Pushes images to Docker Hub and Amazon ECR
+   - Builds the backend and frontend images once each with Buildx, reusing
+     layers from the GitHub Actions cache. The weekly run skips the cache, so
+     the `apk upgrade` layers pick up Alpine security fixes
+   - Scans those images with Trivy; a fixable `HIGH` or `CRITICAL`
+     vulnerability stops the run before anything is pushed
+   - Tags images with `latest` and a tag that is unique to the build,
+     `YYYY-MM-DD-<short sha>-<run number>`, so the weekly rebuild of an
+     unchanged commit gets a new tag instead of overwriting the old image
+   - Pushes the scanned images to Docker Hub and Amazon ECR
    - Uses GitHub Actions OIDC to assume an AWS IAM role for ECR access
+   - Saves the pushed tag and commit as a `release` artifact for the deploy
+     workflow
 
 3. `Deploy to EKS` workflow
    - Runs after the Docker workflow succeeds
    - Waits for approval in the `production` environment
+   - Reads the tag and commit from the Docker run's `release` artifact, and
+     skips the deploy if that commit is no longer the tip of `main`
    - Assumes a separate AWS IAM deployment role through OIDC
    - Sends the deploy SSM document to the ops instance inside the VPC, because
      the EKS API endpoint is private
    - On the instance, the document sets backend and frontend Deployment images
-     to the date-based short SHA tag (`YYYY-MM-DD-<short sha>`) and waits for
-     rollout completion when the app is scaled up
+     to that tag and waits for rollout completion when the app is scaled up
 
 If the Kubernetes deployments are scaled to `0`, the deploy workflow skips the
 rollout wait, but still updates the Deployment image fields. The next manual

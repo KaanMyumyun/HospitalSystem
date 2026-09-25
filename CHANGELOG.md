@@ -44,6 +44,11 @@ tagged releases yet, so everything is listed under Unreleased.
 - CI workflows cancel superseded runs, never run two deploys at once, time
   out instead of hanging for hours, and give jobs only the permissions they
   declare.
+- Docker Image CI builds each image once with the GitHub Actions cache, scans
+  that build with Trivy and pushes it only if the scan passes. The separate
+  scan build in CI is gone. Every build gets a unique
+  `YYYY-MM-DD-<short sha>-<run number>` tag, and the deploy workflow reads
+  that tag from the Docker run instead of working it out again.
 - `docker compose` takes the JWT signing key from a gitignored `.env` file
   (template: `.env.example`) instead of relying on
   `appsettings.Development.json` being copied into the image.
