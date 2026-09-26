@@ -347,13 +347,51 @@ If the API connects to a database you did not expect, run
 ### 3. Create the database schema
 
 ```bash
-dotnet tool install --global dotnet-ef --version "10.*"   # once
 cd HospitalSystem
-dotnet ef database update
+dotnet run -- --migrate
 ```
 
-Alternatively, set `Database__RunMigrationsOnStartup=true` and the API applies
-the migrations when it starts.
+This applies the migrations compiled into the application and exits with code
+`0` on success or `1` on failure. It needs only the database connection string;
+it starts no HTTP or metrics listeners and requires no JWT signing key. An
+invalid command line exits with code `2`. Configure the connection through
+appsettings, development user secrets, or `ConnectionStrings__DefaultConnection`.
+Additional command arguments are rejected to keep the migration entry point
+fixed. EF's migration history makes repeated runs a no-op, and EF Core/Npgsql
+serialize migration execution with a database lock.
+
+The published backend image supports the same command without the SDK or EF
+CLI installed:
+
+```bash
+docker run --rm --env ConnectionStrings__DefaultConnection <backend-image> --migrate
+```
+
+Set `Database__MigrationCommandTimeoutSeconds` to adjust the SQL command and
+migration lock wait timeout (default `120`; must be positive). This is a timeout
+per SQL command, not for the entire process. Migration failures log the error
+type and PostgreSQL error code when available, without dumping connection
+strings, SQL, or database exception details.
+
+For local development, `Database__RunMigrationsOnStartup=true` remains supported.
+In EKS, leave startup migrations disabled and run the privileged operator's
+migration Job before changing Deployment images. The image-only deploy identity
+must not gain permission to create Jobs or read backend secrets. The Job must
+use the same reviewed backend release image that will subsequently be deployed.
+See the [infrastructure runbook](https://github.com/KaanMyumyun/HospitalSystem-infrastructure)
+for the operator path and release verification.
+
+Before the first production run, rehearse the exact release on a Neon branch
+and take the available manual snapshot of the production branch. Review every
+pending migration's SQL and test the existing application against the upgraded
+schema. Existing migrations include a date conversion and a unique appointment
+index, so do not assume all historical changes are safe for existing data.
+Future migrations must preserve compatibility with the running and rollback
+images: add nullable columns or new tables first, backfill separately, and defer
+renames, drops, type changes, and stricter constraints until older images are no
+longer needed. Rolling back an image never undoes a migration; this command only
+applies forward migrations. Recovery from a destructive change requires the
+separately tested restore procedure.
 
 ### 4. Run the API
 

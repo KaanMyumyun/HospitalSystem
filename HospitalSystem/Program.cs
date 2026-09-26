@@ -25,7 +25,13 @@ using HospitalSystem.Interfaces.Auth;
 using HospitalSystem.Interfaces.Calendar;
 using HospitalSystem.Interfaces.Department;
 using HospitalSystem.Interfaces.User;
+using HospitalSystem.Data;
 
+if (args.Contains("--migrate", StringComparer.Ordinal))
+{
+    Environment.ExitCode = await DatabaseMigrationCommand.RunAsync(args);
+    return;
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
