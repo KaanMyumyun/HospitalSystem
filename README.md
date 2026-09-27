@@ -41,8 +41,10 @@ The application uses a three-stage GitHub Actions pipeline:
    - Scans those images with Trivy; a fixable `HIGH` or `CRITICAL`
      vulnerability stops the run before anything is pushed
    - Tags images with `latest` and a tag that is unique to the build,
-     `YYYY-MM-DD-<short sha>-<run number>`, so the weekly rebuild of an
-     unchanged commit gets a new tag instead of overwriting the old image
+     `YYYY-MM-DD-<short sha>-<run number>-<run attempt>`, so the weekly
+     rebuild of an unchanged commit gets a new tag instead of overwriting the
+     old image, and a re-run pushes under a new tag instead of failing on the
+     immutable one it already pushed
    - Pushes the scanned images to Docker Hub and Amazon ECR
    - Uses GitHub Actions OIDC to assume an AWS IAM role for ECR access
    - Saves the pushed tag and commit as a `release` artifact for the deploy

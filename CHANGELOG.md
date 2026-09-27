@@ -47,8 +47,8 @@ tagged releases yet, so everything is listed under Unreleased.
 - Docker Image CI builds each image once with the GitHub Actions cache, scans
   that build with Trivy and pushes it only if the scan passes. The separate
   scan build in CI is gone. Every build gets a unique
-  `YYYY-MM-DD-<short sha>-<run number>` tag, and the deploy workflow reads
-  that tag from the Docker run instead of working it out again.
+  `YYYY-MM-DD-<short sha>-<run number>-<run attempt>` tag, and the deploy
+  workflow reads that tag from the Docker run instead of working it out again.
 - `docker compose` takes the JWT signing key from a gitignored `.env` file
   (template: `.env.example`) instead of relying on
   `appsettings.Development.json` being copied into the image.
@@ -82,6 +82,9 @@ tagged releases yet, so everything is listed under Unreleased.
 - Two front-desk users booking the same doctor and time at once no longer
   both succeed: a unique index on scheduled appointments makes the loser
   fail with `409 Conflict` instead of creating a double booking.
+- Re-running a Docker Image CI run no longer fails on the ECR push: the tag
+  now ends in the run attempt, so the re-run pushes under a new tag instead of
+  the immutable one the first attempt pushed.
 
 ### Security
 
