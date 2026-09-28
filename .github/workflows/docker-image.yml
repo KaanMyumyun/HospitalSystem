@@ -35,12 +35,15 @@ jobs:
 
       # Unique per build: the weekly rebuild of an unchanged commit gets a new
       # tag instead of overwriting the image already pushed for that commit.
+      # A re-run keeps the run number, so the attempt keeps its tag new too;
+      # ECR release tags are immutable, and reusing one fails the push.
       - name: Set image tag
         env:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           RUN_NUMBER: ${{ github.run_number }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          echo "IMAGE_TAG=$(date -u +'%Y-%m-%d')-${HEAD_SHA:0:7}-${RUN_NUMBER}" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=$(date -u +'%Y-%m-%d')-${HEAD_SHA:0:7}-${RUN_NUMBER}-${RUN_ATTEMPT}" >> "$GITHUB_ENV"
 
       - name: Login to Docker Hub
         env:
