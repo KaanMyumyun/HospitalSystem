@@ -52,7 +52,7 @@ public class LoginService : ILoginService
         if (user.Role == UserRole.Pending)
             return LoginResultDto.Fail("Account awaiting approval");
 
-        var token = GenerateToken(user);
+        var token = GenerateToken(user, _jwtSettings);
 
         return LoginResultDto.Success(token, user.Role.ToString());
     }
@@ -77,12 +77,13 @@ public class LoginService : ILoginService
         if (user == null)
             return LoginResultDto.Fail("Invalid credentials");
 
-        var token = GenerateToken(user);
+        var token = GenerateToken(user, _jwtSettings);
 
         return LoginResultDto.Success(token, user.Role.ToString());
     }
 
-    private string GenerateToken(UserEntity user)
+    // Static so the startup warm-up can sign a throwaway token the same way.
+    internal static string GenerateToken(UserEntity user, JwtSettings jwtSettings)
     {
         var claims = new List<Claim>
         {
@@ -91,12 +92,12 @@ public class LoginService : ILoginService
             new Claim(SecurityStampClaims.ClaimType, user.SecurityStamp)
         };
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.SecretKey));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
-            issuer: _jwtSettings.Issuer,
-            audience: _jwtSettings.Audience,
+            issuer: jwtSettings.Issuer,
+            audience: jwtSettings.Audience,
             claims: claims,
             expires: DateTime.UtcNow.AddHours(1),
             signingCredentials: creds

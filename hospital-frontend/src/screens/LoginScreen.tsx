@@ -4,17 +4,20 @@ import { demoLogin, login } from '../api'
 import { StatusBadge } from '../components/ui'
 import type { Session } from '../types'
 
+type PendingSignIn = 'password' | 'DemoAdmin' | 'DemoFrontDesk'
+
 export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }) {
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  // Which button is waiting for the API; all of them are disabled meanwhile.
+  const [pending, setPending] = useState<PendingSignIn | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const submit = async () => {
-    setSubmitting(true)
+    setPending('password')
     setError(null)
     const result = await login(name, password)
-    setSubmitting(false)
+    setPending(null)
 
     if (!result.isSuccess || !result.token || !result.role) {
       setError(result.error ?? 'Invalid credentials')
@@ -25,10 +28,10 @@ export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }
   }
 
   const submitDemo = async (role: 'DemoAdmin' | 'DemoFrontDesk') => {
-    setSubmitting(true)
+    setPending(role)
     setError(null)
     const result = await demoLogin(role)
-    setSubmitting(false)
+    setPending(null)
 
     if (!result.isSuccess || !result.token || !result.role) {
       setError(result.error ?? 'Invalid credentials')
@@ -73,17 +76,27 @@ export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }
             <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
           </label>
           {error && <div className="form-error">{error}</div>}
-          <button className="primary-button" disabled={submitting} type="submit">
-            {submitting ? 'Signing in...' : 'Sign in'}
+          <button className="primary-button" disabled={pending !== null} type="submit">
+            {pending === 'password' ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
 
         <div className="demo-row">
-          <button className="secondary-button" type="button" onClick={() => void submitDemo('DemoAdmin')}>
-            Demo Admin
+          <button
+            className="secondary-button"
+            disabled={pending !== null}
+            type="button"
+            onClick={() => void submitDemo('DemoAdmin')}
+          >
+            {pending === 'DemoAdmin' ? 'Signing in...' : 'Demo Admin'}
           </button>
-          <button className="secondary-button" type="button" onClick={() => void submitDemo('DemoFrontDesk')}>
-            Demo Reception
+          <button
+            className="secondary-button"
+            disabled={pending !== null}
+            type="button"
+            onClick={() => void submitDemo('DemoFrontDesk')}
+          >
+            {pending === 'DemoFrontDesk' ? 'Signing in...' : 'Demo Reception'}
           </button>
         </div>
       </section>

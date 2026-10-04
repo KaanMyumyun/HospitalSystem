@@ -42,11 +42,14 @@ var builder = WebApplication.CreateBuilder(args);
     {
         options.AddPolicy("ReactPolicy", policy =>
         {
+            // Browsers may reuse a preflight answer for up to two hours (Chrome's
+            // cap), so cross-origin calls skip the extra OPTIONS round trip.
             policy
                 .WithOrigins(corsAllowedOrigins)
                 .AllowAnyHeader()
                 .AllowAnyMethod()
-                .WithExposedHeaders("Retry-After");
+                .WithExposedHeaders("Retry-After")
+                .SetPreflightMaxAge(TimeSpan.FromHours(2));
         });
     });
 
@@ -94,6 +97,7 @@ var builder = WebApplication.CreateBuilder(args);
     builder.Services.AddScoped<IAppointmentCreationService, AppointmentCreationService>();
 
     builder.Services.AddScoped<ILoginService, LoginService>();
+    builder.Services.AddHostedService<SignInWarmup>();
     builder.Services.AddScoped<IUserCreationService, UserCreationService>();
 
     builder.Services.AddScoped<IScheduleCreationService, ScheduleCreationService>();
@@ -149,10 +153,7 @@ var builder = WebApplication.CreateBuilder(args);
                     }
 
                     var db = context.HttpContext.RequestServices.GetRequiredService<ApplicationDbContext>();
-                    var currentStamp = await db.Users
-                        .Where(u => u.Id == userId)
-                        .Select(u => u.SecurityStamp)
-                        .FirstOrDefaultAsync();
+                    var currentStamp = await SecurityStampClaims.CurrentStampAsync(db, userId);
 
                     if (currentStamp == null || currentStamp != stampClaim)
                         context.Fail("Token has been revoked");

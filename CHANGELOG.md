@@ -54,6 +54,11 @@ tagged releases yet, so everything is listed under Unreleased.
 - The backend image is compiled ahead of time (ReadyToRun), so a new container
   is ready and answers its first requests sooner. The image is about 13 MB
   larger.
+- The API prepares sign-in when it starts (database connection, the demo
+  sign-in and token-check queries, token signing), so the first sign-ins after
+  a deploy or restart are faster.
+- Browsers may reuse the API's answer to a CORS preflight for two hours, so a
+  frontend on another origin sends fewer extra `OPTIONS` requests.
 
 - CI workflows cancel superseded runs, never run two deploys at once, time
   out instead of hanging for hours, and give jobs only the permissions they
@@ -89,6 +94,9 @@ tagged releases yet, so everything is listed under Unreleased.
   documents its real response type.
 - The reception page fits 1280px and 1440px windows; the calendar scrolls
   inside its panel instead.
+- The demo sign-in buttons say "Signing in..." and are disabled while a
+  sign-in runs. Before, the Sign in button changed instead of the one that was
+  clicked, and a second click sent a second request.
 - Hitting a rate limit shows a readable message with how long to wait,
   instead of a JSON parse error. The API returns JSON and a `Retry-After`
   header, and the frontend no longer fails on any non-JSON response, such as
