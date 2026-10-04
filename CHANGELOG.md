@@ -63,6 +63,9 @@ tagged releases yet, so everything is listed under Unreleased.
   scan build in CI is gone. Every build gets a unique
   `YYYY-MM-DD-<short sha>-<run number>-<run attempt>` tag, and the deploy
   workflow reads that tag from the Docker run instead of working it out again.
+- Docker Image CI rebuilds the runtime stage of both images on every build
+  instead of taking it from the cache, so `apk upgrade` picks up Alpine
+  security fixes on the next build rather than the next weekly run.
 - `docker compose` takes the JWT signing key from a gitignored `.env` file
   (template: `.env.example`) instead of relying on
   `appsettings.Development.json` being copied into the image.
