@@ -8,7 +8,7 @@ ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.31-alpine-slim
+FROM nginxinc/nginx-unprivileged:1.31-alpine-slim AS runtime
 USER root
 RUN apk upgrade --no-cache
 COPY --chown=101:101 nginx.conf /etc/nginx/conf.d/default.conf

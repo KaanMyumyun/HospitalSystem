@@ -14,7 +14,7 @@ WORKDIR /src/HospitalSystem
 RUN dotnet publish -c Release --os linux-musl -a $TARGETARCH --self-contained false --no-restore \
     -p:PublishReadyToRun=true -o /app/publish
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
 WORKDIR /app
 
 RUN apk upgrade --no-cache \
