@@ -36,8 +36,9 @@ The application uses a three-stage GitHub Actions pipeline:
 2. `Docker Image CI` workflow
    - Runs after the `CI` workflow succeeds on `main`
    - Builds the backend and frontend images once each with Buildx, reusing
-     layers from the GitHub Actions cache. The weekly run skips the cache, so
-     the `apk upgrade` layers pick up Alpine security fixes
+     build-stage layers from the GitHub Actions cache. The runtime stage is
+     always rebuilt, so its `apk upgrade` picks up Alpine security fixes on
+     every build; the weekly run skips the cache altogether
    - Scans those images with Trivy; a fixable `HIGH` or `CRITICAL`
      vulnerability stops the run before anything is pushed
    - Tags images with `latest` and a tag that is unique to the build,

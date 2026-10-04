@@ -56,8 +56,10 @@ jobs:
 
       # Both builds load the image into the local Docker engine instead of
       # pushing it, so the image that is scanned is the one that is pushed.
-      # The weekly run skips the cache so the apk upgrade layers pick up
-      # Alpine security fixes; it still refreshes the cache for later builds.
+      # The runtime stage is never taken from the cache, so every build's
+      # apk upgrade picks up the latest Alpine security fixes; the build
+      # stages stay cached. The weekly run skips the cache altogether and
+      # still refreshes it for later builds.
       - name: Build backend image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -65,6 +67,7 @@ jobs:
           file: HospitalSystem/Dockerfile
           pull: true
           no-cache: ${{ github.event.workflow_run.event == 'schedule' }}
+          no-cache-filters: runtime
           load: true
           tags: |
             kstkaan/hospital-backend:latest
@@ -81,6 +84,7 @@ jobs:
           file: hospital-frontend/Dockerfile
           pull: true
           no-cache: ${{ github.event.workflow_run.event == 'schedule' }}
+          no-cache-filters: runtime
           load: true
           build-args: |
             VITE_API_URL=${{ vars.VITE_API_URL || secrets.VITE_API_URL || vars.AWS_API_URL || secrets.AWS_API_URL }}
