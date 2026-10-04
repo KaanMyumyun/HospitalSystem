@@ -505,8 +505,13 @@ It calls the API at `http://localhost:5272/api` unless `VITE_API_URL` is set.
 |   POST | /api/Users/create-doctor         | Create doctor                  |
 |   POST | /api/Users/change-doctor-status  | Activate or deactivate doctor  |
 |   POST | /api/Users/reset-password        | Reset password                 |
-|    GET | /api/Users/ListUsers             | List all users (Admin only)    |
+|    GET | /api/Users/ListUsers             | One page of users (Admin only) |
 |    GET | /api/Users/ListDoctors           | List all doctors               |
+
+`ListUsers` returns users sorted by name, one page at a time:
+`?page=1&pageSize=50&search=desk`. `pageSize` is 1 to 100 (default 50), and
+`search` matches part of a username or role name, ignoring case. The response
+data holds `items`, `totalCount`, `page` and `pageSize`.
 
 ### Departments
 
@@ -519,15 +524,20 @@ It calls the API at `http://localhost:5272/api` unless `VITE_API_URL` is set.
 
 ### Appointments
 
-| Method | Endpoint                            | Description        |
-| -----: | ----------------------------------- | ------------------ |
-|   POST | /api/Appointments/CreateAppointment | Create appointment |
-|    GET | /api/Appointments/ListAppointments  | List appointments  |
-|   POST | /api/Appointments/CancelAppointment | Cancel appointment |
+| Method | Endpoint                            | Description                                 |
+| -----: | ----------------------------------- | ------------------------------------------- |
+|   POST | /api/Appointments/CreateAppointment | Create appointment                          |
+|    GET | /api/Appointments/ListAppointments  | One doctor's appointments in a time window  |
+|   POST | /api/Appointments/CancelAppointment | Cancel appointment                          |
 
 `CreateAppointment` takes `appointmentTime` as the front desk's local time with
 its UTC offset, for example `2026-09-22T09:00:00+03:00`. That clock time must
 fall inside the doctor's working hours; the appointment is stored in UTC.
+
+`ListAppointments` requires `doctorId`, `from` and `to`, with offsets like
+`appointmentTime`, and returns that doctor's appointments in every status that
+start at or after `from` and before `to`, in time order. The window can be at
+most 42 days. URL-encode the `+` of an offset as `%2B`.
 
 ### Schedules
 

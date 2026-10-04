@@ -1,6 +1,6 @@
 namespace HospitalSystem.Interfaces.Appointments;
- 
+
 public interface IAppointmentQueryService
 {
-    Task<ServiceResult<List<ViewAppointmentDto>>> GetAppointmentsAsync();
+    Task<ServiceResult<List<ViewAppointmentDto>>> GetAppointmentsAsync(AppointmentQueryDto query);
 }

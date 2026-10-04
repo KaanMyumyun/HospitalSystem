@@ -15,14 +15,35 @@ public class UserQueryService : IUserQueryService
         _currentUser = currentUser;
     }
  
-    public async Task<ServiceResult<List<UserDisplayDto>>> ListUsersAsync()
+    public async Task<ServiceResult<PagedResult<UserDisplayDto>>> ListUsersAsync(UserQueryDto query)
     {
         if (!_currentUser.IsInRole(UserRole.Admin))
         {
-            return ServiceResult<List<UserDisplayDto>>.Fail("Not allowed to list users");
+            return ServiceResult<PagedResult<UserDisplayDto>>.Fail("Not allowed to list users");
         }
- 
-        var users = await _context.Users
+
+        if (query.Page < 1 || query.Page > UserQueryDto.MaxPage)
+            return ServiceResult<PagedResult<UserDisplayDto>>.Fail($"Page must be between 1 and {UserQueryDto.MaxPage}");
+
+        if (query.PageSize < 1 || query.PageSize > UserQueryDto.MaxPageSize)
+            return ServiceResult<PagedResult<UserDisplayDto>>.Fail($"Page size must be between 1 and {UserQueryDto.MaxPageSize}");
+
+        var users = _context.Users.AsQueryable();
+        var search = query.Search?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrEmpty(search))
+        {
+            // Roles are stored by name, so pick the matching ones here and let
+            // the database compare whole values.
+            var matchingRoles = Enum.GetValues<UserRole>()
+                .Where(role => role.ToString().Contains(search, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            users = users.Where(u => u.Name.ToLower().Contains(search) || matchingRoles.Contains(u.Role));
+        }
+
+        var items = await users
+            .OrderBy(u => u.Name)
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
             .Select(u => new UserDisplayDto
             {
                 UserId = u.Id,
@@ -30,8 +51,19 @@ public class UserQueryService : IUserQueryService
                 Role = u.Role
             })
             .ToListAsync();
- 
-        return ServiceResult<List<UserDisplayDto>>.Success(users);
+
+        // A first page with room to spare already holds every match.
+        var totalCount = query.Page == 1 && items.Count < query.PageSize
+            ? items.Count
+            : await users.CountAsync();
+
+        return ServiceResult<PagedResult<UserDisplayDto>>.Success(new PagedResult<UserDisplayDto>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = query.Page,
+            PageSize = query.PageSize
+        });
     }
  
     public async Task<ServiceResult<List<DoctorDisplayDto>>> ListDoctorsAsync()
@@ -45,7 +77,6 @@ public class UserQueryService : IUserQueryService
         }
  
         var doctors = await _context.Doctors
-            .Include(d => d.User)
             .Where(d => d.User.Role == UserRole.Doctor)
             .Select(d => new DoctorDisplayDto
             {

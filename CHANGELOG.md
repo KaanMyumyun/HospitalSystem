@@ -40,6 +40,20 @@ tagged releases yet, so everything is listed under Unreleased.
 - Each write that spans several saves (appointment booking, doctor creation)
   now runs in one transaction, so a failure leaves no half-written rows or
   unaudited changes.
+- The reception screen loads the selected doctor's visible week instead of
+  every appointment ever booked. `GET /api/Appointments/ListAppointments` now
+  requires `doctorId`, `from` and `to` (at most 42 days apart), and a new
+  index serves it. Browser tabs opened before the update need a reload.
+- The Users tab pages through users on the server, sorted by name, and its
+  search runs on the server. `GET /api/Users/ListUsers` takes `page`,
+  `pageSize` and `search`, and returns one page (`items`, `totalCount`,
+  `page`, `pageSize`) instead of every account.
+- Booking an appointment and creating or changing a schedule take fewer
+  database round trips; everything a booking checks first, including whether
+  the patient already exists, runs as one query.
+- The backend image is compiled ahead of time (ReadyToRun), so a new container
+  is ready and answers its first requests sooner. The image is about 13 MB
+  larger.
 
 - CI workflows cancel superseded runs, never run two deploys at once, time
   out instead of hanging for hours, and give jobs only the permissions they

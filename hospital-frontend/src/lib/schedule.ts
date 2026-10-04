@@ -3,19 +3,34 @@ import type { Slot } from '../types'
 import { formatHourRange } from './format'
 import { clockLabel, scheduleWindow } from './time'
 
-export function weekDays(weekOffset = 0) {
+const daysShown = 5
+
+function weekStart(weekOffset: number) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const day = today.getDay()
   const mondayOffset = day === 0 ? -6 : 1 - day
   const monday = new Date(today)
   monday.setDate(today.getDate() + mondayOffset + weekOffset * 7)
+  return monday
+}
 
-  return Array.from({ length: 5 }, (_, index) => {
+export function weekDays(weekOffset = 0) {
+  const monday = weekStart(weekOffset)
+
+  return Array.from({ length: daysShown }, (_, index) => {
     const date = new Date(monday)
     date.setDate(monday.getDate() + index)
     return date
   })
+}
+
+// Monday 00:00 up to Saturday 00:00, local time: the days the grid shows.
+export function weekRange(weekOffset = 0) {
+  const from = weekStart(weekOffset)
+  const to = new Date(from)
+  to.setDate(from.getDate() + daysShown)
+  return { from, to }
 }
 
 export function dateAtTime(day: Date, time: string) {
@@ -25,10 +40,12 @@ export function dateAtTime(day: Date, time: string) {
   return date
 }
 
+// appointments is null while the week is still loading; its slots stay
+// unclickable rather than showing as open.
 export function buildWeekSlots(
   schedule: ScheduleDto | undefined,
   doctorId: number | undefined,
-  appointments: AppointmentDto[],
+  appointments: AppointmentDto[] | null,
   weekOffset = 0,
 ): Slot[][] {
   const days = weekDays(weekOffset)
@@ -49,6 +66,8 @@ export function buildWeekSlots(
 
   return times.map((time) =>
     days.map((day) => {
+      if (!appointments) return { day, time, status: 'loading' }
+
       const slotDate = dateAtTime(day, time)
       const matching = appointments.filter((item) => {
         const appointmentDate = new Date(item.appointmentTime)
@@ -91,12 +110,6 @@ export function canCancelAppointment(appointment: AppointmentDto, now = Date.now
 }
 
 export function isInWeek(value: Date, weekOffset = 0) {
-  const days = weekDays(weekOffset)
-  const first = days[0]
-  const last = days[days.length - 1]
-  if (!first || !last) return false
-
-  const end = new Date(last)
-  end.setDate(last.getDate() + 1)
-  return value >= first && value < end
+  const { from, to } = weekRange(weekOffset)
+  return value >= from && value < to
 }

@@ -630,6 +630,15 @@ textarea {
   margin-bottom: 14px;
 }
 
+.pager {
+  margin: 14px 0 0;
+}
+
+.pager-buttons {
+  display: flex;
+  gap: 8px;
+}
+
 .inline-form,
 .form-grid {
   display: grid;
@@ -799,7 +808,8 @@ textarea {
 }
 
 .slot-cell.past,
-.slot-cell.empty {
+.slot-cell.empty,
+.slot-cell.loading {
   background: var(--slate-50);
   color: var(--muted);
   cursor: default;

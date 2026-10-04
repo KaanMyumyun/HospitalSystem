@@ -1,26 +1,27 @@
 import { useState } from 'react'
-import type { UserDto, UserRole } from '../../api'
+import type { UserRole, UsersPage } from '../../api'
 import { EmptyState, SkeletonRows } from '../../components/ui'
 import type { ActionOutcome } from '../../types'
 
 // Demo roles are never assigned from the app; accounts get them in the database.
 const assignableRoles: UserRole[] = ['Admin', 'Doctor', 'FrontDesk']
 
+// The API searches, sorts and pages the users; this tab shows one page.
 export function UsersTab({
-  users,
+  usersPage,
   loading,
-  searchQuery,
   isReadOnly,
   onChangeUserRole,
   onCreateUser,
+  onPageChange,
   onResetPassword,
 }: {
-  users: UserDto[]
+  usersPage: UsersPage | null
   loading: boolean
-  searchQuery: string
   isReadOnly: boolean
   onChangeUserRole: (userId: number, role: UserRole) => Promise<ActionOutcome>
   onCreateUser: (name: string, password: string) => Promise<ActionOutcome>
+  onPageChange: (page: number) => void
   onResetPassword: (userId: number, password: string) => Promise<ActionOutcome>
 }) {
   const [newUserName, setNewUserName] = useState('')
@@ -28,13 +29,7 @@ export function UsersTab({
   const [resetUserId, setResetUserId] = useState<number | null>(null)
   const [resetPasswordValue, setResetPasswordValue] = useState('')
 
-  const normalizedSearch = searchQuery.trim().toLowerCase()
-  const visibleUsers = users.filter(
-    (user) =>
-      !normalizedSearch ||
-      user.userName.toLowerCase().includes(normalizedSearch) ||
-      user.role.toLowerCase().includes(normalizedSearch),
-  )
+  const visibleUsers = usersPage?.items ?? []
 
   return (
     <>
@@ -133,6 +128,42 @@ export function UsersTab({
       {!loading && visibleUsers.length === 0 && (
         <EmptyState text={isReadOnly ? 'User accounts are hidden from demo accounts.' : 'No users found.'} />
       )}
+      {usersPage && usersPage.totalCount > usersPage.pageSize && (
+        <UsersPager usersPage={usersPage} loading={loading} onPageChange={onPageChange} />
+      )}
     </>
+  )
+}
+
+function UsersPager({
+  usersPage,
+  loading,
+  onPageChange,
+}: {
+  usersPage: UsersPage
+  loading: boolean
+  onPageChange: (page: number) => void
+}) {
+  const { items, page, pageSize, totalCount } = usersPage
+  const first = (page - 1) * pageSize + 1
+  const last = (page - 1) * pageSize + items.length
+
+  return (
+    <div className="toolbar pager">
+      <span className="subtle">{items.length > 0 ? `${first}-${last} of ${totalCount}` : `${totalCount} users`}</span>
+      <div className="pager-buttons">
+        <button className="secondary-button" disabled={page <= 1 || loading} type="button" onClick={() => onPageChange(page - 1)}>
+          Previous
+        </button>
+        <button
+          className="secondary-button"
+          disabled={page * pageSize >= totalCount || loading}
+          type="button"
+          onClick={() => onPageChange(page + 1)}
+        >
+          Next
+        </button>
+      </div>
+    </div>
   )
 }

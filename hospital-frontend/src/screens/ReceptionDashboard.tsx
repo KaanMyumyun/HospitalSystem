@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 import type { AppointmentDto, CreateAppointmentInput, DepartmentDto, DoctorDto, ScheduleDto } from '../api'
 import { EmptyState, Metric, Modal, StatusBadge } from '../components/ui'
 import {
@@ -25,12 +26,15 @@ export function ReceptionDashboard({
   selectedDoctor,
   selectedDoctorId,
   searchQuery,
+  weekOffset,
   isReadOnly,
   onCancelAppointment,
   onCreateAppointment,
   onSelectDoctor,
+  onWeekOffsetChange,
 }: {
-  appointments: AppointmentDto[]
+  // The selected doctor's appointments for the week shown; null while loading.
+  appointments: AppointmentDto[] | null
   departments: DepartmentDto[]
   doctors: DoctorDto[]
   loading: boolean
@@ -38,12 +42,13 @@ export function ReceptionDashboard({
   selectedDoctor: DoctorDto | null
   selectedDoctorId: number | null
   searchQuery: string
+  weekOffset: number
   isReadOnly: boolean
   onCancelAppointment: (appointmentId: number, reason: string) => Promise<ActionOutcome>
   onCreateAppointment: (input: CreateAppointmentInput) => Promise<ActionOutcome>
   onSelectDoctor: (doctorId: number) => void
+  onWeekOffsetChange: Dispatch<SetStateAction<number>>
 }) {
-  const [weekOffset, setWeekOffset] = useState(0)
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<number | null>(null)
   const [cancellingAppointmentId, setCancellingAppointmentId] = useState<number | null>(null)
@@ -85,13 +90,14 @@ export function ReceptionDashboard({
     [appointments, selectedDoctor?.doctorId, selectedSchedule, weekOffset],
   )
   const nextAvailableSlot = useMemo(() => getNextAvailableSlot(slots), [slots])
-  const visibleAppointment = appointments.find((appointment) => appointment.appointmentId === selectedAppointmentId) ?? null
+  const visibleAppointment =
+    appointments?.find((appointment) => appointment.appointmentId === selectedAppointmentId) ?? null
   const cancellingAppointment =
-    appointments.find((appointment) => appointment.appointmentId === cancellingAppointmentId) ?? null
+    appointments?.find((appointment) => appointment.appointmentId === cancellingAppointmentId) ?? null
   const counts = {
     booked: slots.flat().filter((slot) => slot.status === 'booked').length,
     available: slots.flat().filter((slot) => slot.status === 'available').length,
-    cancelled: appointments.filter(
+    cancelled: (appointments ?? []).filter(
       (appointment) =>
         appointment.doctorId === selectedDoctor?.doctorId &&
         appointment.status === 'Cancelled' &&
@@ -217,13 +223,13 @@ export function ReceptionDashboard({
         </div>
 
         <div className="toolbar calendar-toolbar">
-          <button className="secondary-button" type="button" onClick={() => setWeekOffset((value) => value - 1)}>
+          <button className="secondary-button" type="button" onClick={() => onWeekOffsetChange((value) => value - 1)}>
             Previous Week
           </button>
-          <button className="secondary-button" type="button" onClick={() => setWeekOffset(0)}>
+          <button className="secondary-button" type="button" onClick={() => onWeekOffsetChange(0)}>
             Current Week
           </button>
-          <button className="secondary-button" type="button" onClick={() => setWeekOffset((value) => value + 1)}>
+          <button className="secondary-button" type="button" onClick={() => onWeekOffsetChange((value) => value + 1)}>
             Next Week
           </button>
         </div>
@@ -245,7 +251,7 @@ export function ReceptionDashboard({
                 ...row.map((slot) => (
                   <button
                     className={`slot-cell ${slot.status}`}
-                    disabled={slot.status === 'empty' || slot.status === 'past'}
+                    disabled={slot.status === 'empty' || slot.status === 'past' || slot.status === 'loading'}
                     onClick={() => {
                       if (slot.appointment) {
                         setSelectedAppointmentId(slot.appointment.appointmentId)

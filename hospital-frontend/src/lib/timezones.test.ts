@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { AppointmentDto, ScheduleDto } from '../api'
 import { formatHourRange } from './format'
-import { buildWeekSlots, dateAtTime, weekDays } from './schedule'
+import { buildWeekSlots, dateAtTime, isInWeek, weekDays, weekRange } from './schedule'
 import { toLocalIsoString } from './time'
 
 // The rest of the suite runs in UTC, where local and UTC hours coincide and
@@ -69,6 +69,15 @@ inTimeZone('Europe/Istanbul', () => {
   it('books the 09:00 row as 09:00 desk time', () => {
     const monday = weekDays(1)[0]!
     expect(toLocalIsoString(dateAtTime(monday, '09:00'))).toMatch(/T09:00:00\+03:00$/)
+  })
+
+  it('asks for the week from desk midnight, not UTC midnight', () => {
+    const { from, to } = weekRange(1)
+    const earlyMonday = dateAtTime(weekDays(1)[0]!, '01:00') // Sunday 22:00 UTC
+
+    expect(toLocalIsoString(from)).toMatch(/T00:00:00\+03:00$/)
+    expect(toLocalIsoString(to)).toMatch(/T00:00:00\+03:00$/)
+    expect(isInWeek(earlyMonday, 1)).toBe(true)
   })
 })
 

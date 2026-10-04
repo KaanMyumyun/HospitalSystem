@@ -134,4 +134,18 @@ public class ScheduleCreationServiceTests
         Assert.False(result.IsSuccess);
         Assert.Equal("Cannot schedule a doctor in an inactive department", result.Error);
     }
+
+    [Fact]
+    public async Task CreateSchedule_DoctorNotFound_Fails()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db);
+        var service = CreateService(db, isAdmin: true);
+
+        var result = await service.CreateScheduleAsync(new CreateSchedule { DoctorId = 99, StartHour = 9, EndHour = 17, SlotDurationMin = 30 });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Doctor not found", result.Error);
+        Assert.Empty(db.Calendars);
+    }
 }
