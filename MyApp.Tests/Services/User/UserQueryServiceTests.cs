@@ -10,7 +10,15 @@ public class UserQueryServiceTests : UserTestBase
 {
     private UserQueryService CreateService(ApplicationDbContext db, bool isAdmin = true, bool isFrontDesk = false)
         => new(db, CreateCurrentUser(isAdmin, isFrontDesk));
- 
+
+    private static async Task SeedUsersAsync(ApplicationDbContext db, params (string Name, UserRole Role)[] users)
+    {
+        var id = 1;
+        foreach (var (name, role) in users)
+            db.Users.Add(new UserEntity { Id = id++, Name = name, Role = role, PasswordHash = "hashed" });
+        await db.SaveChangesAsync();
+    }
+
     [Fact]
     public async Task ListUsersAsync_Admin_Succeeds()
     {
@@ -21,22 +29,106 @@ public class UserQueryServiceTests : UserTestBase
         );
         await db.SaveChangesAsync();
         var service = CreateService(db);
- 
-        var result = await service.ListUsersAsync();
- 
+
+        var result = await service.ListUsersAsync(new UserQueryDto());
+
         Assert.True(result.IsSuccess);
-        Assert.Equal(2, result.Data.Count);
-        Assert.Contains(result.Data, u => u.UserId == 1 && u.UserName == "Alice" && u.Role == UserRole.Doctor);
-        Assert.Contains(result.Data, u => u.UserId == 2 && u.UserName == "Bob" && u.Role == UserRole.FrontDesk);
+        Assert.Equal(2, result.Data.Items.Count);
+        Assert.Equal(2, result.Data.TotalCount);
+        Assert.Contains(result.Data.Items, u => u.UserId == 1 && u.UserName == "Alice" && u.Role == UserRole.Doctor);
+        Assert.Contains(result.Data.Items, u => u.UserId == 2 && u.UserName == "Bob" && u.Role == UserRole.FrontDesk);
     }
- 
+
+    [Fact]
+    public async Task ListUsersAsync_PagesInNameOrder()
+    {
+        var db = CreateDbContext();
+        await SeedUsersAsync(db,
+            ("Eve", UserRole.FrontDesk), ("Carol", UserRole.Doctor), ("Alice", UserRole.Admin),
+            ("Dave", UserRole.Doctor), ("Bob", UserRole.Pending));
+        var service = CreateService(db);
+
+        var result = await service.ListUsersAsync(new UserQueryDto { Page = 2, PageSize = 2 });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(new[] { "Carol", "Dave" }, result.Data.Items.Select(u => u.UserName));
+        Assert.Equal(5, result.Data.TotalCount);
+        Assert.Equal(2, result.Data.Page);
+        Assert.Equal(2, result.Data.PageSize);
+    }
+
+    [Fact]
+    public async Task ListUsersAsync_FullFirstPage_CountsEveryMatch()
+    {
+        var db = CreateDbContext();
+        await SeedUsersAsync(db, ("Alice", UserRole.Admin), ("Bob", UserRole.Doctor), ("Carol", UserRole.Doctor));
+        var service = CreateService(db);
+
+        var result = await service.ListUsersAsync(new UserQueryDto { PageSize = 2 });
+
+        Assert.Equal(new[] { "Alice", "Bob" }, result.Data.Items.Select(u => u.UserName));
+        Assert.Equal(3, result.Data.TotalCount);
+    }
+
+    [Fact]
+    public async Task ListUsersAsync_PageAfterTheEnd_IsEmptyWithTheTotal()
+    {
+        var db = CreateDbContext();
+        await SeedUsersAsync(db, ("Alice", UserRole.Admin), ("Bob", UserRole.Doctor));
+        var service = CreateService(db);
+
+        var result = await service.ListUsersAsync(new UserQueryDto { Page = 3, PageSize = 2 });
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Data.Items);
+        Assert.Equal(2, result.Data.TotalCount);
+    }
+
+    [Theory]
+    [InlineData("doc", new[] { "Alice", "Docherty" })]
+    [InlineData("DOC", new[] { "Alice", "Docherty" })]
+    [InlineData("  bo ", new[] { "Bob" })]
+    [InlineData("frontdesk", new[] { "Bob" })]
+    [InlineData("admin", new[] { "Docherty", "Zed" })]
+    [InlineData("nobody", new string[0])]
+    public async Task ListUsersAsync_SearchMatchesNameOrRole(string search, string[] expected)
+    {
+        var db = CreateDbContext();
+        await SeedUsersAsync(db,
+            ("Alice", UserRole.Doctor), ("Bob", UserRole.FrontDesk),
+            ("Docherty", UserRole.Admin), ("Zed", UserRole.DemoAdmin));
+        var service = CreateService(db);
+
+        var result = await service.ListUsersAsync(new UserQueryDto { Search = search });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(expected, result.Data.Items.Select(u => u.UserName));
+        Assert.Equal(expected.Length, result.Data.TotalCount);
+    }
+
+    [Theory]
+    [InlineData(0, 50, "Page must be between 1 and 100000")]
+    [InlineData(100_001, 50, "Page must be between 1 and 100000")]
+    [InlineData(1, 0, "Page size must be between 1 and 100")]
+    [InlineData(1, 101, "Page size must be between 1 and 100")]
+    public async Task ListUsersAsync_PageOutOfRange_Fails(int page, int pageSize, string expectedError)
+    {
+        var db = CreateDbContext();
+        var service = CreateService(db);
+
+        var result = await service.ListUsersAsync(new UserQueryDto { Page = page, PageSize = pageSize });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(expectedError, result.Error);
+    }
+
     [Fact]
     public async Task ListUsersAsync_NotAdmin_Fails()
     {
         var db = CreateDbContext();
         var service = CreateService(db, isAdmin: false);
- 
-        var result = await service.ListUsersAsync();
+
+        var result = await service.ListUsersAsync(new UserQueryDto());
  
         Assert.False(result.IsSuccess);
         Assert.Equal("Not allowed to list users", result.Error);
@@ -100,7 +192,7 @@ public class UserQueryServiceTests : UserTestBase
         await db.SaveChangesAsync();
         var service = CreateService(db, isAdmin: false, isFrontDesk: true);
 
-        var result = await service.ListUsersAsync();
+        var result = await service.ListUsersAsync(new UserQueryDto());
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Not allowed to list users", result.Error);
@@ -116,7 +208,7 @@ public class UserQueryServiceTests : UserTestBase
         currentUser.Setup(x => x.IsInRole(demoRole)).Returns(true);
         var service = new UserQueryService(db, currentUser.Object);
 
-        var result = await service.ListUsersAsync();
+        var result = await service.ListUsersAsync(new UserQueryDto());
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Not allowed to list users", result.Error);

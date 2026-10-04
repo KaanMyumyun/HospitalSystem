@@ -18,9 +18,12 @@ public class AppointmentQueryController : ControllerBase
  
     [Authorize(Roles = "FrontDesk,DemoFrontDesk")]
     [HttpGet("ListAppointments")]
-    public async Task<IActionResult> ListAppointments()
+    public async Task<IActionResult> ListAppointments([FromQuery] AppointmentQueryDto query)
     {
-        var result = await _appointmentQueryService.GetAppointmentsAsync();
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var result = await _appointmentQueryService.GetAppointmentsAsync(query);
  
         if (!result.IsSuccess)
             return BadRequest(result);

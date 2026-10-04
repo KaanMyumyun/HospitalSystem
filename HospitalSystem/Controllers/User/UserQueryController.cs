@@ -17,9 +17,12 @@ public class UserQueryController : ControllerBase
  
     [Authorize(Roles = "Admin")]
     [HttpGet("ListUsers")]
-    public async Task<IActionResult> ListUsers()
+    public async Task<IActionResult> ListUsers([FromQuery] UserQueryDto query)
     {
-        var result = await _userQueryService.ListUsersAsync();
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var result = await _userQueryService.ListUsersAsync(query);
  
         if (!result.IsSuccess)
             return BadRequest(result);

@@ -1,4 +1,5 @@
 import { parseBody, tooManyRequestsMessage, unreadableResponseMessage } from './lib/http'
+import { toLocalIsoString } from './lib/time'
 
 export type UserRole = 'Pending' | 'Admin' | 'Doctor' | 'FrontDesk' | 'DemoAdmin' | 'DemoFrontDesk'
 
@@ -28,6 +29,15 @@ export type UserDto = {
   userName: string
   role: UserRole
 }
+
+export type UsersPage = {
+  items: UserDto[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+
+export const usersPageSize = 50
 
 export type ScheduleDto = {
   scheduleId: number
@@ -151,22 +161,34 @@ export async function demoLogin(role: 'DemoAdmin' | 'DemoFrontDesk'): Promise<Lo
   }
 }
 
-export async function loadHospitalData(role: UserRole) {
-  const [departments, doctors, users, schedules, appointments] = await Promise.all([
+// Users and appointments are loaded on their own, a page or a week at a time.
+export async function loadHospitalData() {
+  const [departments, doctors, schedules] = await Promise.all([
     getServiceResult<unknown[]>('/api/Department/ViewDepartment').then((items) => items.map(normalizeDepartment)),
     getServiceResult<unknown[]>('/api/Users/ListDoctors').then((items) => items.map(normalizeDoctor)),
-    canListUsers(role)
-      ? getServiceResult<unknown[]>('/api/Users/ListUsers').then((items) => items.map(normalizeUser))
-      : Promise.resolve([]),
     getServiceResult<unknown[]>('/api/schedule/list-schedule').then((items) => items.map(normalizeSchedule)),
-    canReadAppointments(role)
-      ? getServiceResult<unknown[]>('/api/Appointments/ListAppointments').then((items) =>
-          items.map(normalizeAppointment),
-        )
-      : Promise.resolve([]),
   ])
 
-  return { departments, doctors, users, schedules, appointments }
+  return { departments, doctors, schedules }
+}
+
+// One doctor's appointments that start at or after `from` and before `to`.
+export async function loadAppointments(doctorId: number, from: Date, to: Date) {
+  const query = new URLSearchParams({
+    doctorId: String(doctorId),
+    from: toLocalIsoString(from),
+    to: toLocalIsoString(to),
+  })
+  const items = await getServiceResult<unknown[]>(`/api/Appointments/ListAppointments?${query}`)
+  return items.map(normalizeAppointment)
+}
+
+// search matches part of a username or role; the API caps it at 50 characters.
+export async function loadUsers(search: string, page: number): Promise<UsersPage> {
+  const query = new URLSearchParams({ page: String(page), pageSize: String(usersPageSize) })
+  const term = search.trim().slice(0, 50)
+  if (term) query.set('search', term)
+  return normalizeUsersPage(await getServiceResult<unknown>(`/api/Users/ListUsers?${query}`))
 }
 
 export async function createAppointment(input: CreateAppointmentInput) {
@@ -216,11 +238,7 @@ export async function changeSchedule(input: ChangeScheduleInput) {
   return postAction('/api/schedule/change-schedule', input)
 }
 
-function canReadAppointments(role: UserRole) {
-  return role === 'FrontDesk' || role === 'DemoFrontDesk'
-}
-
-function canListUsers(role: UserRole) {
+export function canListUsers(role: UserRole) {
   return role === 'Admin'
 }
 
@@ -349,6 +367,17 @@ function normalizeUser(value: unknown): UserDto {
     userId: numberValue(item.userId ?? item.UserId),
     userName: stringValue(item.userName ?? item.UserName ?? item.name ?? item.Name),
     role: stringValue(item.role ?? item.Role) as UserRole,
+  }
+}
+
+function normalizeUsersPage(value: unknown): UsersPage {
+  const page = (value ?? {}) as Record<string, unknown>
+  const items = page.items ?? page.Items
+  return {
+    items: Array.isArray(items) ? items.map(normalizeUser) : [],
+    totalCount: numberValue(page.totalCount ?? page.TotalCount),
+    page: numberValue(page.page ?? page.Page, 1),
+    pageSize: numberValue(page.pageSize ?? page.PageSize, usersPageSize),
   }
 }
 

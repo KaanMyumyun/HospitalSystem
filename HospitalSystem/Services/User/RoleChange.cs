@@ -26,8 +26,8 @@ internal static class RoleChange
 
         if (user.Role == UserRole.Admin && newRole != UserRole.Admin)
         {
-            var otherAdmins = await context.Users.CountAsync(u => u.Role == UserRole.Admin && u.Id != user.Id);
-            if (otherAdmins == 0)
+            var hasOtherAdmin = await context.Users.AnyAsync(u => u.Role == UserRole.Admin && u.Id != user.Id);
+            if (!hasOtherAdmin)
                 return "Cannot demote the last remaining admin";
         }
 

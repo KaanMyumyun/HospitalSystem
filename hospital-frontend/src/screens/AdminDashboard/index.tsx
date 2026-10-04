@@ -4,8 +4,8 @@ import type {
   DepartmentDto,
   DoctorDto,
   ScheduleDto,
-  UserDto,
   UserRole,
+  UsersPage,
 } from '../../api'
 import { EmptyState, Metric, PageHint, StatusBadge } from '../../components/ui'
 import { adminTitle, formatTime, initials } from '../../lib/format'
@@ -26,7 +26,8 @@ export function AdminDashboard({
   searchQuery,
   isReadOnly,
   activity,
-  users,
+  usersPage,
+  usersLoading,
   onAssignDoctor,
   onChangeDepartmentStatus,
   onChangeDoctorStatus,
@@ -38,6 +39,7 @@ export function AdminDashboard({
   onNavigate,
   onResetPassword,
   onSelectDepartment,
+  onUsersPageChange,
 }: {
   departments: DepartmentDto[]
   doctors: DoctorDto[]
@@ -49,7 +51,8 @@ export function AdminDashboard({
   searchQuery: string
   isReadOnly: boolean
   activity: ActivityEntry[]
-  users: UserDto[]
+  usersPage: UsersPage | null
+  usersLoading: boolean
   onAssignDoctor: (doctorId: number, departmentId: number) => Promise<ActionOutcome>
   onChangeDepartmentStatus: (departmentId: number, isActive: boolean) => Promise<ActionOutcome>
   onChangeDoctorStatus: (doctor: DoctorDto, isActive: boolean) => Promise<ActionOutcome>
@@ -61,6 +64,7 @@ export function AdminDashboard({
   onNavigate: (screen: Screen) => void
   onResetPassword: (userId: number, password: string) => Promise<ActionOutcome>
   onSelectDepartment: (departmentId: number) => void
+  onUsersPageChange: (page: number) => void
 }) {
   const selectedDoctors = selectedDepartment
     ? doctors.filter((doctor) => doctor.departmentId === selectedDepartment.id)
@@ -122,12 +126,12 @@ export function AdminDashboard({
 
         {section === 'users' && (
           <UsersTab
-            users={users}
-            loading={loading}
-            searchQuery={searchQuery}
+            usersPage={usersPage}
+            loading={loading || usersLoading}
             isReadOnly={isReadOnly}
             onChangeUserRole={onChangeUserRole}
             onCreateUser={onCreateUser}
+            onPageChange={onUsersPageChange}
             onResetPassword={onResetPassword}
           />
         )}

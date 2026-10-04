@@ -32,6 +32,7 @@ export function slotLabel(status: SlotStatus) {
   if (status === 'booked') return 'Booked'
   if (status === 'cancelled') return 'Cancelled'
   if (status === 'past') return 'Past'
+  if (status === 'loading') return 'Loading'
   return 'No schedule'
 }
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  canListUsers,
   cancelAppointment,
   changeDepartmentStatus,
   changeDoctorDepartment,
@@ -20,6 +21,8 @@ import type { UserRole } from './api'
 import './App.css'
 import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
+import { useUsersPage } from './hooks/useUsersPage'
+import { useWeekAppointments } from './hooks/useWeekAppointments'
 import { adminTitle, confirmAction } from './lib/format'
 import { AdminDashboard } from './screens/AdminDashboard'
 import { LoginScreen } from './screens/LoginScreen'
@@ -31,9 +34,7 @@ import type { ActionOutcome, ActivityEntry, HospitalData, Screen, Session } from
 const emptyData: HospitalData = {
   departments: [],
   doctors: [],
-  users: [],
   schedules: [],
-  appointments: [],
 }
 const activityStorageKey = 'hospital-frontend-activity'
 
@@ -53,6 +54,7 @@ function App() {
   })
   const [data, setData] = useState<HospitalData>(emptyData)
   const [selectedDoctorId, setSelectedDoctorId] = useState<number | null>(null)
+  const [weekOffset, setWeekOffset] = useState(0)
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -68,13 +70,29 @@ function App() {
     }
   })
 
+  const selectedDoctor =
+    data.doctors.find((doctor) => doctor.doctorId === selectedDoctorId) ??
+    data.doctors.find((doctor) => doctor.isActive) ??
+    null
+  const { appointments, reload: reloadAppointments } = useWeekAppointments(
+    session && canUseReception(session.role) ? (selectedDoctor?.doctorId ?? null) : null,
+    weekOffset,
+    setError,
+  )
+  const {
+    usersPage,
+    isLoading: usersLoading,
+    setPage: setUsersPage,
+    reload: reloadUsers,
+  } = useUsersPage(session !== null && canListUsers(session.role) && screen === 'users', searchQuery, setError)
+
   const refresh = useCallback(async () => {
     if (!session || !(canUseAdmin(session.role) || canUseReception(session.role))) return
 
     setLoading(true)
     setError(null)
     try {
-      const nextData = await loadHospitalData(session.role)
+      const nextData = await loadHospitalData()
       setData(nextData)
       setSelectedDoctorId((current) => current ?? nextData.doctors.find((doctor) => doctor.isActive)?.doctorId ?? null)
       setSelectedDepartmentId((current) => current ?? nextData.departments[0]?.id ?? null)
@@ -84,6 +102,11 @@ function App() {
       setLoading(false)
     }
   }, [session])
+
+  // Everything on screen: the shared lists, plus the visible week or users page.
+  const reloadAll = useCallback(async () => {
+    await Promise.all([refresh(), reloadAppointments(), reloadUsers()])
+  }, [refresh, reloadAppointments, reloadUsers])
 
   const actionInFlight = useRef(false)
 
@@ -103,7 +126,7 @@ function App() {
     setNotice(null)
     try {
       await action()
-      await refresh()
+      await reloadAll()
       setNotice(successMessage)
       setActivity((current) =>
         [{ id: crypto.randomUUID(), message: successMessage, at: new Date().toISOString() }, ...current].slice(0, 8),
@@ -129,12 +152,12 @@ function App() {
 
   useEffect(() => {
     const handleFocus = () => {
-      void refresh()
+      void reloadAll()
     }
 
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
-  }, [refresh])
+  }, [reloadAll])
 
   useEffect(() => {
     const handleSessionExpired = () => {
@@ -142,6 +165,7 @@ function App() {
       setActivity([])
       setData(emptyData)
       setSelectedDoctorId(null)
+      setWeekOffset(0)
       setSelectedDepartmentId(null)
     }
 
@@ -161,6 +185,7 @@ function App() {
     setActivity([])
     setData(emptyData)
     setSelectedDoctorId(null)
+    setWeekOffset(0)
     setSelectedDepartmentId(null)
   }
 
@@ -177,10 +202,6 @@ function App() {
     return <NoAccessScreen role={session.role} onLogout={handleLogout} />
   }
 
-  const selectedDoctor =
-    data.doctors.find((doctor) => doctor.doctorId === selectedDoctorId) ??
-    data.doctors.find((doctor) => doctor.isActive) ??
-    null
   const selectedDepartment =
     data.departments.find((department) => department.id === selectedDepartmentId) ?? data.departments[0] ?? null
 
@@ -199,7 +220,7 @@ function App() {
           userRole={session.role}
           searchQuery={searchQuery}
           onLogout={handleLogout}
-          onRefresh={refresh}
+          onRefresh={reloadAll}
           onSearchChange={setSearchQuery}
         />
 
@@ -220,7 +241,7 @@ function App() {
 
         {screen === 'reception' ? (
           <ReceptionDashboard
-            appointments={data.appointments}
+            appointments={appointments}
             departments={data.departments}
             doctors={data.doctors}
             loading={loading}
@@ -228,8 +249,10 @@ function App() {
             selectedDoctor={selectedDoctor}
             selectedDoctorId={selectedDoctorId}
             searchQuery={searchQuery}
+            weekOffset={weekOffset}
             isReadOnly={session.role.startsWith('Demo')}
             onSelectDoctor={setSelectedDoctorId}
+            onWeekOffsetChange={setWeekOffset}
             onCancelAppointment={(appointmentId, reason) =>
               runAction(
                 () => cancelAppointment({ AppointmentId: appointmentId, Reason: reason }),
@@ -250,8 +273,10 @@ function App() {
             searchQuery={searchQuery}
             isReadOnly={session.role.startsWith('Demo')}
             activity={activity}
-            users={data.users}
+            usersPage={usersPage}
+            usersLoading={usersLoading}
             onNavigate={setScreen}
+            onUsersPageChange={setUsersPage}
             onSelectDepartment={setSelectedDepartmentId}
             onAssignDoctor={async (doctorId, departmentId) => {
               if (!confirmAction('Assign doctor to this department?')) return { ok: false }

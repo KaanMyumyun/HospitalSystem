@@ -61,6 +61,8 @@ public class ApplicationDbContext : DbContext
             builder.HasIndex(a => new { a.DoctorId, a.TimeOfAppointment })
                 .IsUnique()
                 .HasFilter("\"Status\" = 'Scheduled'");
+            // One doctor's appointments in a time range, in every status.
+            builder.HasIndex(a => new { a.DoctorId, a.TimeOfAppointment }, "IX_Appointments_DoctorId_TimeOfAppointment_AllStatuses");
         });
         
         modelBuilder.Entity<CalendarEntity>(builder =>

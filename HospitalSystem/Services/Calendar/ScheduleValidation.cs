@@ -32,8 +32,14 @@ internal static class ScheduleValidation
             return "Slot duration must fit evenly inside the schedule window";
 
         var doctor = await context.Doctors
-            .Include(d => d.Department)
-            .FirstOrDefaultAsync(d => d.Id == doctorId);
+            .Where(d => d.Id == doctorId)
+            .Select(d => new
+            {
+                d.IsActive,
+                DepartmentIsActive = d.Department.IsActive,
+                HasSchedule = d.Calendars.Any()
+            })
+            .FirstOrDefaultAsync();
 
         if (doctor is null)
             return "Doctor not found";
@@ -41,14 +47,10 @@ internal static class ScheduleValidation
         if (!doctor.IsActive)
             return "Cannot schedule an inactive doctor";
 
-        if (doctor.Department is null || !doctor.Department.IsActive)
+        if (!doctor.DepartmentIsActive)
             return "Cannot schedule a doctor in an inactive department";
 
-        var hasAnySchedule = await context.Calendars.AnyAsync(c =>
-            c.DoctorId == doctorId &&
-            (!currentScheduleId.HasValue || c.Id != currentScheduleId.Value));
-
-        if (!currentScheduleId.HasValue && hasAnySchedule)
+        if (!currentScheduleId.HasValue && doctor.HasSchedule)
             return "Doctor already has a schedule. Edit the existing schedule instead";
 
         return null;

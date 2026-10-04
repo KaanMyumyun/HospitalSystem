@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AppointmentDto, ScheduleDto } from '../api'
-import { buildWeekSlots, canCancelAppointment, isInWeek, weekDays } from './schedule'
+import { buildWeekSlots, canCancelAppointment, isInWeek, weekDays, weekRange } from './schedule'
 
 const oneHourSchedule: ScheduleDto = {
   scheduleId: 1,
@@ -154,6 +154,13 @@ describe('buildWeekSlots', () => {
     expect(grid[0]![0]!.appointment?.appointmentId).toBe(2)
   })
 
+  it('shows every slot as loading until the week has loaded', () => {
+    const grid = buildWeekSlots(oneHourSchedule, 42, null, 520)
+
+    expect(grid).toHaveLength(1)
+    expect(grid[0]!.every((slot) => slot.status === 'loading' && slot.time === '09:00')).toBe(true)
+  })
+
   it('marks slots in the past as past rather than available', () => {
     const farPastWeekOffset = -520 // ~10 years ago, safely before "now"
 
@@ -200,5 +207,19 @@ describe('isInWeek', () => {
     expect(isInWeek(days[0]!, 0)).toBe(true)
     expect(isInWeek(friday, 0)).toBe(true)
     expect(isInWeek(saturday, 0)).toBe(false)
+  })
+})
+
+describe('weekRange', () => {
+  it('runs from Monday 00:00 to Saturday 00:00 of the week shown', () => {
+    const days = weekDays(3)
+    const { from, to } = weekRange(3)
+    const saturday = new Date(days[4]!)
+    saturday.setDate(saturday.getDate() + 1)
+
+    expect(from.getTime()).toBe(days[0]!.getTime())
+    expect(from.getDay()).toBe(1)
+    expect(to.getTime()).toBe(saturday.getTime())
+    expect(to.getHours()).toBe(0)
   })
 })

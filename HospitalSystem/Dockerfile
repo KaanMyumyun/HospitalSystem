@@ -1,13 +1,18 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+# amd64 or arm64, set by BuildKit. The runtime image below is Alpine (musl).
+ARG TARGETARCH
 WORKDIR /src
 
 COPY global.json Directory.Build.props ./
 COPY HospitalSystem/*.csproj HospitalSystem/
-RUN dotnet restore HospitalSystem/HospitalSystem.csproj
+RUN dotnet restore HospitalSystem/HospitalSystem.csproj --os linux-musl -a $TARGETARCH -p:PublishReadyToRun=true
 
 COPY HospitalSystem/ HospitalSystem/
 WORKDIR /src/HospitalSystem
-RUN dotnet publish -c Release -o /app/publish
+# ReadyToRun compiles ahead of time, so a new container gets ready and answers
+# its first requests sooner instead of spending them in the JIT.
+RUN dotnet publish -c Release --os linux-musl -a $TARGETARCH --self-contained false --no-restore \
+    -p:PublishReadyToRun=true -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
 WORKDIR /app

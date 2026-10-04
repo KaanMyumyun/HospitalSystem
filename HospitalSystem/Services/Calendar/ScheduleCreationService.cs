@@ -1,6 +1,5 @@
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.Calendar;
-using Microsoft.EntityFrameworkCore;
 
 namespace HospitalSystem.Services.Calendar;
 
@@ -36,14 +35,8 @@ public class ScheduleCreationService : IScheduleCreationService
         var start = dummyDate.AddHours(dto.StartHour);
         var end = dummyDate.AddHours(dto.EndHour);
 
-        var exist = await _context.Calendars.AnyAsync(u =>
-            u.DoctorId == dto.DoctorId &&
-            u.EndTime > start &&
-            u.StartTime < end);
-
-        if (exist)
-            return CalendarActionResult.Fail("Schedule already exists for this time range");
-
+        // Unlike ChangeScheduleAsync, no overlap check: ValidateAsync has already
+        // refused a doctor who has any schedule, so there is nothing to overlap.
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
         var calendar = new CalendarEntity
