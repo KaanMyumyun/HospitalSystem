@@ -18,28 +18,36 @@ export function useWeekAppointments(
   const fromMs = from.getTime()
   const toMs = to.getTime()
   const [loaded, setLoaded] = useState<LoadedWeek | null>(null)
-  const latestRequest = useRef(0)
+  const [previousDoctorId, setPreviousDoctorId] = useState(doctorId)
+  const latestRequest = useRef<symbol | null>(null)
+
+  // A cleared or changed doctor selection must discard cached appointments.
+  if (previousDoctorId !== doctorId) {
+    setPreviousDoctorId(doctorId)
+    setLoaded(null)
+  }
 
   const reload = useCallback(async () => {
-    const request = ++latestRequest.current
-    if (doctorId === null) {
-      setLoaded(null)
-      return
-    }
+    const request = Symbol()
+    latestRequest.current = request
+    if (doctorId === null) return
 
-    try {
-      const appointments = await loadAppointments(doctorId, new Date(fromMs), new Date(toMs))
-      // The desk may have moved to another doctor or week meanwhile.
-      if (request === latestRequest.current) setLoaded({ doctorId, fromMs, appointments })
-    } catch (error) {
-      if (request === latestRequest.current) {
-        onError(error instanceof Error ? error.message : 'Failed to load appointments')
-      }
-    }
+    return loadAppointments(doctorId, new Date(fromMs), new Date(toMs)).then(
+      (appointments) => {
+        // The desk may have moved to another doctor or week meanwhile.
+        if (request === latestRequest.current) setLoaded({ doctorId, fromMs, appointments })
+      },
+      (error: unknown) => {
+        if (request === latestRequest.current) {
+          onError(error instanceof Error ? error.message : 'Failed to load appointments')
+        }
+      },
+    )
   }, [doctorId, fromMs, toMs, onError])
 
   useEffect(() => {
     void reload()
+    return () => { latestRequest.current = null }
   }, [reload])
 
   const isShownWeek = loaded !== null && loaded.doctorId === doctorId && loaded.fromMs === fromMs

@@ -56,7 +56,9 @@ function App() {
   const [selectedDoctorId, setSelectedDoctorId] = useState<number | null>(null)
   const [weekOffset, setWeekOffset] = useState(0)
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(() =>
+    session !== null && (canUseAdmin(session.role) || canUseReception(session.role)),
+  )
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -86,27 +88,29 @@ function App() {
     reload: reloadUsers,
   } = useUsersPage(session !== null && canListUsers(session.role) && screen === 'users', searchQuery, setError)
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(() => {
     if (!session || !(canUseAdmin(session.role) || canUseReception(session.role))) return
 
-    setLoading(true)
-    setError(null)
-    try {
-      const nextData = await loadHospitalData()
-      setData(nextData)
-      setSelectedDoctorId((current) => current ?? nextData.doctors.find((doctor) => doctor.isActive)?.doctorId ?? null)
-      setSelectedDepartmentId((current) => current ?? nextData.departments[0]?.id ?? null)
-    } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : 'Failed to load backend data')
-    } finally {
-      setLoading(false)
-    }
+    return loadHospitalData()
+      .then((nextData) => {
+        setData(nextData)
+        setSelectedDoctorId((current) => current ?? nextData.doctors.find((doctor) => doctor.isActive)?.doctorId ?? null)
+        setSelectedDepartmentId((current) => current ?? nextData.departments[0]?.id ?? null)
+      })
+      .catch((refreshError) => {
+        setError(refreshError instanceof Error ? refreshError.message : 'Failed to load backend data')
+      })
+      .finally(() => setLoading(false))
   }, [session])
 
   // Everything on screen: the shared lists, plus the visible week or users page.
   const reloadAll = useCallback(async () => {
+    if (!session || !(canUseAdmin(session.role) || canUseReception(session.role))) return
+
+    setLoading(true)
+    setError(null)
     await Promise.all([refresh(), reloadAppointments(), reloadUsers()])
-  }, [refresh, reloadAppointments, reloadUsers])
+  }, [session, refresh, reloadAppointments, reloadUsers])
 
   const actionInFlight = useRef(false)
 
@@ -162,6 +166,7 @@ function App() {
   useEffect(() => {
     const handleSessionExpired = () => {
       setSession(null)
+      setLoading(false)
       setActivity([])
       setData(emptyData)
       setSelectedDoctorId(null)
@@ -175,6 +180,8 @@ function App() {
 
   const handleLogin = (nextSession: Session) => {
     setSession(nextSession)
+    setLoading(canUseAdmin(nextSession.role) || canUseReception(nextSession.role))
+    setError(null)
     setActivity([])
     setScreen(canUseAdmin(nextSession.role) ? 'departments' : 'reception')
   }
@@ -182,6 +189,7 @@ function App() {
   const handleLogout = () => {
     clearSession()
     setSession(null)
+    setLoading(false)
     setActivity([])
     setData(emptyData)
     setSelectedDoctorId(null)
