@@ -14,34 +14,42 @@ export function useUsersPage(enabled: boolean, searchQuery: string, onError: (me
   // A new search starts again from its first page.
   const page = requested.search === search ? requested.page : 1
   const [loaded, setLoaded] = useState<LoadedPage | null>(null)
-  const latestRequest = useRef(0)
+  const [wasEnabled, setWasEnabled] = useState(enabled)
+  const latestRequest = useRef<symbol | null>(null)
+
+  // Discard cached users before rendering a disabled or newly enabled view.
+  if (wasEnabled !== enabled) {
+    setWasEnabled(enabled)
+    setLoaded(null)
+  }
 
   const reload = useCallback(async () => {
-    const request = ++latestRequest.current
-    if (!enabled) {
-      setLoaded(null)
-      return
-    }
+    const request = Symbol()
+    latestRequest.current = request
+    if (!enabled) return
 
-    try {
-      const result = await loadUsers(search, page)
-      if (request === latestRequest.current) setLoaded({ search, page, result })
-    } catch (error) {
-      if (request === latestRequest.current) {
-        onError(error instanceof Error ? error.message : 'Failed to load users')
-      }
-    }
+    return loadUsers(search, page).then(
+      (result) => {
+        if (request === latestRequest.current) setLoaded({ search, page, result })
+      },
+      (error: unknown) => {
+        if (request === latestRequest.current) {
+          onError(error instanceof Error ? error.message : 'Failed to load users')
+        }
+      },
+    )
   }, [enabled, search, page, onError])
 
   useEffect(() => {
     void reload()
+    return () => { latestRequest.current = null }
   }, [reload])
 
   const setPage = useCallback((next: number) => setRequested({ search, page: next }), [search])
   const isShownPage = loaded !== null && loaded.search === search && loaded.page === page
 
   // The previous page stays on screen while the next one loads.
-  return { usersPage: loaded?.result ?? null, isLoading: enabled && !isShownPage, setPage, reload }
+  return { usersPage: enabled ? loaded?.result ?? null : null, isLoading: enabled && !isShownPage, setPage, reload }
 }
 
 function useDebouncedValue<T>(value: T, delayMs: number) {
