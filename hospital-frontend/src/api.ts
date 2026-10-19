@@ -108,6 +108,9 @@ function apiUrl(path: string) {
 const tokenStorageKey = 'hospital-frontend-token'
 const roleStorageKey = 'hospital-frontend-role'
 const requestTimeoutMs = 15000
+// A free-tier host stops an idle API and can take about a minute to start it
+// again, so sign-in waits longer than other requests.
+const signInTimeoutMs = 90_000
 
 export const sessionExpiredEvent = 'hospital-frontend:session-expired'
 
@@ -127,11 +130,19 @@ export function clearSession() {
   localStorage.removeItem(roleStorageKey)
 }
 
+// Starts an idle API while the visitor is still on the sign-in page; nothing
+// waits for the answer. Skipped when the API shares the app's origin.
+export function wakeApi() {
+  if (!API_ORIGIN) return
+  void fetch(`${API_ORIGIN}/health/ready`, { mode: 'no-cors', cache: 'no-store' }).catch(() => undefined)
+}
+
 export async function login(name: string, password: string): Promise<LoginResult> {
   try {
     const result = await request<LoginResult>('/api/Auth/login', {
       method: 'POST',
       body: JSON.stringify({ name, password }),
+      signal: AbortSignal.timeout(signInTimeoutMs),
     })
 
     if (result.isSuccess && result.token && result.role) {
@@ -149,6 +160,7 @@ export async function demoLogin(role: 'DemoAdmin' | 'DemoFrontDesk'): Promise<Lo
     const result = await request<LoginResult>('/api/Auth/demo-login', {
       method: 'POST',
       body: JSON.stringify({ role }),
+      signal: AbortSignal.timeout(signInTimeoutMs),
     })
 
     if (result.isSuccess && result.token && result.role) {

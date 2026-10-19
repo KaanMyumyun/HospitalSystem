@@ -92,6 +92,12 @@
   margin-top: 14px;
 }
 
+.login-note {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .login-preview {
   display: flex;
   align-items: center;

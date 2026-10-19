@@ -16,7 +16,7 @@ The project is live on free-tier cloud infrastructure — no setup needed:
 | Backend API | Render | Auto-deployed on merge to main |
 | Database | Neon (Serverless PostgreSQL) | Persistent, always on |
 
-> The backend runs on a free Render instance. If inactive, it may take **30–60 seconds to spin up** on first request.
+> The backend runs on a free Render instance. If inactive, it may take **30–60 seconds to spin up** on first request. The sign-in page wakes it as soon as it opens.
 
 This is the only deployment that runs permanently. The AWS deployments described under [Deployment](#deployment) are brought up only when needed.
 

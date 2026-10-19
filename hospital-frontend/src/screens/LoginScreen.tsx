@@ -1,22 +1,35 @@
 import { Activity } from 'lucide-react'
-import { useState } from 'react'
-import { demoLogin, login } from '../api'
+import { useEffect, useState } from 'react'
+import { demoLogin, login, wakeApi } from '../api'
+import type { LoginResult } from '../api'
 import { StatusBadge } from '../components/ui'
 import type { Session } from '../types'
 
 type PendingSignIn = 'password' | 'DemoAdmin' | 'DemoFrontDesk'
+
+// Sign-in normally answers within a second; after this long, say why it may not.
+const slowSignInMs = 3000
 
 export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }) {
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   // Which button is waiting for the API; all of them are disabled meanwhile.
   const [pending, setPending] = useState<PendingSignIn | null>(null)
+  const [slow, setSlow] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const submit = async () => {
-    setPending('password')
+  // An idle API starts while the visitor reads the page, not on the first click.
+  useEffect(() => {
+    wakeApi()
+  }, [])
+
+  const signIn = async (kind: PendingSignIn, request: () => Promise<LoginResult>) => {
+    setPending(kind)
     setError(null)
-    const result = await login(name, password)
+    const slowTimer = setTimeout(() => setSlow(true), slowSignInMs)
+    const result = await request()
+    clearTimeout(slowTimer)
+    setSlow(false)
     setPending(null)
 
     if (!result.isSuccess || !result.token || !result.role) {
@@ -27,19 +40,8 @@ export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }
     onLogin({ token: result.token, role: result.role })
   }
 
-  const submitDemo = async (role: 'DemoAdmin' | 'DemoFrontDesk') => {
-    setPending(role)
-    setError(null)
-    const result = await demoLogin(role)
-    setPending(null)
-
-    if (!result.isSuccess || !result.token || !result.role) {
-      setError(result.error ?? 'Invalid credentials')
-      return
-    }
-
-    onLogin({ token: result.token, role: result.role })
-  }
+  const submit = () => signIn('password', () => login(name, password))
+  const submitDemo = (role: 'DemoAdmin' | 'DemoFrontDesk') => signIn(role, () => demoLogin(role))
 
   return (
     <main className="login-page">
@@ -99,6 +101,11 @@ export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }
             {pending === 'DemoFrontDesk' ? 'Signing in...' : 'Demo Reception'}
           </button>
         </div>
+        {slow && (
+          <p className="login-note" role="status">
+            Waking up the server. After a quiet spell, the first sign-in can take up to a minute.
+          </p>
+        )}
       </section>
 
       <section className="login-preview" aria-hidden="true">

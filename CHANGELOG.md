@@ -110,6 +110,9 @@ tagged releases yet, so everything is listed under Unreleased.
 - Re-running a Docker Image CI run no longer fails on the ECR push: the tag
   now ends in the run attempt, so the re-run pushes under a new tag instead of
   the immutable one the first attempt pushed.
+- The first sign-in after the demo API has been idle no longer times out. The
+  sign-in page wakes the API as soon as it opens, sign-in waits up to 90
+  seconds, and after 3 seconds the page says the server is starting.
 - Unknown paths get a real 404: on Cloudflare Pages, `/robots.txt` and other
   missing files no longer return the app shell with a 200, and the API
   answers paths such as `/favicon.ico` with 404 instead of 401. nginx's
