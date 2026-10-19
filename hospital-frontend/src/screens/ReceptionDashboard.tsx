@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import type { AppointmentDto, CreateAppointmentInput, DepartmentDto, DoctorDto, ScheduleDto } from '../api'
+import { PossiblePatientMatchError } from '../api'
+import type {
+  AppointmentDto,
+  CreateAppointmentInput,
+  DepartmentDto,
+  DoctorDto,
+  PatientMatchDto,
+  ScheduleDto,
+} from '../api'
 import { EmptyState, Metric, Modal, StatusBadge } from '../components/ui'
 import {
   departmentName,
@@ -58,6 +66,8 @@ export function ReceptionDashboard({
   const [cancelReason, setCancelReason] = useState('')
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [bookingError, setBookingError] = useState<string | null>(null)
+  // Patients on file who share some of the entered details, as the API listed them.
+  const [possibleMatches, setPossibleMatches] = useState<PatientMatchDto[] | null>(null)
   const [departmentFilter, setDepartmentFilter] = useState<number | 'all'>('all')
   const activeDepartments = useMemo(() => departments.filter((department) => department.isActive), [departments])
   const activeDepartmentIds = useMemo(
@@ -110,13 +120,20 @@ export function ReceptionDashboard({
     setPhoneNumber('')
     setDateOfBirth('')
     setBookingError(null)
+    setPossibleMatches(null)
+  }
+  // An edit makes an error or the listed matches out of date.
+  const clearBookingFeedback = () => {
+    setBookingError(null)
+    setPossibleMatches(null)
   }
   const closeCancellation = () => {
     setCancellingAppointmentId(null)
     setCancelReason('')
     setCancelError(null)
   }
-  const submitBooking = async () => {
+  // patient is set when booking again after the API listed possible matches.
+  const submitBooking = async (patient?: Pick<CreateAppointmentInput, 'PatientId' | 'CreateNewPatient'>) => {
     if (!selectedSlot || !selectedDoctor) return
     const appointmentTime = dateAtTime(selectedSlot.day, selectedSlot.time)
     const validationError = validateAppointmentInput(patientName, phoneNumber, dateOfBirth, appointmentTime)
@@ -131,9 +148,15 @@ export function ReceptionDashboard({
       PhoneNumber: phoneNumber.trim(),
       DateOfBirth: dateOfBirth,
       AppointmentTime: toLocalIsoString(appointmentTime),
+      ...patient,
     })
     if (!outcome.ok) {
-      if (outcome.error) setBookingError(outcome.error)
+      if (outcome.cause instanceof PossiblePatientMatchError) {
+        setPossibleMatches(outcome.cause.matches)
+      } else if (outcome.error) {
+        setPossibleMatches(null)
+        setBookingError(outcome.error)
+      }
       return
     }
     closeBooking()
@@ -364,7 +387,7 @@ export function ReceptionDashboard({
                 maxLength={50}
                 value={patientName}
                 onChange={(event) => {
-                  setBookingError(null)
+                  clearBookingFeedback()
                   setPatientName(event.target.value)
                 }}
               />
@@ -377,7 +400,7 @@ export function ReceptionDashboard({
                 pattern="^\+?[0-9\s().-]+$"
                 value={phoneNumber}
                 onChange={(event) => {
-                  setBookingError(null)
+                  clearBookingFeedback()
                   setPhoneNumber(event.target.value.replace(/[^\d\s()+.-]/g, ''))
                 }}
               />
@@ -389,26 +412,63 @@ export function ReceptionDashboard({
                 type="date"
                 value={dateOfBirth}
                 onChange={(event) => {
-                  setBookingError(null)
+                  clearBookingFeedback()
                   setDateOfBirth(event.target.value)
                 }}
               />
             </label>
           </div>
           {bookingError && <div className="form-error">{bookingError}</div>}
+          {possibleMatches && (
+            <div className="match-box">
+              <p>These details partly match a patient on file. Book for the right patient, or register a new one.</p>
+              <ul className="match-list" aria-label="Patients on file">
+                {possibleMatches.map((match) => (
+                  <li key={match.patientId}>
+                    <span>
+                      <strong>{match.name}</strong>
+                      <small>
+                        Born {match.dateOfBirth} · {match.phoneNumber}
+                      </small>
+                    </span>
+                    <button
+                      aria-label={`Book for ${match.name}`}
+                      className="secondary-button"
+                      disabled={isReadOnly || loading}
+                      type="button"
+                      onClick={() => void submitBooking({ PatientId: match.patientId })}
+                    >
+                      Book for this patient
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="modal-actions">
             <button className="secondary-button" type="button" onClick={closeBooking}>
               Close
             </button>
-            <button
-              className="primary-button"
-              disabled={!patientName || !phoneNumber || !dateOfBirth || isReadOnly || loading}
-              title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
-              type="button"
-              onClick={() => void submitBooking()}
-            >
-              Confirm Booking
-            </button>
+            {possibleMatches ? (
+              <button
+                className="primary-button"
+                disabled={isReadOnly || loading}
+                type="button"
+                onClick={() => void submitBooking({ CreateNewPatient: true })}
+              >
+                Register as new patient
+              </button>
+            ) : (
+              <button
+                className="primary-button"
+                disabled={!patientName || !phoneNumber || !dateOfBirth || isReadOnly || loading}
+                title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
+                type="button"
+                onClick={() => void submitBooking()}
+              >
+                Confirm Booking
+              </button>
+            )}
           </div>
         </Modal>
       )}

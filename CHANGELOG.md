@@ -110,6 +110,16 @@ tagged releases yet, so everything is listed under Unreleased.
 - Re-running a Docker Image CI run no longer fails on the ECR push: the tag
   now ends in the run attempt, so the re-run pushes under a new tag instead of
   the immutable one the first attempt pushed.
+- A booking is no longer filed under whoever first registered the same phone
+  number. Patients are matched on phone number, name and date of birth
+  together, and relatives can share a phone number. When only some of the
+  details match a patient on file, the booking dialog lists those patients so
+  the desk can book for one of them or register a new patient. Phone numbers
+  are stored as digits with an optional leading `+`, and a migration converts
+  the existing ones.
+- The overlap check uses the doctor's slot length instead of a fixed 15
+  minutes. With 5- or 10-minute slots, the slot right after a booking can be
+  booked; with longer slots, a booking can no longer start inside another one.
 - The first sign-in after the demo API has been idle no longer times out. The
   sign-in page wakes the API as soon as it opens, sign-in waits up to 90
   seconds, and after 3 seconds the page says the server is starting.

@@ -36,9 +36,9 @@ public abstract class AppointmentTestBase
  
         var doctor = new DoctorEntity { Id = 1, UserId = 1, User = userDoctor, DepartmentId = 1, Department = department, IsActive = isDoctorActive };
  
-        var patient1 = new PatientEntity { Id = 1, Name = "Patient One", PhoneNumber = "555-0001", DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-30)) };
-        var patient2 = new PatientEntity { Id = 2, Name = "Patient Two", PhoneNumber = "555-0002", DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-25)) };
-        var patient3 = new PatientEntity { Id = 3, Name = "Patient Three", PhoneNumber = "555-0003", DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-40)) };
+        var patient1 = new PatientEntity { Id = 1, Name = "Patient One", PhoneNumber = "5550001", DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-30)) };
+        var patient2 = new PatientEntity { Id = 2, Name = "Patient Two", PhoneNumber = "5550002", DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-25)) };
+        var patient3 = new PatientEntity { Id = 3, Name = "Patient Three", PhoneNumber = "5550003", DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-40)) };
  
         var appointmentTime = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
  

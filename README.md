@@ -109,7 +109,6 @@ The frontend build adds a `404.html` copy of the app shell, so Pages answers
 unknown paths with a real 404, and `hospital-frontend/public/_headers` sets the
 same cache and security headers that `nginx.conf` sets for the Docker image.
 
-
 ### AWS EKS (on demand)
 
 The CI/CD pipeline above builds images for, and deploys to, AWS using EKS, ECR, ACM, an AWS Application Load Balancer, and Kubernetes manifests. This environment is not kept running; it is provisioned from the infrastructure repository when needed.
@@ -538,7 +537,19 @@ data holds `items`, `totalCount`, `page` and `pageSize`.
 
 `CreateAppointment` takes `appointmentTime` as the front desk's local time with
 its UTC offset, for example `2026-09-22T09:00:00+03:00`. That clock time must
-fall inside the doctor's working hours; the appointment is stored in UTC.
+fall inside the doctor's working hours; the appointment is stored in UTC. An
+appointment lasts one slot of the doctor's schedule and cannot overlap another
+scheduled appointment.
+
+The patient is matched on phone number, name and date of birth together. Phone
+numbers are compared as digits, keeping a leading `+`, and names ignoring
+case. When all three match a patient on file, the appointment is booked for
+that patient; when nothing matches, a new patient is registered. When only the
+phone number, or only the name and date of birth, match, nothing is booked:
+the response is `409` with `possibleMatches`, each with `patientId`, `name`,
+`dateOfBirth` and `phoneNumber`. Send the request again with `patientId` to
+book for one of them, or with `createNewPatient: true` to register a new
+patient.
 
 `ListAppointments` requires `doctorId`, `from` and `to`, with offsets like
 `appointmentTime`, and returns that doctor's appointments in every status that
@@ -573,7 +584,9 @@ getting healthy containers restarted.
 * 401 Unauthorized – Missing or invalid JWT
 * 403 Forbidden – Insufficient permissions
 * 404 Not Found – Resource not found
-* 409 Conflict – The doctor was booked for that time by a concurrent request
+* 409 Conflict – The doctor was booked for that time by a concurrent request,
+  or the patient details partly match a patient on file (see
+  `CreateAppointment`)
 * 429 Too Many Requests – Rate limit reached; the `Retry-After` header gives
   the number of seconds to wait
 * 500 Internal Server Error – Unexpected server error
@@ -621,8 +634,10 @@ InMemory. They cover 17 services across five areas:
 The Appointments, Auth, Department and User tests share seed data through
 `*TestBase` classes.
 
-The frontend has unit tests in `hospital-frontend/src/lib`, written with
-Vitest, covering schedule slot generation and form validation.
+The frontend has unit tests in `hospital-frontend/src` (`lib/*.test.ts` and
+`api.test.ts`), written with Vitest, covering schedule slot generation, form
+validation, time handling, HTTP error messages and the API client's booking
+errors.
 
 Not covered yet: `PatientService`, `ScheduleValidation`, `AuditLogService`,
 `CurrentUserService`, the controllers, and the frontend components and

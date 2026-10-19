@@ -214,8 +214,9 @@ namespace HospitalSystem.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PhoneNumber")
-                        .IsUnique();
+                    b.HasIndex("DateOfBirth");
+
+                    b.HasIndex("PhoneNumber");
 
                     b.ToTable("Patients");
                 });

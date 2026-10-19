@@ -66,6 +66,29 @@ export type CreateAppointmentInput = {
   PhoneNumber: string
   DateOfBirth: string
   AppointmentTime: string
+  // Set when booking again after the API listed possible matches.
+  PatientId?: number
+  CreateNewPatient?: boolean
+}
+
+// A patient on file who shares some of a booking's patient details.
+export type PatientMatchDto = {
+  patientId: number
+  name: string
+  dateOfBirth: string
+  phoneNumber: string
+}
+
+// The booking's patient details partly match patients on file. The desk
+// books for one of them or registers a new patient.
+export class PossiblePatientMatchError extends Error {
+  readonly matches: PatientMatchDto[]
+
+  constructor(message: string, matches: PatientMatchDto[]) {
+    super(message)
+    this.name = 'PossiblePatientMatchError'
+    this.matches = matches
+  }
 }
 
 export type CancelAppointmentInput = {
@@ -328,6 +351,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (response.status === 429) {
       throw new Error(tooManyRequestsMessage(response.headers.get('Retry-After')))
     }
+    const possibleMatches = payload?.possibleMatches ?? payload?.PossibleMatches
+    if (response.status === 409 && Array.isArray(possibleMatches) && possibleMatches.length > 0) {
+      throw new PossiblePatientMatchError(
+        message ?? 'These details partly match a patient on file.',
+        possibleMatches.map(normalizePatientMatch),
+      )
+    }
     if (!isJson) {
       throw new Error(unreadableResponseMessage(response.status))
     }
@@ -415,6 +445,16 @@ function normalizeAppointment(value: unknown): AppointmentDto {
     patientPhoneNumber: stringValue(item.patientPhoneNumber ?? item.PatientPhoneNumber),
     appointmentTime: stringValue(item.appointmentTime ?? item.AppointmentTime ?? item.timeOfAppointment),
     status: stringValue(item.status ?? item.Status, 'Scheduled') as AppointmentStatus,
+  }
+}
+
+function normalizePatientMatch(value: unknown): PatientMatchDto {
+  const item = value as Record<string, unknown>
+  return {
+    patientId: numberValue(item.patientId ?? item.PatientId),
+    name: stringValue(item.name ?? item.Name),
+    dateOfBirth: stringValue(item.dateOfBirth ?? item.DateOfBirth),
+    phoneNumber: stringValue(item.phoneNumber ?? item.PhoneNumber),
   }
 }
 
