@@ -92,6 +92,12 @@
   margin-top: 14px;
 }
 
+.login-note {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .login-preview {
   display: flex;
   align-items: center;
@@ -1085,6 +1091,49 @@ textarea {
 .summary-box span {
   color: var(--muted);
   font-size: 13px;
+}
+
+.match-box {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--blue-200);
+  border-radius: 8px;
+  background: var(--blue-50);
+  padding: 12px;
+}
+
+.match-box p {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.match-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.match-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.match-list span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.match-list small {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .modal-backdrop {

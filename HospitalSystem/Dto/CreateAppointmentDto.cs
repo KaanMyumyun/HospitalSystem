@@ -22,4 +22,10 @@ public class CreateAppointmentDto
     // The desk's wall-clock time with its UTC offset, e.g. 2026-09-22T09:00:00+03:00.
     [Required]
     public DateTimeOffset? AppointmentTime { get; set; }
+
+    // Set when booking again after a reply that listed possible matches: the
+    // patient on file to book for, or a new patient despite the matches.
+    public int? PatientId { get; set; }
+
+    public bool CreateNewPatient { get; set; }
 }

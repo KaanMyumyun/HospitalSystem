@@ -20,4 +20,5 @@ export type Slot = {
   status: SlotStatus
   appointment?: AppointmentDto
 }
-export type ActionOutcome = { ok: true } | { ok: false; error?: string }
+// cause is the error the action threw, for screens that handle some errors themselves.
+export type ActionOutcome = { ok: true } | { ok: false; error?: string; cause?: unknown }

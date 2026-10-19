@@ -37,7 +37,8 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
  
         Assert.True(result.IsSuccess);
  
-        var patient = await db.Patients.FirstOrDefaultAsync(p => p.PhoneNumber == "123-4567");
+        // Stored without the formatting, as digits.
+        var patient = await db.Patients.FirstOrDefaultAsync(p => p.PhoneNumber == "1234567");
         Assert.NotNull(patient);
         Assert.Equal("New Patient", patient!.Name);
         Assert.Equal(dob, patient.DateOfBirth);
@@ -74,7 +75,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
  
         Assert.True(result.IsSuccess);
  
-        var patientCount = await db.Patients.CountAsync(p => p.PhoneNumber == "555-0001");
+        var patientCount = await db.Patients.CountAsync(p => p.PhoneNumber == "5550001");
         Assert.Equal(1, patientCount);
     }
  
@@ -374,6 +375,48 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         var result = await service.CreateAppointmentAsync(dto, 5);
 
         Assert.True(result.IsSuccess);
+    }
+
+    // The seeded booking is at 10:00 on 2026-01-01.
+    [Theory]
+    [InlineData(10, 9, 50)]
+    [InlineData(10, 10, 10)]
+    [InlineData(5, 9, 55)]
+    [InlineData(5, 10, 5)]
+    [InlineData(30, 9, 30)]
+    [InlineData(30, 10, 30)]
+    public async Task CreateAppointmentAsync_NextToBookingWithDoctorsSlotLength_Succeeds(int slotMinutes, int hour, int minute)
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        (await db.Calendars.FindAsync(1))!.SlotDurationMin = slotMinutes;
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 1, hour, minute, 0, DateTimeKind.Utc)), 5);
+
+        Assert.True(result.IsSuccess);
+    }
+
+    [Theory]
+    [InlineData(30, 9, 31)]
+    [InlineData(30, 9, 45)]
+    [InlineData(30, 10, 15)]
+    [InlineData(30, 10, 29)]
+    [InlineData(60, 9, 30)]
+    [InlineData(60, 10, 45)]
+    public async Task CreateAppointmentAsync_WithinDoctorsSlotLengthOfBooking_Fails(int slotMinutes, int hour, int minute)
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        (await db.Calendars.FindAsync(1))!.SlotDurationMin = slotMinutes;
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 1, hour, minute, 0, DateTimeKind.Utc)), 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Doctor already booked for that time slot", result.Error);
     }
 
     [Fact]

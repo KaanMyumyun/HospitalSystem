@@ -13,7 +13,7 @@ public class AppointmentCreationService : IAppointmentCreationService
     private readonly IPatientService _patientService;
     private readonly IAuditLogService _auditLog;
 
-    private static readonly TimeSpan AppointmentDuration = TimeSpan.FromMinutes(15);
+    private const int MaxPossibleMatches = 10;
     private static readonly Regex AllowedPhoneCharacters = new(@"^\+?[0-9\s().-]+$", RegexOptions.Compiled);
 
     public AppointmentCreationService(
@@ -37,8 +37,11 @@ public class AppointmentCreationService : IAppointmentCreationService
             return CreateAppointmentResultDto.Fail("Appointment time is required");
 
         var appointmentTime = requestedTime.UtcDateTime;
-        var earliestOverlappingStart = appointmentTime.Subtract(AppointmentDuration);
-        var appointmentEnd = appointmentTime.Add(AppointmentDuration);
+        var patientName = dto.PatientName?.Trim() ?? "";
+        var patientNameKey = patientName.ToLowerInvariant();
+        var phoneNumber = NormalizePhoneNumber(dto.PhoneNumber);
+        var dateOfBirth = dto.DateOfBirth;
+        var chosenPatientId = dto.PatientId;
 
         // Fetched together so the checks below and the patient lookup cost one
         // round trip, not four.
@@ -52,14 +55,26 @@ public class AppointmentCreationService : IAppointmentCreationService
                 Schedule = d.Calendars
                     .Select(c => new WorkingHours(c.StartTime, c.EndTime, c.SlotDurationMin))
                     .FirstOrDefault(),
-                HasOverlap = d.Appointments.Any(a =>
-                    a.Status == AppointmentStatus.Scheduled &&
-                    a.TimeOfAppointment > earliestOverlappingStart &&
-                    a.TimeOfAppointment < appointmentEnd),
-                ExistingPatientId = _context.Patients
-                    .Where(p => p.PhoneNumber == dto.PhoneNumber)
+                // The nearest bookings on either side. Whether they overlap
+                // depends on the slot length, known once the schedule is loaded.
+                PreviousStart = d.Appointments
+                    .Where(a => a.Status == AppointmentStatus.Scheduled && a.TimeOfAppointment <= appointmentTime)
+                    .Max(a => (DateTime?)a.TimeOfAppointment),
+                NextStart = d.Appointments
+                    .Where(a => a.Status == AppointmentStatus.Scheduled && a.TimeOfAppointment > appointmentTime)
+                    .Min(a => (DateTime?)a.TimeOfAppointment),
+                SamePatientId = _context.Patients
+                    .Where(p => p.PhoneNumber == phoneNumber && p.Name.ToLower() == patientNameKey && p.DateOfBirth == dateOfBirth)
+                    .OrderBy(p => p.Id)
                     .Select(p => (int?)p.Id)
-                    .FirstOrDefault()
+                    .FirstOrDefault(),
+                // Someone on file with the same phone number, or the same name
+                // and date of birth, may be the patient being booked. Written
+                // out here and below: a shared expression variable would make
+                // EF run this check as a query of its own.
+                HasPossibleMatch = _context.Patients
+                    .Any(p => p.PhoneNumber == phoneNumber || (p.Name.ToLower() == patientNameKey && p.DateOfBirth == dateOfBirth)),
+                ChosenPatientExists = chosenPatientId != null && _context.Patients.Any(p => p.Id == chosenPatientId)
             })
             .FirstOrDefaultAsync();
         if (doctor == null)
@@ -75,22 +90,58 @@ public class AppointmentCreationService : IAppointmentCreationService
         if (validationError is not null)
             return CreateAppointmentResultDto.Fail(validationError);
 
-        var scheduleError = CheckWorkingHours(doctor.Schedule, requestedTime);
+        if (doctor.Schedule is not { } schedule)
+            return CreateAppointmentResultDto.Fail("Doctor has no schedule");
+
+        var scheduleError = CheckWorkingHours(schedule, requestedTime);
         if (scheduleError is not null)
             return CreateAppointmentResultDto.Fail(scheduleError);
 
-        if (doctor.HasOverlap)
+        // Every booking lasts one slot, so another booking overlaps this one
+        // when it starts less than a slot before or after it.
+        var slotLength = TimeSpan.FromMinutes(schedule.SlotDurationMin);
+        if (doctor.PreviousStart > appointmentTime - slotLength || doctor.NextStart < appointmentTime + slotLength)
             return CreateAppointmentResultDto.Fail("Doctor already booked for that time slot");
- 
+
+        if (chosenPatientId is not null && !doctor.ChosenPatientExists)
+            return CreateAppointmentResultDto.Fail("Patient not found");
+
+        // A patient whose phone number, name and date of birth all match is
+        // booked again. When only some match (a relative sharing a phone, a
+        // typo, a new number), the desk sees the matches and books again with
+        // PatientId or CreateNewPatient.
+        var patientId = chosenPatientId ?? doctor.SamePatientId;
+        if (patientId is null && doctor.HasPossibleMatch && !dto.CreateNewPatient)
+        {
+            var possibleMatches = await _context.Patients
+                .AsNoTracking()
+                .Where(p => p.PhoneNumber == phoneNumber || (p.Name.ToLower() == patientNameKey && p.DateOfBirth == dateOfBirth))
+                .OrderBy(p => p.Name)
+                .ThenBy(p => p.Id)
+                .Take(MaxPossibleMatches)
+                .Select(p => new PatientMatchDto
+                {
+                    PatientId = p.Id,
+                    Name = p.Name,
+                    DateOfBirth = p.DateOfBirth,
+                    PhoneNumber = p.PhoneNumber
+                })
+                .ToListAsync();
+
+            return CreateAppointmentResultDto.FailPossibleMatch(
+                "These details partly match a patient on file. Book for that patient, or register a new one.",
+                possibleMatches);
+        }
+
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
-        var patientId = doctor.ExistingPatientId
-            ?? await _patientService.CreatePatientAsync(dto.PatientName, dto.PhoneNumber, dto.DateOfBirth!.Value);
- 
+        var bookedPatientId = patientId
+            ?? await _patientService.CreatePatientAsync(patientName, phoneNumber, dateOfBirth!.Value);
+
         var appointment = new AppointmentsEntity
         {
             DoctorId = dto.DoctorId,
-            PatientId = patientId,
+            PatientId = bookedPatientId,
             TimeOfAppointment = appointmentTime,
             CreatedAt = DateTime.UtcNow,
             CreatedByTheFrontDeskId = frontDeskUserId,
@@ -137,16 +188,25 @@ public class AppointmentCreationService : IAppointmentCreationService
         if (dto.DateOfBirth > DateOnly.FromDateTime(requestedTime.DateTime))
             return "Date of birth cannot be after the appointment date";
 
+        if (dto.PatientId is not null && dto.CreateNewPatient)
+            return "Choose a patient on file or a new patient, not both";
+
         return null;
     }
- 
+
+    // Patients are stored and matched by digits only, keeping a leading +, so
+    // "+359 888 111-222" and "+359888111222" are the same number.
+    private static string NormalizePhoneNumber(string? phoneNumber)
+    {
+        var trimmed = phoneNumber?.Trim() ?? "";
+        var digits = string.Concat(trimmed.Where(char.IsAsciiDigit));
+        return trimmed.StartsWith('+') ? "+" + digits : digits;
+    }
+
     // Working hours are whole wall-clock hours, compared with the time as the
     // desk sent it, not with its UTC equivalent.
-    private static string? CheckWorkingHours(WorkingHours? schedule, DateTimeOffset requestedTime)
+    private static string? CheckWorkingHours(WorkingHours schedule, DateTimeOffset requestedTime)
     {
-        if (schedule == null)
-            return "Doctor has no schedule";
-
         // Stored on a placeholder date; an end hour of 24 is midnight of the next day.
         var startMinutes = (schedule.StartTime - schedule.StartTime.Date).TotalMinutes;
         var endMinutes = (schedule.EndTime - schedule.StartTime.Date).TotalMinutes;

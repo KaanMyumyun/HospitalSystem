@@ -12,8 +12,8 @@ public class PatientService : IPatientService
         _context = context;
     }
 
-    // Booking looks the phone number up in its own query and calls this only
-    // when no patient has it.
+    // Booking looks for the patient in its own query and calls this only when
+    // a new patient is to be registered.
     public async Task<int> CreatePatientAsync(string name, string phoneNumber, DateOnly dateOfBirth)
     {
         var patient = new PatientEntity

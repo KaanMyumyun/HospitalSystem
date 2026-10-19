@@ -14,6 +14,7 @@ import {
   createUser,
   getStoredSession,
   loadHospitalData,
+  PossiblePatientMatchError,
   resetPassword,
   sessionExpiredEvent,
 } from './api'
@@ -138,8 +139,9 @@ function App() {
       return { ok: true }
     } catch (actionError) {
       const message = actionError instanceof Error ? actionError.message : 'Operation failed'
-      setError(message)
-      return { ok: false, error: message }
+      // The booking dialog lists possible patient matches itself.
+      if (!(actionError instanceof PossiblePatientMatchError)) setError(message)
+      return { ok: false, error: message, cause: actionError }
     } finally {
       actionInFlight.current = false
       setLoading(false)

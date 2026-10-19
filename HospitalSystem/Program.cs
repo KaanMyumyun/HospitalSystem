@@ -294,7 +294,9 @@ var builder = WebApplication.CreateBuilder(args);
         Predicate = check => check.Tags.Contains("ready")
     }).AllowAnonymous();
     app.MapControllers();
-    app.MapFallback(context =>
+    // The explicit pattern also covers paths with a file extension, such as
+    // /favicon.ico, which MapFallback's default pattern leaves out.
+    app.MapFallback("{*path}", context =>
     {
         context.Response.StatusCode = StatusCodes.Status404NotFound;
         context.Response.ContentType = "application/json";

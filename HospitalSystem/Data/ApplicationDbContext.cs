@@ -34,7 +34,10 @@ public class ApplicationDbContext : DbContext
             builder.Property(s => s.PhoneNumber).IsRequired().HasMaxLength(20);
             builder.Property(s => s.Name).IsRequired().HasMaxLength(50);
             builder.Property(s => s.DateOfBirth).IsRequired();
-            builder.HasIndex(s => s.PhoneNumber).IsUnique();
+            // Not unique: relatives often share a phone. Booking looks patients
+            // up by phone number, or by name and date of birth.
+            builder.HasIndex(s => s.PhoneNumber);
+            builder.HasIndex(s => s.DateOfBirth);
         });
 
         modelBuilder.Entity<DepartmentEntity>(builder =>
