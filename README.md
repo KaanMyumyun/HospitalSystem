@@ -105,6 +105,11 @@ rules:
 * **Backend API:** Hosted on [Render](https://render.com/)
 * **Database:** Serverless PostgreSQL hosted on [Neon](https://neon.tech/)
 
+The frontend build adds a `404.html` copy of the app shell, so Pages answers
+unknown paths with a real 404, and `hospital-frontend/public/_headers` sets the
+same cache and security headers that `nginx.conf` sets for the Docker image.
+
+
 ### AWS EKS (on demand)
 
 The CI/CD pipeline above builds images for, and deploys to, AWS using EKS, ECR, ACM, an AWS Application Load Balancer, and Kubernetes manifests. This environment is not kept running; it is provisioned from the infrastructure repository when needed.

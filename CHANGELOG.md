@@ -110,6 +110,10 @@ tagged releases yet, so everything is listed under Unreleased.
 - Re-running a Docker Image CI run no longer fails on the ECR push: the tag
   now ends in the run attempt, so the re-run pushes under a new tag instead of
   the immutable one the first attempt pushed.
+- Unknown paths get a real 404: on Cloudflare Pages, `/robots.txt` and other
+  missing files no longer return the app shell with a 200, and the API
+  answers paths such as `/favicon.ico` with 404 instead of 401. nginx's
+  `/health` sends a single `Content-Type`.
 
 ### Security
 
@@ -133,3 +137,7 @@ tagged releases yet, so everything is listed under Unreleased.
 - Local configuration files (`appsettings.Development.json`,
   `appsettings.Local.json`) are no longer copied into the backend image, so
   locally built images do not carry a developer's secrets.
+- The frontend sends `X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy` and `Permissions-Policy` on every response, from nginx and
+  from Cloudflare Pages (`public/_headers`), which also lets browsers keep the
+  content-hashed files under `/assets/` for a year.
