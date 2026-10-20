@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.User;
+using HospitalSystem.Services.Auth;
  
 namespace HospitalSystem.Services.User;
  
@@ -9,12 +10,14 @@ public class DoctorStatusService : IDoctorStatusService
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
     private readonly IAuditLogService _auditLog;
+    private readonly SecurityStampCache _stamps;
  
-    public DoctorStatusService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
+    public DoctorStatusService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog, SecurityStampCache stamps)
     {
         _context = context;
         _currentUser = currentUser;
         _auditLog = auditLog;
+        _stamps = stamps;
     }
  
     public async Task<ChangeDoctorsStatusResult> ChangeDoctorsStatusAsync(ChangeDoctorStatusDto dto)
@@ -47,6 +50,8 @@ public class DoctorStatusService : IDoctorStatusService
             doctor.Id,
             $"Doctor {doctor.User.Name} set to {(isActive ? "active" : "inactive")}");
         await _context.SaveChangesAsync();
+        if (!isActive)
+            _stamps.Forget(doctor.UserId);
  
         return ChangeDoctorsStatusResult.Success(new ChangeDoctorsStatus
         {

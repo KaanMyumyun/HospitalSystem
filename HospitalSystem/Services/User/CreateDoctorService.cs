@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.User;
+using HospitalSystem.Services.Auth;
  
 namespace HospitalSystem.Services.User;
  
@@ -9,12 +10,14 @@ public class CreateDoctorService : ICreateDoctorService
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
     private readonly IAuditLogService _auditLog;
+    private readonly SecurityStampCache _stamps;
 
-    public CreateDoctorService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
+    public CreateDoctorService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog, SecurityStampCache stamps)
     {
         _context = context;
         _currentUser = currentUser;
         _auditLog = auditLog;
+        _stamps = stamps;
     }
  
     public async Task<CreateDoctorResultDto> CreateDoctorAsync(CreateDoctorDto dto)
@@ -68,6 +71,7 @@ public class CreateDoctorService : ICreateDoctorService
         await _auditLog.LogAsync("CreateDoctor", "Doctor", doctor.Id, $"User {user.Name} made a doctor in department {dto.DepartmentId}");
         await _context.SaveChangesAsync();
         await transaction.CommitAsync();
+        _stamps.Forget(user.Id);
 
         return CreateDoctorResultDto.Success();
     }

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.User;
+using HospitalSystem.Services.Auth;
  
 namespace HospitalSystem.Services.User;
  
@@ -9,12 +10,14 @@ public class ChangeRoleService : IChangeRoleService
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
     private readonly IAuditLogService _auditLog;
+    private readonly SecurityStampCache _stamps;
  
-    public ChangeRoleService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
+    public ChangeRoleService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog, SecurityStampCache stamps)
     {
         _context = context;
         _currentUser = currentUser;
         _auditLog = auditLog;
+        _stamps = stamps;
     }
  
     public async Task<ChangeRoleResultDto> ChangeRoleAsync(ChangeRoleDto dto)
@@ -61,6 +64,7 @@ public class ChangeRoleService : IChangeRoleService
             user.Id,
             $"User {user.Name} role changed from {oldRole} to {dto.NewRole}");
         await _context.SaveChangesAsync();
+        _stamps.Forget(user.Id);
         return ChangeRoleResultDto.Success();
     }
 }

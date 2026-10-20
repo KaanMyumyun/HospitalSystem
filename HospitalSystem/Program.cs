@@ -98,6 +98,8 @@ var builder = WebApplication.CreateBuilder(args);
 
     builder.Services.AddScoped<ILoginService, LoginService>();
     builder.Services.AddHostedService<SignInWarmup>();
+    builder.Services.AddMemoryCache();
+    builder.Services.AddSingleton<SecurityStampCache>();
     builder.Services.AddScoped<IUserCreationService, UserCreationService>();
 
     builder.Services.AddScoped<IScheduleCreationService, ScheduleCreationService>();
@@ -152,8 +154,9 @@ var builder = WebApplication.CreateBuilder(args);
                         return;
                     }
 
-                    var db = context.HttpContext.RequestServices.GetRequiredService<ApplicationDbContext>();
-                    var currentStamp = await SecurityStampClaims.CurrentStampAsync(db, userId);
+                    var services = context.HttpContext.RequestServices;
+                    var currentStamp = await services.GetRequiredService<SecurityStampCache>()
+                        .GetAsync(services.GetRequiredService<ApplicationDbContext>(), userId);
 
                     if (currentStamp == null || currentStamp != stampClaim)
                         context.Fail("Token has been revoked");

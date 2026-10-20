@@ -1,14 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using HospitalSystem.Services;
+using HospitalSystem.Services.Auth;
 using HospitalSystem.Services.User;
 
 namespace HospitalSystem.Tests;
  
 public class CreateDoctorServiceTests : UserTestBase
 {
-    private CreateDoctorService CreateService(ApplicationDbContext db, bool isAdmin = true)
-        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db));
+    private CreateDoctorService CreateService(ApplicationDbContext db, bool isAdmin = true, SecurityStampCache? stamps = null)
+        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db), stamps ?? CreateStampCache());
  
     [Fact]
     public async Task CreateDoctorAsync_Admin_Succeeds()
@@ -135,5 +136,22 @@ public class CreateDoctorServiceTests : UserTestBase
 
         Assert.True(result.IsSuccess);
         Assert.NotEqual(originalStamp, (await db.Users.FindAsync(1))!.SecurityStamp);
+    }
+
+    [Fact]
+    public async Task CreateDoctorAsync_PendingUser_ForgetsTheCachedStamp()
+    {
+        var db = CreateDbContext();
+        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true });
+        db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.Pending });
+        await db.SaveChangesAsync();
+        var stamps = CreateStampCache();
+        var originalStamp = await stamps.GetAsync(db, 1);
+        var service = CreateService(db, stamps: stamps);
+
+        var result = await service.CreateDoctorAsync(new CreateDoctorDto { UserId = 1, DepartmentId = 1 });
+
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(originalStamp, await stamps.GetAsync(db, 1));
     }
 }

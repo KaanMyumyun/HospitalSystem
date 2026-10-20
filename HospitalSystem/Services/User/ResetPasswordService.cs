@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.User;
+using HospitalSystem.Services.Auth;
  
 namespace HospitalSystem.Services.User;
  
@@ -10,12 +11,14 @@ public class ResetPasswordService : IResetPasswordService
     private readonly ICurrentUserService _currentUser;
     private readonly PasswordHasher<UserEntity> _hasher;
     private readonly IAuditLogService _auditLog;
+    private readonly SecurityStampCache _stamps;
  
-    public ResetPasswordService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
+    public ResetPasswordService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog, SecurityStampCache stamps)
     {
         _context = context;
         _currentUser = currentUser;
         _auditLog = auditLog;
+        _stamps = stamps;
         _hasher = new PasswordHasher<UserEntity>();
     }
  
@@ -42,6 +45,7 @@ public class ResetPasswordService : IResetPasswordService
             user.Id,
             $"Password reset for user {user.Name}");
         await _context.SaveChangesAsync();
+        _stamps.Forget(user.Id);
  
         return ResetPasswordResultDto.Success();
     }

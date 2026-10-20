@@ -3,14 +3,15 @@ using Moq;
 using Xunit;
 using HospitalSystem.Interfaces;
 using HospitalSystem.Services;
+using HospitalSystem.Services.Auth;
 using HospitalSystem.Services.User;
 
 namespace HospitalSystem.Tests;
 
 public class ChangeRoleServiceTests : UserTestBase
 {
-    private ChangeRoleService CreateService(ApplicationDbContext db, bool isAdmin = true)
-        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db));
+    private ChangeRoleService CreateService(ApplicationDbContext db, bool isAdmin = true, SecurityStampCache? stamps = null)
+        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db), stamps ?? CreateStampCache());
 
     private static ICurrentUserService CreateCurrentUserWithId(string userId, bool isAdmin = true)
     {
@@ -135,7 +136,7 @@ public class ChangeRoleServiceTests : UserTestBase
         var db = CreateDbContext();
         db.Users.Add(new UserEntity { Id = 1, Name = "Admin User", Role = UserRole.Admin, PasswordHash = "hash" });
         await db.SaveChangesAsync();
-        var service = new ChangeRoleService(db, CreateCurrentUserWithId("1"), new TestAuditLogService(db));
+        var service = new ChangeRoleService(db, CreateCurrentUserWithId("1"), new TestAuditLogService(db), CreateStampCache());
 
         var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.FrontDesk });
 
@@ -149,7 +150,7 @@ public class ChangeRoleServiceTests : UserTestBase
         var db = CreateDbContext();
         db.Users.Add(new UserEntity { Id = 1, Name = "Only Admin", Role = UserRole.Admin, PasswordHash = "hash" });
         await db.SaveChangesAsync();
-        var service = new ChangeRoleService(db, CreateCurrentUserWithId("2"), new TestAuditLogService(db));
+        var service = new ChangeRoleService(db, CreateCurrentUserWithId("2"), new TestAuditLogService(db), CreateStampCache());
 
         var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.FrontDesk });
 
@@ -164,7 +165,7 @@ public class ChangeRoleServiceTests : UserTestBase
         db.Users.Add(new UserEntity { Id = 1, Name = "Admin One", Role = UserRole.Admin, PasswordHash = "hash" });
         db.Users.Add(new UserEntity { Id = 2, Name = "Admin Two", Role = UserRole.Admin, PasswordHash = "hash" });
         await db.SaveChangesAsync();
-        var service = new ChangeRoleService(db, CreateCurrentUserWithId("2"), new TestAuditLogService(db));
+        var service = new ChangeRoleService(db, CreateCurrentUserWithId("2"), new TestAuditLogService(db), CreateStampCache());
 
         var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.FrontDesk });
 
@@ -183,6 +184,21 @@ public class ChangeRoleServiceTests : UserTestBase
 
         Assert.True(result.IsSuccess);
         Assert.NotEqual(originalStamp, (await db.Users.FindAsync(1))!.SecurityStamp);
+    }
+
+    [Fact]
+    public async Task ChangeRoleAsync_Succeeds_ForgetsTheCachedStamp()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db, isDoctorActive: false);
+        var stamps = CreateStampCache();
+        var originalStamp = await stamps.GetAsync(db, 1);
+        var service = CreateService(db, stamps: stamps);
+
+        var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.FrontDesk });
+
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(originalStamp, await stamps.GetAsync(db, 1));
     }
 
     [Theory]

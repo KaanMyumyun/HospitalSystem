@@ -131,9 +131,10 @@ tagged releases yet, so everything is listed under Unreleased.
 ### Security
 
 - Tokens carry a security stamp that is checked on every request. Changing a
-  user's role, resetting their password or disabling a doctor now revokes
-  that user's existing tokens immediately, and token lifetime is one hour
-  instead of three.
+  user's role, resetting their password or disabling a doctor revokes that
+  user's existing tokens: at once on the API instance that made the change,
+  and within 30 seconds on any other, because each instance keeps a user's
+  stamp for 30 seconds. Token lifetime is one hour instead of three.
 - Demo login is off unless `Demo:Enabled` is set, and signs in only the
   accounts named by `Demo:AdminUserName` and `Demo:FrontDeskUserName` while
   those accounts still hold a demo role. Demo accounts can no longer sign in
