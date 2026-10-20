@@ -4,17 +4,49 @@ namespace HospitalSystem.Services.Calendar;
 
 internal static class ScheduleValidation
 {
+    // What the checks need to know about the schedule's doctor.
+    public sealed record DoctorState(bool IsActive, bool DepartmentIsActive);
+
+    // For a new schedule.
     public static async Task<string?> ValidateAsync(
         ApplicationDbContext context,
         int doctorId,
         int startHour,
         int endHour,
-        int slotDurationMin,
-        int? currentScheduleId = null)
+        int slotDurationMin)
     {
         if (doctorId <= 0)
             return "Doctor is required";
 
+        var hoursError = ValidateHours(startHour, endHour, slotDurationMin);
+        if (hoursError is not null)
+            return hoursError;
+
+        var doctor = await context.Doctors
+            .Where(d => d.Id == doctorId)
+            .Select(d => new
+            {
+                State = new DoctorState(d.IsActive, d.Department.IsActive),
+                HasSchedule = d.Calendars.Any()
+            })
+            .FirstOrDefaultAsync();
+
+        var doctorError = ValidateDoctor(doctor?.State);
+        if (doctorError is not null)
+            return doctorError;
+
+        if (doctor!.HasSchedule)
+            return "Doctor already has a schedule. Edit the existing schedule instead";
+
+        return null;
+    }
+
+    // For a change to an existing schedule, whose own query reads the doctor.
+    public static string? Validate(DoctorState doctor, int startHour, int endHour, int slotDurationMin)
+        => ValidateHours(startHour, endHour, slotDurationMin) ?? ValidateDoctor(doctor);
+
+    private static string? ValidateHours(int startHour, int endHour, int slotDurationMin)
+    {
         if (startHour < 0 || startHour > 23)
             return "Start hour must be between 0 and 23";
 
@@ -31,16 +63,11 @@ internal static class ScheduleValidation
         if (windowMinutes % slotDurationMin != 0)
             return "Slot duration must fit evenly inside the schedule window";
 
-        var doctor = await context.Doctors
-            .Where(d => d.Id == doctorId)
-            .Select(d => new
-            {
-                d.IsActive,
-                DepartmentIsActive = d.Department.IsActive,
-                HasSchedule = d.Calendars.Any()
-            })
-            .FirstOrDefaultAsync();
+        return null;
+    }
 
+    private static string? ValidateDoctor(DoctorState? doctor)
+    {
         if (doctor is null)
             return "Doctor not found";
 
@@ -49,9 +76,6 @@ internal static class ScheduleValidation
 
         if (!doctor.DepartmentIsActive)
             return "Cannot schedule a doctor in an inactive department";
-
-        if (!currentScheduleId.HasValue && doctor.HasSchedule)
-            return "Doctor already has a schedule. Edit the existing schedule instead";
 
         return null;
     }

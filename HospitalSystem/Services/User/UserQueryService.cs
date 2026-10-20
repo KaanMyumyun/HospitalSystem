@@ -40,26 +40,33 @@ public class UserQueryService : IUserQueryService
             users = users.Where(u => u.Name.ToLower().Contains(search) || matchingRoles.Contains(u.Role));
         }
 
-        var items = await users
+        var rows = await users
             .OrderBy(u => u.Name)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
-            .Select(u => new UserDisplayDto
+            .Select(u => new
             {
-                UserId = u.Id,
-                UserName = u.Name,
-                Role = u.Role
+                Item = new UserDisplayDto
+                {
+                    UserId = u.Id,
+                    UserName = u.Name,
+                    Role = u.Role
+                },
+                // Counted by the same statement, so a page and its total cost
+                // one round trip.
+                TotalCount = users.Count()
             })
             .ToListAsync();
 
-        // A first page with room to spare already holds every match.
-        var totalCount = query.Page == 1 && items.Count < query.PageSize
-            ? items.Count
+        // An empty page carries no total. On page 1 there is nothing to
+        // count; a later page is past the last match and needs its own count.
+        var totalCount = rows.Count > 0 ? rows[0].TotalCount
+            : query.Page == 1 ? 0
             : await users.CountAsync();
 
         return ServiceResult<PagedResult<UserDisplayDto>>.Success(new PagedResult<UserDisplayDto>
         {
-            Items = items,
+            Items = rows.Select(r => r.Item).ToList(),
             TotalCount = totalCount,
             Page = query.Page,
             PageSize = query.PageSize

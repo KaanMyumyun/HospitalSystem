@@ -75,6 +75,40 @@ public class ScheduleModificationServiceTests
     }
 
     [Fact]
+    public async Task ChangeSchedule_InactiveDoctor_Fails()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db);
+        (await db.Doctors.FindAsync(1))!.IsActive = false;
+        db.Calendars.Add(new CalendarEntity { Id = 1, DoctorId = 1 });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db, isAdmin: true);
+        var dto = new ChangeScheduleDto { ScheduleId = 1, StartHour = 9, EndHour = 14, SlotDurationMin = 30 };
+        var result = await service.ChangeScheduleAsync(dto);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Cannot schedule an inactive doctor", result.Error);
+    }
+
+    [Fact]
+    public async Task ChangeSchedule_InactiveDepartment_Fails()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db);
+        (await db.Departments.FindAsync(1))!.IsActive = false;
+        db.Calendars.Add(new CalendarEntity { Id = 1, DoctorId = 1 });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db, isAdmin: true);
+        var dto = new ChangeScheduleDto { ScheduleId = 1, StartHour = 9, EndHour = 14, SlotDurationMin = 30 };
+        var result = await service.ChangeScheduleAsync(dto);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Cannot schedule a doctor in an inactive department", result.Error);
+    }
+
+    [Fact]
     public async Task ChangeSchedule_Schedule_AlreadyExist()
     {
         var db = CreateDbContext();

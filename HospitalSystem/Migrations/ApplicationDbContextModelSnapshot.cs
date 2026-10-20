@@ -66,8 +66,6 @@ namespace HospitalSystem.Migrations
                         .IsUnique()
                         .HasFilter("\"Status\" = 'Scheduled'");
 
-                    b.HasIndex("DoctorId", "Status", "TimeOfAppointment");
-
                     b.HasIndex(new[] { "DoctorId", "TimeOfAppointment" }, "IX_Appointments_DoctorId_TimeOfAppointment_AllStatuses");
 
                     b.ToTable("Appointments");
@@ -213,8 +211,6 @@ namespace HospitalSystem.Migrations
                         .HasColumnType("character varying(20)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("DateOfBirth");
 
                     b.HasIndex("PhoneNumber");
 

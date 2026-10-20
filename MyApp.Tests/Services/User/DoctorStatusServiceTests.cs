@@ -1,13 +1,14 @@
 using Xunit;
 using HospitalSystem.Services;
+using HospitalSystem.Services.Auth;
 using HospitalSystem.Services.User;
 
 namespace HospitalSystem.Tests;
  
 public class DoctorStatusServiceTests : UserTestBase
 {
-    private DoctorStatusService CreateService(ApplicationDbContext db, bool isAdmin = true)
-        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db));
+    private DoctorStatusService CreateService(ApplicationDbContext db, bool isAdmin = true, SecurityStampCache? stamps = null)
+        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db), stamps ?? CreateStampCache());
  
     [Fact]
     public async Task ChangeDoctorsStatusAsync_Admin_Succeeds()
@@ -83,6 +84,21 @@ public class DoctorStatusServiceTests : UserTestBase
 
         Assert.True(result.IsSuccess);
         Assert.NotEqual(originalStamp, (await db.Users.FindAsync(1))!.SecurityStamp);
+    }
+
+    [Fact]
+    public async Task ChangeDoctorsStatusAsync_Deactivate_ForgetsTheCachedStamp()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db, isDoctorActive: true);
+        var stamps = CreateStampCache();
+        var originalStamp = await stamps.GetAsync(db, 1);
+        var service = CreateService(db, stamps: stamps);
+
+        var result = await service.ChangeDoctorsStatusAsync(new ChangeDoctorStatusDto { DoctorId = 1, IsActive = false });
+
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(originalStamp, await stamps.GetAsync(db, 1));
     }
 
     [Theory]

@@ -1,13 +1,14 @@
 using Xunit;
 using HospitalSystem.Services;
+using HospitalSystem.Services.Auth;
 using HospitalSystem.Services.User;
 
 namespace HospitalSystem.Tests;
  
 public class ResetPasswordServiceTests : UserTestBase
 {
-    private ResetPasswordService CreateService(ApplicationDbContext db, bool isAdmin = true)
-        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db));
+    private ResetPasswordService CreateService(ApplicationDbContext db, bool isAdmin = true, SecurityStampCache? stamps = null)
+        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db), stamps ?? CreateStampCache());
  
     [Fact]
     public async Task ResetPasswordAsync_Admin_Succeeds()
@@ -34,6 +35,21 @@ public class ResetPasswordServiceTests : UserTestBase
 
         Assert.True(result.IsSuccess);
         Assert.NotEqual(originalStamp, (await db.Users.FindAsync(1))!.SecurityStamp);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_Succeeds_ForgetsTheCachedStamp()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db);
+        var stamps = CreateStampCache();
+        var originalStamp = await stamps.GetAsync(db, 1);
+        var service = CreateService(db, stamps: stamps);
+
+        var result = await service.ResetPasswordAsync(new ResetPasswordDto { UserId = 1, NewPassword = "newpassword" });
+
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(originalStamp, await stamps.GetAsync(db, 1));
     }
 
     [Fact]

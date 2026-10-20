@@ -42,19 +42,32 @@ public class AppointmentCreationService : IAppointmentCreationService
         var phoneNumber = NormalizePhoneNumber(dto.PhoneNumber);
         var dateOfBirth = dto.DateOfBirth;
         var chosenPatientId = dto.PatientId;
+        // Possible matches only matter while the desk has not yet picked a
+        // patient on file or asked for a new one.
+        var listPossibleMatches = chosenPatientId is null && !dto.CreateNewPatient;
 
         // Fetched together so the checks below and the patient lookup cost one
         // round trip, not four.
-        var doctor = await _context.Doctors
-            .Where(d => d.Id == dto.DoctorId)
-            .Select(d => new
+        var doctor = await (
+            from d in _context.Doctors
+            where d.Id == dto.DoctorId
+            // A join, not FirstOrDefault on d.Calendars, which EF turns into a
+            // numbering of every schedule on file; the join reads this
+            // doctor's from the DoctorId index.
+            from c in d.Calendars.DefaultIfEmpty()
+            let samePatientId = _context.Patients
+                .Where(p => p.PhoneNumber == phoneNumber && p.Name.ToLower() == patientNameKey && p.DateOfBirth == dateOfBirth)
+                .OrderBy(p => p.Id)
+                .Select(p => (int?)p.Id)
+                .FirstOrDefault()
+            // A doctor with more than one schedule is booked against the first.
+            orderby c.Id
+            select new
             {
                 d.IsActive,
                 d.User.Role,
                 DepartmentIsActive = d.Department.IsActive,
-                Schedule = d.Calendars
-                    .Select(c => new WorkingHours(c.StartTime, c.EndTime, c.SlotDurationMin))
-                    .FirstOrDefault(),
+                Schedule = c == null ? null : new WorkingHours(c.StartTime, c.EndTime, c.SlotDurationMin),
                 // The nearest bookings on either side. Whether they overlap
                 // depends on the slot length, known once the schedule is loaded.
                 PreviousStart = d.Appointments
@@ -63,17 +76,25 @@ public class AppointmentCreationService : IAppointmentCreationService
                 NextStart = d.Appointments
                     .Where(a => a.Status == AppointmentStatus.Scheduled && a.TimeOfAppointment > appointmentTime)
                     .Min(a => (DateTime?)a.TimeOfAppointment),
-                SamePatientId = _context.Patients
-                    .Where(p => p.PhoneNumber == phoneNumber && p.Name.ToLower() == patientNameKey && p.DateOfBirth == dateOfBirth)
-                    .OrderBy(p => p.Id)
-                    .Select(p => (int?)p.Id)
-                    .FirstOrDefault(),
+                SamePatientId = samePatientId,
                 // Someone on file with the same phone number, or the same name
-                // and date of birth, may be the patient being booked. Written
-                // out here and below: a shared expression variable would make
-                // EF run this check as a query of its own.
-                HasPossibleMatch = _context.Patients
-                    .Any(p => p.PhoneNumber == phoneNumber || (p.Name.ToLower() == patientNameKey && p.DateOfBirth == dateOfBirth)),
+                // and date of birth, may be the patient being booked. Not read
+                // when a patient matches exactly, so a phone that many patients
+                // share costs nothing on a booking for one of them.
+                PossibleMatches = _context.Patients
+                    .Where(p => listPossibleMatches && samePatientId == null
+                        && (p.PhoneNumber == phoneNumber || (p.Name.ToLower() == patientNameKey && p.DateOfBirth == dateOfBirth)))
+                    .OrderBy(p => p.Name)
+                    .ThenBy(p => p.Id)
+                    .Take(MaxPossibleMatches)
+                    .Select(p => new PatientMatchDto
+                    {
+                        PatientId = p.Id,
+                        Name = p.Name,
+                        DateOfBirth = p.DateOfBirth,
+                        PhoneNumber = p.PhoneNumber
+                    })
+                    .ToList(),
                 ChosenPatientExists = chosenPatientId != null && _context.Patients.Any(p => p.Id == chosenPatientId)
             })
             .FirstOrDefaultAsync();
@@ -111,26 +132,11 @@ public class AppointmentCreationService : IAppointmentCreationService
         // typo, a new number), the desk sees the matches and books again with
         // PatientId or CreateNewPatient.
         var patientId = chosenPatientId ?? doctor.SamePatientId;
-        if (patientId is null && doctor.HasPossibleMatch && !dto.CreateNewPatient)
+        if (patientId is null && doctor.PossibleMatches.Count > 0)
         {
-            var possibleMatches = await _context.Patients
-                .AsNoTracking()
-                .Where(p => p.PhoneNumber == phoneNumber || (p.Name.ToLower() == patientNameKey && p.DateOfBirth == dateOfBirth))
-                .OrderBy(p => p.Name)
-                .ThenBy(p => p.Id)
-                .Take(MaxPossibleMatches)
-                .Select(p => new PatientMatchDto
-                {
-                    PatientId = p.Id,
-                    Name = p.Name,
-                    DateOfBirth = p.DateOfBirth,
-                    PhoneNumber = p.PhoneNumber
-                })
-                .ToListAsync();
-
             return CreateAppointmentResultDto.FailPossibleMatch(
                 "These details partly match a patient on file. Book for that patient, or register a new one.",
-                possibleMatches);
+                doctor.PossibleMatches);
         }
 
         await using var transaction = await _context.Database.BeginTransactionAsync();

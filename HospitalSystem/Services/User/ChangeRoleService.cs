@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.User;
+using HospitalSystem.Services.Auth;
  
 namespace HospitalSystem.Services.User;
  
@@ -9,12 +10,14 @@ public class ChangeRoleService : IChangeRoleService
     private readonly ApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
     private readonly IAuditLogService _auditLog;
+    private readonly SecurityStampCache _stamps;
  
-    public ChangeRoleService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
+    public ChangeRoleService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog, SecurityStampCache stamps)
     {
         _context = context;
         _currentUser = currentUser;
         _auditLog = auditLog;
+        _stamps = stamps;
     }
  
     public async Task<ChangeRoleResultDto> ChangeRoleAsync(ChangeRoleDto dto)
@@ -22,7 +25,10 @@ public class ChangeRoleService : IChangeRoleService
         if (!_currentUser.IsInRole(UserRole.Admin))
             return ChangeRoleResultDto.Fail("Not allowed");
  
-        var user = await _context.Users.FindAsync(dto.UserId);
+        // With the doctor row, if the user has one: one query instead of two.
+        var user = await _context.Users
+            .Include(u => u.Doctor)
+            .FirstOrDefaultAsync(u => u.Id == dto.UserId);
         if (user == null)
             return ChangeRoleResultDto.Fail("User not found");
  
@@ -31,7 +37,7 @@ public class ChangeRoleService : IChangeRoleService
         if (roleError is not null)
             return ChangeRoleResultDto.Fail(roleError);
 
-        var doctor = await _context.Doctors.FirstOrDefaultAsync(d => d.UserId == user.Id);
+        var doctor = user.Doctor;
  
         if (dto.NewRole == UserRole.Doctor)
         {
@@ -61,6 +67,7 @@ public class ChangeRoleService : IChangeRoleService
             user.Id,
             $"User {user.Name} role changed from {oldRole} to {dto.NewRole}");
         await _context.SaveChangesAsync();
+        _stamps.Forget(user.Id);
         return ChangeRoleResultDto.Success();
     }
 }

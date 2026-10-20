@@ -1,5 +1,7 @@
 using HospitalSystem.Interfaces;
+using HospitalSystem.Services.Auth;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Moq;
 
 namespace HospitalSystem.Tests;
@@ -15,6 +17,8 @@ public abstract class UserTestBase
  
         return new ApplicationDbContext(options);
     }
+ 
+    protected static SecurityStampCache CreateStampCache() => new(new MemoryCache(new MemoryCacheOptions()));
  
     protected ICurrentUserService CreateCurrentUser(bool isAdmin = true, bool isFrontDesk = false)
     {

@@ -51,6 +51,22 @@ tagged releases yet, so everything is listed under Unreleased.
 - Booking an appointment and creating or changing a schedule take fewer
   database round trips; everything a booking checks first, including whether
   the patient already exists, runs as one query.
+- Most requests make fewer database round trips. The caller's security stamp
+  is no longer read from the database on each request (see Security), and a
+  save inside a transaction no longer sets and releases a savepoint. Listing
+  users counts the total in the same query as the page; a booking that partly
+  matches patients on file lists them without a second query; and creating a
+  doctor, changing a role, moving a doctor to another department or changing
+  a schedule read what they check in one query. Against 2 million
+  appointments and 1 million patients, a list request now takes 1 round trip
+  instead of 2 or 3, and a booking 4 instead of 9 (5 instead of 12 for a new
+  patient).
+- Two migrations change indexes. `DropUnusedAppointmentStatusIndex` drops
+  `IX_Appointments_DoctorId_Status_TimeOfAppointment`, which no query uses
+  (131 MB at 2 million appointments). `IndexPatientsByNameAndBirthDate`
+  replaces the date-of-birth index on patients with one on the lowercased
+  name and the date of birth, so matching a booking by name and date of birth
+  no longer reads every patient born that day.
 - The backend image is compiled ahead of time (ReadyToRun), so a new container
   is ready and answers its first requests sooner. The image is about 13 MB
   larger.
@@ -131,9 +147,10 @@ tagged releases yet, so everything is listed under Unreleased.
 ### Security
 
 - Tokens carry a security stamp that is checked on every request. Changing a
-  user's role, resetting their password or disabling a doctor now revokes
-  that user's existing tokens immediately, and token lifetime is one hour
-  instead of three.
+  user's role, resetting their password or disabling a doctor revokes that
+  user's existing tokens: at once on the API instance that made the change,
+  and within 30 seconds on any other, because each instance keeps a user's
+  stamp for 30 seconds. Token lifetime is one hour instead of three.
 - Demo login is off unless `Demo:Enabled` is set, and signs in only the
   accounts named by `Demo:AdminUserName` and `Demo:FrontDeskUserName` while
   those accounts still hold a demo role. Demo accounts can no longer sign in
