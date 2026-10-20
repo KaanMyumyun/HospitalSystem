@@ -61,6 +61,12 @@ tagged releases yet, so everything is listed under Unreleased.
   appointments and 1 million patients, a list request now takes 1 round trip
   instead of 2 or 3, and a booking 4 instead of 9 (5 instead of 12 for a new
   patient).
+- Two migrations change indexes. `DropUnusedAppointmentStatusIndex` drops
+  `IX_Appointments_DoctorId_Status_TimeOfAppointment`, which no query uses
+  (131 MB at 2 million appointments). `IndexPatientsByNameAndBirthDate`
+  replaces the date-of-birth index on patients with one on the lowercased
+  name and the date of birth, so matching a booking by name and date of birth
+  no longer reads every patient born that day.
 - The backend image is compiled ahead of time (ReadyToRun), so a new container
   is ready and answers its first requests sooner. The image is about 13 MB
   larger.

@@ -41,9 +41,12 @@ public class ApplicationDbContext : DbContext
             builder.Property(s => s.Name).IsRequired().HasMaxLength(50);
             builder.Property(s => s.DateOfBirth).IsRequired();
             // Not unique: relatives often share a phone. Booking looks patients
-            // up by phone number, or by name and date of birth.
+            // up by phone number, or by name and date of birth. The second
+            // lookup ignores case and uses IX_Patients_LowerName_DateOfBirth
+            // on (lower("Name"), "DateOfBirth"), which migration
+            // IndexPatientsByNameAndBirthDate creates in SQL: EF cannot
+            // describe an index on an expression.
             builder.HasIndex(s => s.PhoneNumber);
-            builder.HasIndex(s => s.DateOfBirth);
         });
 
         modelBuilder.Entity<DepartmentEntity>(builder =>
@@ -66,7 +69,8 @@ public class ApplicationDbContext : DbContext
             builder.Property(s => s.Status).HasConversion<string>();
             builder.Property(a => a.CancellationReason).HasMaxLength(500).IsRequired(false);
             builder.Property(a => a.CancelledAt).IsRequired(false);
-            builder.HasIndex(a => new { a.DoctorId, a.Status, a.TimeOfAppointment });
+            // No two scheduled appointments for a doctor at one time. Booking
+            // also reads the nearest scheduled appointments from it.
             builder.HasIndex(a => new { a.DoctorId, a.TimeOfAppointment })
                 .IsUnique()
                 .HasFilter("\"Status\" = 'Scheduled'");
