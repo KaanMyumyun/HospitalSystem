@@ -22,17 +22,28 @@ public class ScheduleModificationService : IScheduleModificationService
         if (!_currentUser.IsInRole(UserRole.Admin))
             return CalendarActionResult.Fail("You are not allowed to change a schedule");
 
-        var calendar = await _context.Calendars.FirstOrDefaultAsync(c => c.Id == dto.ScheduleId);
-        if (calendar == null)
+        // The doctor and the doctor's other schedules come with the schedule:
+        // one query instead of three. Doctors normally have no other schedule.
+        var found = await _context.Calendars
+            .Where(c => c.Id == dto.ScheduleId)
+            .Select(c => new
+            {
+                Calendar = c,
+                Doctor = new ScheduleValidation.DoctorState(c.Doctor.IsActive, c.Doctor.Department.IsActive),
+                OtherSchedules = _context.Calendars
+                    .Where(u => u.DoctorId == c.DoctorId && u.Id != c.Id)
+                    .Select(u => new { u.StartTime, u.EndTime })
+                    .ToList()
+            })
+            .FirstOrDefaultAsync();
+        if (found == null)
             return CalendarActionResult.Fail("Schedule not found");
 
-        var validationError = await ScheduleValidation.ValidateAsync(
-            _context,
-            calendar.DoctorId,
+        var validationError = ScheduleValidation.Validate(
+            found.Doctor,
             dto.StartHour,
             dto.EndHour,
-            dto.SlotDurationMin,
-            dto.ScheduleId);
+            dto.SlotDurationMin);
 
         if (validationError is not null)
             return CalendarActionResult.Fail(validationError);
@@ -41,15 +52,10 @@ public class ScheduleModificationService : IScheduleModificationService
         var start = baseDate.AddHours(dto.StartHour);
         var end = baseDate.AddHours(dto.EndHour);
 
-        var exist = await _context.Calendars.AnyAsync(u =>
-            u.DoctorId == calendar.DoctorId &&
-            u.Id != dto.ScheduleId &&
-            u.EndTime > start &&
-            u.StartTime < end);
-
-        if (exist)
+        if (found.OtherSchedules.Any(u => u.EndTime > start && u.StartTime < end))
             return CalendarActionResult.Fail("Schedule already exists for this time range");
 
+        var calendar = found.Calendar;
         calendar.StartTime = start;
         calendar.EndTime = end;
         calendar.SlotDurationMin = dto.SlotDurationMin;

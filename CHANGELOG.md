@@ -51,6 +51,16 @@ tagged releases yet, so everything is listed under Unreleased.
 - Booking an appointment and creating or changing a schedule take fewer
   database round trips; everything a booking checks first, including whether
   the patient already exists, runs as one query.
+- Most requests make fewer database round trips. The caller's security stamp
+  is no longer read from the database on each request (see Security), and a
+  save inside a transaction no longer sets and releases a savepoint. Listing
+  users counts the total in the same query as the page; a booking that partly
+  matches patients on file lists them without a second query; and creating a
+  doctor, changing a role, moving a doctor to another department or changing
+  a schedule read what they check in one query. Against 2 million
+  appointments and 1 million patients, a list request now takes 1 round trip
+  instead of 2 or 3, and a booking 4 instead of 9 (5 instead of 12 for a new
+  patient).
 - The backend image is compiled ahead of time (ReadyToRun), so a new container
   is ready and answers its first requests sooner. The image is about 13 MB
   larger.

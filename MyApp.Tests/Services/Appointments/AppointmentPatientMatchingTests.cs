@@ -55,6 +55,24 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
     }
 
     [Fact]
+    public async Task ManyPatientsOnOnePhone_ListsTheFirstTenByName()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        for (var i = 11; i >= 0; i--)
+            db.Patients.Add(new PatientEntity { Name = $"Relative {i:00}", PhoneNumber = "5559999", DateOfBirth = new DateOnly(1970, 1, 1) });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.CreateAppointmentAsync(Booking("Someone New", "555-9999", new DateOnly(2001, 1, 1)), 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(
+            Enumerable.Range(0, 10).Select(i => $"Relative {i:00}"),
+            result.PossibleMatches!.Select(m => m.Name));
+    }
+
+    [Fact]
     public async Task SameNameAndBirthDateDifferentPhone_ListsPossibleMatch()
     {
         using var db = CreateDbContext();

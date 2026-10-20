@@ -496,6 +496,28 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
     }
 
     [Fact]
+    public async Task CreateAppointmentAsync_DoctorWithTwoSchedules_UsesTheFirst()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        db.Calendars.Add(new CalendarEntity
+        {
+            Id = 2,
+            DoctorId = 1,
+            StartTime = new DateTime(2000, 1, 1, 18, 0, 0, DateTimeKind.Utc),
+            EndTime = new DateTime(2000, 1, 1, 22, 0, 0, DateTimeKind.Utc),
+            SlotDurationMin = 60
+        });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 19, 0, 0, DateTimeKind.Utc)), 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Appointment time is outside the doctor's working hours", result.Error);
+    }
+
+    [Fact]
     public async Task CreateAppointmentAsync_InactiveDepartment_Fails()
     {
         using var db = CreateDbContext();

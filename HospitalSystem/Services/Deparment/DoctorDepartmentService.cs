@@ -22,18 +22,29 @@ public class DoctorDepartmentService : IDoctorDepartmentService
         if (!_currentUser.IsInRole(UserRole.Admin))
             return DepartmentActionResultDto.Fail("You are not allowed to change doctor department");
  
-        var doctor = await _context.Doctors.FirstOrDefaultAsync(d => d.Id == dto.DoctorId);
-        if (doctor == null)
+        // The department's state comes with the doctor: one query instead of two.
+        var found = await _context.Doctors
+            .Where(d => d.Id == dto.DoctorId)
+            .Select(d => new
+            {
+                Doctor = d,
+                DepartmentIsActive = _context.Departments
+                    .Where(x => x.Id == dto.DepartmentId)
+                    .Select(x => (bool?)x.IsActive)
+                    .FirstOrDefault()
+            })
+            .FirstOrDefaultAsync();
+        if (found == null)
             return DepartmentActionResultDto.Fail("Doctor doesnt exist ");
  
+        var doctor = found.Doctor;
         if (!doctor.IsActive)
             return DepartmentActionResultDto.Fail("This Doctor isnt active");
  
-        var department = await _context.Departments.FirstOrDefaultAsync(d => d.Id == dto.DepartmentId);
-        if (department == null)
+        if (found.DepartmentIsActive is not bool departmentIsActive)
             return DepartmentActionResultDto.Fail("Department doesnt exist");
  
-        if (!department.IsActive)
+        if (!departmentIsActive)
             return DepartmentActionResultDto.Fail("This Deparment isnt active");
  
         if (doctor.DepartmentId == dto.DepartmentId)
