@@ -7,6 +7,12 @@ public class ApplicationDbContext : DbContext
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
     {
+        // Inside a transaction a service started, EF would set a savepoint
+        // before every SaveChanges and release it after: two extra round trips
+        // per save. A savepoint only helps code that keeps using a transaction
+        // after a failed save, and no service does; a failed save ends the
+        // request and the whole transaction rolls back.
+        Database.AutoSavepointsEnabled = false;
     }
     public DbSet<UserEntity> Users { get; set; }
     public DbSet<AppointmentsEntity> Appointments { get; set; }
