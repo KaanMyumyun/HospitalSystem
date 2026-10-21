@@ -7,20 +7,21 @@ internal static class ScheduleValidation
     // What the checks need to know about the schedule's doctor.
     public sealed record DoctorState(bool IsActive, bool DepartmentIsActive);
 
-    // For a new schedule.
-    public static async Task<string?> ValidateAsync(
+    // For a new schedule. Null when it can be created.
+    public static async Task<CalendarActionResult?> ValidateAsync(
         ApplicationDbContext context,
         int doctorId,
         int startHour,
         int endHour,
-        int slotDurationMin)
+        int slotDurationMin,
+        IReadOnlyCollection<DayOfWeek>? workingDays)
     {
         if (doctorId <= 0)
-            return "Doctor is required";
+            return CalendarActionResult.Fail("Doctor is required");
 
-        var hoursError = ValidateHours(startHour, endHour, slotDurationMin);
+        var hoursError = ValidateHours(startHour, endHour, slotDurationMin) ?? ScheduleDays.Validate(workingDays);
         if (hoursError is not null)
-            return hoursError;
+            return CalendarActionResult.Fail(hoursError);
 
         var doctor = await context.Doctors
             .Where(d => d.Id == doctorId)
@@ -36,14 +37,22 @@ internal static class ScheduleValidation
             return doctorError;
 
         if (doctor!.HasSchedule)
-            return "Doctor already has a schedule. Edit the existing schedule instead";
+            return CalendarActionResult.Conflict("Doctor already has a schedule. Edit the existing schedule instead");
 
         return null;
     }
 
     // For a change to an existing schedule, whose own query reads the doctor.
-    public static string? Validate(DoctorState doctor, int startHour, int endHour, int slotDurationMin)
-        => ValidateHours(startHour, endHour, slotDurationMin) ?? ValidateDoctor(doctor);
+    public static CalendarActionResult? Validate(
+        DoctorState doctor,
+        int startHour,
+        int endHour,
+        int slotDurationMin,
+        IReadOnlyCollection<DayOfWeek>? workingDays)
+    {
+        var hoursError = ValidateHours(startHour, endHour, slotDurationMin) ?? ScheduleDays.Validate(workingDays);
+        return hoursError is not null ? CalendarActionResult.Fail(hoursError) : ValidateDoctor(doctor);
+    }
 
     private static string? ValidateHours(int startHour, int endHour, int slotDurationMin)
     {
@@ -66,16 +75,16 @@ internal static class ScheduleValidation
         return null;
     }
 
-    private static string? ValidateDoctor(DoctorState? doctor)
+    private static CalendarActionResult? ValidateDoctor(DoctorState? doctor)
     {
         if (doctor is null)
-            return "Doctor not found";
+            return CalendarActionResult.NotFound("Doctor not found");
 
         if (!doctor.IsActive)
-            return "Cannot schedule an inactive doctor";
+            return CalendarActionResult.Fail("Cannot schedule an inactive doctor");
 
         if (!doctor.DepartmentIsActive)
-            return "Cannot schedule a doctor in an inactive department";
+            return CalendarActionResult.Fail("Cannot schedule a doctor in an inactive department");
 
         return null;
     }

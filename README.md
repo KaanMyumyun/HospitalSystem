@@ -31,7 +31,9 @@ The application uses a three-stage GitHub Actions pipeline:
    - Runs on pull requests, pushes to `main`, and weekly (Mondays 03:00 UTC)
      so published images pick up base image security fixes
    - Restores, builds and tests the backend
-   - Lints, tests and builds the frontend (the build type-checks it)
+   - Lints, tests and builds the frontend (the build type-checks it), and
+     checks that its generated API types match `openapi.json` (see
+     [API contract](#api-contract))
 
 2. `Docker Image CI` workflow
    - Runs after the `CI` workflow succeeds on `main`
@@ -108,6 +110,8 @@ rules:
 The frontend build adds a `404.html` copy of the app shell, so Pages answers
 unknown paths with a real 404, and `hospital-frontend/public/_headers` sets the
 same cache and security headers that `nginx.conf` sets for the Docker image.
+The Content-Security-Policy is part of the page itself (see [Security](#security)),
+so both hosts serve the same one.
 
 ### AWS EKS (on demand)
 
@@ -190,7 +194,12 @@ The Hospital System is designed to manage hospital operations including:
 * User registration and authentication
 * Role-based access control
 * Department management
-* Appointment scheduling and cancellation
+* Doctor schedules with working hours and working days
+* Appointment scheduling and cancellation, and marking visits completed or
+  no-show
+* Patient records for the front desk
+* A day view for doctors
+* An audit log of changes and failed sign-ins, for admins
 * Secure API access using JWT
 
 The system is divided into two independent layers:
@@ -235,12 +244,15 @@ The system is divided into two independent layers:
 │
 ├── hospital-frontend/              # Frontend (React + TypeScript + Vite)
 │   ├── public/
+│   ├── scripts/                    # generate-api-types.mjs (+ test)
 │   ├── src/
-│   │   ├── components/             # Shared UI (Sidebar, TopBar, ui)
-│   │   ├── screens/                # LoginScreen, dashboards, NotFoundScreen
+│   │   ├── components/             # Shared UI (Sidebar, TopBar, dialogs, ui)
+│   │   ├── hooks/                  # Data loading (week, users, paged lists)
+│   │   ├── screens/                # LoginScreen, dashboards, patients, NotFoundScreen
 │   │   ├── lib/                    # format, schedule, validation (+ tests)
 │   │   ├── App.tsx                 # Routing and session state
 │   │   ├── api.ts                  # API client and session storage
+│   │   ├── api-schema.ts           # Generated from openapi.json; do not edit
 │   │   ├── types.ts
 │   │   ├── main.tsx
 │   │   ├── App.css
@@ -248,7 +260,8 @@ The system is divided into two independent layers:
 │   ├── Dockerfile
 │   ├── nginx.conf
 │   ├── index.html
-│   ├── vite.config.ts
+│   ├── openapi.json                # The API's OpenAPI document (API contract)
+│   ├── vite.config.ts              # 404 page and Content-Security-Policy
 │   └── package.json
 │
 ├── HospitalSystem/                 # Backend (ASP.NET Core Web API)
@@ -268,7 +281,10 @@ The system is divided into two independent layers:
 │   ├── Dockerfile
 │   └── HospitalSystem.csproj
 │
-├── MyApp.Tests/                    # Unit tests (xUnit, Moq, EF Core InMemory)
+├── MyApp.Tests/                    # Tests (xUnit, Moq, EF Core InMemory)
+│   ├── Api/                        # Start the real app: OpenAPI contract, startup checks
+│   ├── Controllers/
+│   ├── Data/
 │   ├── Services/
 │   ├── Dto/
 │   ├── TestAuditLogService.cs
@@ -333,7 +349,9 @@ cp HospitalSystem/appsettings.Development.example.json HospitalSystem/appsetting
 The template's connection string matches the Postgres container from step 1.
 Replace `JwtSettings:SecretKey` with your own random string of at least 32
 characters. If the key is missing, the API stops at startup with
-`JWT SecretKey is not configured`.
+`JWT SecretKey is not configured`; if it is shorter than 32 bytes, the minimum
+for the HMAC-SHA256 signature, with
+`JWT SecretKey must be at least 32 bytes (256 bits) long`.
 
 You can use user secrets instead of the file:
 
@@ -400,6 +418,22 @@ longer needed. Rolling back an image never undoes a migration; this command only
 applies forward migrations. Recovery from a destructive change requires the
 separately tested restore procedure.
 
+Two migrations need attention on a database that already has data:
+
+* `CaseInsensitiveUserNames` makes usernames unique regardless of case. If
+  existing usernames differ only in case, it stops with PostgreSQL error
+  `P0001` and changes nothing. Find them, rename all but one in each group,
+  and run the migration again:
+
+  ```sql
+  SELECT string_agg("Name", ', ') FROM "Users" GROUP BY lower("Name") HAVING count(*) > 1;
+  ```
+
+* `AddScheduleWorkingDays` gives every existing schedule Monday to Friday,
+  and keeps that as the column's default, so an older image can still create
+  schedules. Change the days in the Schedules tab afterwards if a doctor
+  works others.
+
 ### 4. Run the API
 
 ```bash
@@ -462,7 +496,8 @@ docker compose exec postgres psql -U hospitaluser -d HospitalSystemDb \
 ```
 
 Demo accounts can view departments, doctors and schedules, and Demo Reception
-can view appointments. Neither can view the list of user accounts.
+can view appointments and patients. Neither can view the list of user accounts
+or the audit log, or change a password.
 
 ---
 
@@ -489,6 +524,19 @@ It calls the API at `http://localhost:5272/api` unless `VITE_API_URL` is set.
 * Protected endpoints require a Bearer token
 * Role-based access restrictions
 * Swagger supports authenticated testing
+* Usernames are case-insensitive: `Admin` and `admin` sign in to the same
+  account, and a new user cannot take a name that differs from an existing one
+  only in case
+* Everyone except demo accounts can change their own password from the top
+  bar
+
+| Role | Screens |
+| --- | --- |
+| Admin | Departments, Doctors, Schedules, Users, Audit log |
+| FrontDesk | Reception (the weekly calendar), Patients |
+| Doctor | My day: their own appointments, one day at a time |
+| DemoAdmin, DemoFrontDesk | The Admin and FrontDesk screens, read-only, without the user list or the audit log |
+| Pending | None: cannot sign in until an admin assigns a role |
 
 ---
 
@@ -501,6 +549,13 @@ It calls the API at `http://localhost:5272/api` unless `VITE_API_URL` is set.
 |   POST | /api/Auth/CreateUser | Create a user (Admin only)       |
 |   POST | /api/Auth/login      | Authenticate and return JWT      |
 |   POST | /api/Auth/demo-login | Sign in a demo account, if enabled |
+|   POST | /api/Auth/change-password | Change your own password    |
+
+`change-password` takes `currentPassword` and `newPassword` (at least 8
+characters, and not the current one) and returns a new `token`. Tokens issued
+before the change stop working, so the user's other sessions are signed out.
+It shares the sign-in rate limit, and demo accounts cannot use it. Failed
+sign-ins and failed password changes are recorded in the audit log.
 
 ### Users
 
@@ -518,6 +573,11 @@ It calls the API at `http://localhost:5272/api` unless `VITE_API_URL` is set.
 `search` matches part of a username or role name, ignoring case. The response
 data holds `items`, `totalCount`, `page` and `pageSize`.
 
+Taking the Doctor role away (`change-role`) or deactivating a doctor
+(`change-doctor-status`) can be refused with `409` when the doctor has future
+bookings; see
+[Changes that affect future bookings](#changes-that-affect-future-bookings).
+
 ### Departments
 
 | Method | Endpoint                               | Description                  |
@@ -527,6 +587,10 @@ data holds `items`, `totalCount`, `page` and `pageSize`.
 |   POST | /api/Department/ChangeDoctorDepartment | Assign doctor to department  |
 |   POST | /api/Department/ChangeDepartmentStatus | Enable or disable department |
 
+Disabling a department can be refused with `409` when its doctors have future
+bookings; see
+[Changes that affect future bookings](#changes-that-affect-future-bookings).
+
 ### Appointments
 
 | Method | Endpoint                            | Description                                 |
@@ -534,10 +598,13 @@ data holds `items`, `totalCount`, `page` and `pageSize`.
 |   POST | /api/Appointments/CreateAppointment | Create appointment                          |
 |    GET | /api/Appointments/ListAppointments  | One doctor's appointments in a time window  |
 |   POST | /api/Appointments/CancelAppointment | Cancel appointment                          |
+|   POST | /api/Appointments/ChangeAppointmentStatus | Mark an appointment completed or no-show |
+|    GET | /api/Appointments/MyAppointments    | The signed-in doctor's appointments in a time window |
 
 `CreateAppointment` takes `appointmentTime` as the front desk's local time with
 its UTC offset, for example `2026-09-22T09:00:00+03:00`. That clock time must
-fall inside the doctor's working hours; the appointment is stored in UTC. An
+fall on one of the doctor's working days and inside their working hours; the
+appointment is stored in UTC. An
 appointment lasts one slot of the doctor's schedule and cannot overlap another
 scheduled appointment.
 
@@ -556,6 +623,31 @@ patient.
 start at or after `from` and before `to`, in time order. The window can be at
 most 42 days. URL-encode the `+` of an offset as `%2B`.
 
+`MyAppointments` takes the same `from` and `to` and returns the signed-in
+doctor's own appointments. Only the Doctor role can call it.
+
+`ChangeAppointmentStatus` takes `appointmentId` and `status`, `Completed` or
+`NoShow`, once the appointment has started. A cancelled appointment cannot be
+marked, and a mark can be corrected later. The front desk can mark any
+appointment and a doctor only their own. Each change is recorded in the audit
+log.
+
+### Patients
+
+| Method | Endpoint                    | Description                                       |
+| -----: | --------------------------- | ------------------------------------------------- |
+|    GET | /api/Patients/ListPatients  | One page of patients, sorted by name              |
+|    GET | /api/Patients/{patientId}   | A patient's details and appointments              |
+|   POST | /api/Patients/UpdatePatient | Correct a patient's name, phone or date of birth  |
+
+`ListPatients` pages like `ListUsers` (`page`, `pageSize`, `search`). `search`
+matches part of a name, ignoring case, or part of a phone number once it has
+at least 3 digits. A patient's details include their 200 most recent
+appointments. The front desk and Demo Reception can search and view patients;
+only the front desk can update them. `UpdatePatient` takes `patientId`, `name`,
+`phoneNumber` and `dateOfBirth`, stores the phone number the same way bookings
+do, and records what changed in the audit log.
+
 ### Schedules
 
 | Method | Endpoint                      | Description                 |
@@ -563,6 +655,38 @@ most 42 days. URL-encode the `+` of an offset as `%2B`.
 |   POST | /api/schedule/create-schedule | Create a new schedule       |
 |   POST | /api/schedule/change-schedule | Modify an existing schedule |
 |    GET | /api/schedule/list-schedule   | View all schedules          |
+
+Schedules have `workingDays`, a list of day names such as `"Monday"`.
+`create-schedule` uses Monday to Friday when it is left out. `change-schedule`
+also requires `timeZone`, the IANA time zone of whoever makes the change, such
+as `Europe/Sofia`, because it checks the doctor's future bookings against the
+new hours and days in that time zone. The frontend sends the browser's time
+zone.
+
+### Audit log
+
+| Method | Endpoint                     | Description                                          |
+| -----: | ---------------------------- | ---------------------------------------------------- |
+|    GET | /api/AuditLogs/ListAuditLogs | One page of the audit log, newest first (Admin only) |
+
+`ListAuditLogs` pages like `ListUsers`, and `search` matches part of the action
+or its details. Each entry has `createdAt`, `action`, `entityType`, `entityId`,
+`details` and `actor`, the username of whoever made the change, or `Unknown`
+when nobody was signed in, as for a failed sign-in.
+
+### Changes that affect future bookings
+
+Changing a schedule's hours, slot length or working days, deactivating a doctor
+or a department, or taking the Doctor role away can leave future bookings at
+times the doctor no longer works. Such a change is not saved. The response is
+`409` with `affectedAppointmentCount` and `affectedAppointments`: the first 100
+of those bookings, soonest first, each with `appointmentId`, `appointmentTime`,
+`doctorName` and `patientInitials`. Either move the bookings and try again, or
+send the same request again with `cancelAffectedAppointments: true` and a
+`cancellationReason` of up to 500 characters. The bookings are then cancelled
+in the same save as the change, and each cancellation is recorded in the audit
+log with the reason. The admin screens list the bookings and ask for the
+reason.
 
 ### Health
 
@@ -580,19 +704,25 @@ getting healthy containers restarted.
 ## Error Handling
 
 * 200 OK – Successful request
-* 400 Bad Request – Validation or business logic error
+* 400 Bad Request – Invalid input, or a request the current data does not
+  allow, such as booking outside working hours or a time that is already
+  booked
 * 401 Unauthorized – Missing or invalid JWT
-* 403 Forbidden – Insufficient permissions
-* 404 Not Found – Resource not found
-* 409 Conflict – The doctor was booked for that time by a concurrent request,
-  or the patient details partly match a patient on file (see
-  `CreateAppointment`)
+* 403 Forbidden – The caller's role may not do this
+* 404 Not Found – The doctor, schedule, department, appointment, patient or
+  user does not exist
+* 409 Conflict – The request clashes with existing data: a username,
+  department or schedule that already exists, a time a concurrent request
+  booked first, patient details that partly match a patient on file (see
+  `CreateAppointment`), or future bookings a change would strand (see
+  [Changes that affect future bookings](#changes-that-affect-future-bookings))
 * 429 Too Many Requests – Rate limit reached; the `Retry-After` header gives
   the number of seconds to wait
 * 500 Internal Server Error – Unexpected server error
 
-Errors the API raises itself carry a JSON body with an `error` message. 401
-and 403 have no body, and request validation failures use ASP.NET Core's
+Errors the API raises itself carry a JSON body with `isSuccess: false` and an
+`error` message, whatever the status code. A 401, and a 403 from an endpoint's
+role check, have no body, and request validation failures use ASP.NET Core's
 problem-details format.
 
 ---
@@ -604,6 +734,15 @@ problem-details format.
 * Secure password hashing
 * Input validation on all endpoints
 * HTTPS enforced via Nginx + Let's Encrypt
+* A Content-Security-Policy on the frontend: the page loads scripts, styles
+  and images only from its own origin, and sends requests only to itself and
+  the API it was built for (`VITE_API_URL`). The build adds the policy as a
+  `<meta>` tag (`hospital-frontend/vite.config.ts`), so every host serves the
+  same one; framing is blocked by the `X-Frame-Options` header instead,
+  because a `<meta>` policy cannot set `frame-ancestors`
+* An audit log of every change, failed sign-in and failed password change,
+  readable by admins
+* The API refuses to start with a JWT signing key shorter than 32 bytes
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
@@ -612,7 +751,8 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 A global rate limiter is implemented using ASP.NET Core's built-in rate-limiting middleware:
 
 * **Strategy:** Fixed Window Limiter (partitioned by client IP)
-* **Limit:** 60 requests per minute per IP
+* **Limit:** 60 requests per minute per IP, and 5 per minute per IP for
+  sign-in and password changes
 * **Queue:** Disabled — exceeding requests are immediately rejected
 * **Response:** `429 Too Many Requests` with a custom message
 
@@ -620,34 +760,65 @@ A global rate limiter is implemented using ASP.NET Core's built-in rate-limiting
 
 ## Testing
 
-The backend has unit tests in `MyApp.Tests`, written with xUnit, Moq and EF Core
-InMemory. They cover 17 services across five areas:
+The backend tests in `MyApp.Tests` are written with xUnit, Moq and EF Core
+InMemory. Most of them test one service each:
 
-| Area | Services under test |
+| Area | Under test |
 | --- | --- |
-| Appointments | `AppointmentCreationService`, `AppointmentCancellationService`, `AppointmentQueryService` |
-| Auth | `LoginService`, `UserCreationService` |
-| Calendar | `ScheduleCreationService`, `ScheduleModificationService`, `ScheduleQueryService` |
+| Appointments | `AppointmentCreationService` (with patient matching), `AppointmentCancellationService`, `AppointmentQueryService`, `AppointmentStatusService`, `PatientRecordService`, the check for bookings a change would strand |
+| Auth | `LoginService`, `UserCreationService`, `ChangePasswordService`, `SecurityStampCache`, `SignInWarmup` |
+| Calendar | `ScheduleCreationService`, `ScheduleModificationService`, `ScheduleQueryService`, working days |
 | Department | `DepartmentCreationService`, `DepartmentQueryService`, `DepartmentStatusService`, `DoctorDepartmentService` |
 | User | `ChangeRoleService`, `CreateDoctorService`, `DoctorStatusService`, `ResetPasswordService`, `UserQueryService` |
+| Audit log | `AuditLogQueryService` |
+| Data | The `--migrate` command |
+| API | The status code for each kind of refusal; with the real app started by `WebApplicationFactory`, the signing key check at startup and the [API contract](#api-contract) |
 
 The Appointments, Auth, Department and User tests share seed data through
 `*TestBase` classes.
 
-The frontend has unit tests in `hospital-frontend/src` (`lib/*.test.ts` and
-`api.test.ts`), written with Vitest, covering schedule slot generation, form
-validation, time handling, HTTP error messages and the API client's booking
-errors.
+The frontend has unit tests, written with Vitest, in `hospital-frontend/src`
+(`lib/*.test.ts` and `api.test.ts`) and `hospital-frontend/scripts`. They
+cover schedule slots and working days, formatting, form validation, time
+handling, HTTP error messages, the API client's booking errors and the API
+type generator.
 
-Not covered yet: `PatientService`, `ScheduleValidation`, `AuditLogService`,
-`CurrentUserService`, the controllers, and the frontend components and
-screens.
+Not covered yet: `PatientService`, `ScheduleValidation` on its own,
+`AuditLogService`, `CurrentUserService`, the controllers themselves, and the
+frontend components and screens.
+
+### API contract
+
+`hospital-frontend/openapi.json` is the API's OpenAPI document, and
+`hospital-frontend/src/api-schema.ts` holds TypeScript types generated from it,
+which `src/api.ts` uses for requests and responses. `dotnet test` fails when
+the document the API serves differs from `openapi.json`, and CI fails when
+`api-schema.ts` is out of date. After changing a controller or DTO, update
+both and commit them with the change:
+
+```bash
+UPDATE_OPENAPI=1 dotnet test --filter OpenApiContractTests
+cd hospital-frontend
+npm run generate:api
+```
+
+The generator, `scripts/generate-api-types.mjs`, is a small script of its own
+because openapi-typescript needs TypeScript 5's compiler API, which TypeScript
+7 does not have.
+
+Keep `Microsoft.OpenApi` on 2.x: Swashbuckle is built against it, and with 3.x
+`/swagger/v1/swagger.json` fails with a 500. Dependabot does not propose major
+updates for it.
 
 ### Run Tests
 
 ```bash
 dotnet test
 ```
+
+The backend build treats compiler warnings, nullable warnings included, as
+errors (`Directory.Build.props`). NuGet vulnerability advisories stay
+warnings, so a newly published advisory does not fail unrelated builds.
 
 Test, lint and type-check the frontend with:
 
@@ -664,7 +835,8 @@ npm run build
 
 Full Docker support:
 
-* Multi-stage Dockerfile for ASP.NET Core backend
+* Multi-stage Dockerfile for ASP.NET Core backend (Alpine, with `tzdata` for
+  the time zone names schedule changes use)
 * Dockerfile for React + Vite frontend (served via Nginx)
 * Docker Compose for local development
 

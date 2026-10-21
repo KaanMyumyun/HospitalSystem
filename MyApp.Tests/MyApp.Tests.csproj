@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <!-- EF Core InMemory -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.12" />
 
     <!-- Test stack -->

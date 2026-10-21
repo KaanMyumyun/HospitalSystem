@@ -815,7 +815,8 @@ textarea {
 
 .slot-cell.past,
 .slot-cell.empty,
-.slot-cell.loading {
+.slot-cell.loading,
+.slot-cell.off {
   background: var(--slate-50);
   color: var(--muted);
   cursor: default;
@@ -1253,5 +1254,242 @@ textarea {
   .inline-form,
   .schedule-form {
     grid-template-columns: 1fr;
+  }
+}
+
+/* One column per day the doctor works, as the grid's days-N class says. */
+.schedule-grid.days-1 {
+  grid-template-columns: 82px repeat(1, minmax(128px, 1fr));
+}
+
+.schedule-grid.days-2 {
+  grid-template-columns: 82px repeat(2, minmax(128px, 1fr));
+}
+
+.schedule-grid.days-3 {
+  grid-template-columns: 82px repeat(3, minmax(128px, 1fr));
+}
+
+.schedule-grid.days-4 {
+  grid-template-columns: 82px repeat(4, minmax(128px, 1fr));
+}
+
+.schedule-grid.days-5 {
+  grid-template-columns: 82px repeat(5, minmax(128px, 1fr));
+}
+
+.schedule-grid.days-6 {
+  grid-template-columns: 82px repeat(6, minmax(128px, 1fr));
+}
+
+.schedule-grid.days-7 {
+  grid-template-columns: 82px repeat(7, minmax(128px, 1fr));
+}
+
+.slot-cell.booked.appointment-completed {
+  border-color: var(--slate-300);
+  background: var(--slate-50);
+}
+
+.slot-cell.booked.appointment-noshow {
+  border-color: var(--red-200);
+  background: var(--surface);
+}
+
+.button-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.day-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.day-picker label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.schedule-form .day-picker {
+  grid-column: 1 / -1;
+}
+
+.schedule-form > button {
+  grid-column: -2 / -1;
+}
+
+.dialog-text {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.affected-list,
+.history-list,
+.day-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.affected-list {
+  max-height: 240px;
+  overflow: auto;
+}
+
+.affected-list li,
+.history-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.affected-list li {
+  justify-content: flex-start;
+}
+
+.affected-list li span:last-child,
+.history-list li span:first-child,
+.day-row span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.affected-list small,
+.history-list small,
+.day-row small,
+.table-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.history-list li {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0;
+}
+
+.table-note {
+  display: block;
+}
+
+.details-cell {
+  max-width: 420px;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.link-button {
+  border: 0;
+  background: none;
+  color: var(--blue-700);
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+.patients-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+}
+
+.doctor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 900px);
+}
+
+.doctor-grid .panel {
+  padding: 18px;
+}
+
+.day-list {
+  margin-top: 14px;
+}
+
+.day-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.day-row.cancelled {
+  opacity: 0.6;
+}
+
+.day-time {
+  font-size: 15px;
+}
+
+@media (max-width: 1180px) {
+  .patients-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 820px) {
+  .schedule-grid.days-1 {
+    grid-template-columns: 72px repeat(1, 120px);
+  }
+
+  .schedule-grid.days-2 {
+    grid-template-columns: 72px repeat(2, 120px);
+  }
+
+  .schedule-grid.days-3 {
+    grid-template-columns: 72px repeat(3, 120px);
+  }
+
+  .schedule-grid.days-4 {
+    grid-template-columns: 72px repeat(4, 120px);
+  }
+
+  .schedule-grid.days-5 {
+    grid-template-columns: 72px repeat(5, 120px);
+  }
+
+  .schedule-grid.days-6 {
+    grid-template-columns: 72px repeat(6, 120px);
+  }
+
+  .schedule-grid.days-7 {
+    grid-template-columns: 72px repeat(7, 120px);
+  }
+
+  .day-row {
+    grid-template-columns: 56px minmax(0, 1fr);
   }
 }

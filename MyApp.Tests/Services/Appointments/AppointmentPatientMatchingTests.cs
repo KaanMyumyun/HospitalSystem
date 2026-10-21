@@ -146,6 +146,7 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Patient not found", result.Error);
+        Assert.Equal(FailureKind.NotFound, result.Failure);
     }
 
     [Fact]

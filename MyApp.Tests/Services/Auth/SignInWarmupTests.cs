@@ -22,7 +22,8 @@ public class SignInWarmupTests : AuthTestBase
         var warmup = CreateWarmup(services => services
             .AddScoped(_ => new ApplicationDbContext(options))
             .AddScoped<ILoginService>(provider => new LoginService(
-                provider.GetRequiredService<ApplicationDbContext>(), CreateJwtOptions(), CreateDemoOptions())), logger);
+                provider.GetRequiredService<ApplicationDbContext>(), CreateJwtOptions(), CreateDemoOptions(),
+                new TestAuditLogService(provider.GetRequiredService<ApplicationDbContext>()))), logger);
 
         await warmup.StartAsync(CancellationToken.None);
 

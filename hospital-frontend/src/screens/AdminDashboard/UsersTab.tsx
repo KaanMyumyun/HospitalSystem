@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { UserRole, UsersPage } from '../../api'
+import { Pager } from '../../components/Pager'
 import { EmptyState, SkeletonRows } from '../../components/ui'
 import type { ActionOutcome } from '../../types'
 
@@ -128,42 +129,7 @@ export function UsersTab({
       {!loading && visibleUsers.length === 0 && (
         <EmptyState text={isReadOnly ? 'User accounts are hidden from demo accounts.' : 'No users found.'} />
       )}
-      {usersPage && usersPage.totalCount > usersPage.pageSize && (
-        <UsersPager usersPage={usersPage} loading={loading} onPageChange={onPageChange} />
-      )}
+      <Pager page={usersPage} loading={loading} noun="users" onPageChange={onPageChange} />
     </>
-  )
-}
-
-function UsersPager({
-  usersPage,
-  loading,
-  onPageChange,
-}: {
-  usersPage: UsersPage
-  loading: boolean
-  onPageChange: (page: number) => void
-}) {
-  const { items, page, pageSize, totalCount } = usersPage
-  const first = (page - 1) * pageSize + 1
-  const last = (page - 1) * pageSize + items.length
-
-  return (
-    <div className="toolbar pager">
-      <span className="subtle">{items.length > 0 ? `${first}-${last} of ${totalCount}` : `${totalCount} users`}</span>
-      <div className="pager-buttons">
-        <button className="secondary-button" disabled={page <= 1 || loading} type="button" onClick={() => onPageChange(page - 1)}>
-          Previous
-        </button>
-        <button
-          className="secondary-button"
-          disabled={page * pageSize >= totalCount || loading}
-          type="button"
-          onClick={() => onPageChange(page + 1)}
-        >
-          Next
-        </button>
-      </div>
-    </div>
   )
 }

@@ -7,5 +7,5 @@ public class ViewSchedule
     public DateTime StartTime { get; set; }
     public DateTime EndTime { get; set; }
     public int SlotDurationMin { get; set; }
-
+    public List<DayOfWeek> WorkingDays { get; set; } = [];
 }

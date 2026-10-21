@@ -23,7 +23,7 @@ public class AppointmentCancellationService : IAppointmentCancellationService
     public async Task<CancelAppointmentResultDto> CancelAppointmentAsync(CancelAppointmentDto dto)
     {
         if (!_currentUser.IsInRole(UserRole.FrontDesk))
-            return CancelAppointmentResultDto.Fail("You are not allowed to cancel appointments");
+            return CancelAppointmentResultDto.Forbidden("You are not allowed to cancel appointments");
  
         if (dto.AppointmentId is null)
             return CancelAppointmentResultDto.Fail("Appointment id is required");
@@ -35,7 +35,7 @@ public class AppointmentCancellationService : IAppointmentCancellationService
             .SingleOrDefaultAsync(a => a.Id == dto.AppointmentId);
  
         if (appointment == null)
-            return CancelAppointmentResultDto.Fail("Appointment not found");
+            return CancelAppointmentResultDto.NotFound("Appointment not found");
  
         if (appointment.Status == AppointmentStatus.Cancelled)
             return CancelAppointmentResultDto.Fail("Appointment already canceled");

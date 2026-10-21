@@ -17,13 +17,6 @@ public class DepartmentQueryController : ControllerBase
  
     [Authorize(Roles = "FrontDesk,Admin,DemoAdmin,DemoFrontDesk")]
     [HttpGet("ViewDepartment")]
-    public async Task<IActionResult> ListDepartments()
-    {
-        var result = await _departmentQueryService.ListDepartmentsAsync();
- 
-        if (!result.IsSuccess)
-            return BadRequest(result);
- 
-        return Ok(result);
-    }
+    public async Task<ActionResult<ServiceResult<List<ViewDepartmentDto>>>> ListDepartments()
+        => this.ToActionResult(await _departmentQueryService.ListDepartmentsAsync());
 }

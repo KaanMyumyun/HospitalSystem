@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.Department;
+using HospitalSystem.Services.Appointments;
  
 namespace HospitalSystem.Services.Deparment;
  
@@ -20,11 +21,20 @@ public class DepartmentStatusService : IDepartmentStatusService
     public async Task<DepartmentActionResultDto> ChangeDepartmentStatusAsync(ChangeDepartmentStatusDto dto)
     {
         if (!_currentUser.IsInRole(UserRole.Admin))
-            return DepartmentActionResultDto.Fail("You are not allowed to change department status");
+            return DepartmentActionResultDto.Forbidden("You are not allowed to change department status");
  
         var department = await _context.Departments.FirstOrDefaultAsync(d => d.Id == dto.DepartmentId);
         if (department == null)
-            return DepartmentActionResultDto.Fail("Department doesnt exist");
+            return DepartmentActionResultDto.NotFound("Department doesnt exist");
+
+        if (department.IsActive && !dto.IsActive)
+        {
+            var stranded = await AffectedBookings.LoadFutureAsync(_context, a => a.Doctor.DepartmentId == department.Id);
+            var refusal = await AffectedBookings.ResolveAsync<DepartmentActionResultDto>(
+                stranded, dto, _auditLog, $"department {department.Department} deactivated");
+            if (refusal is not null)
+                return refusal;
+        }
  
         department.IsActive = dto.IsActive;
         await _auditLog.LogAsync(

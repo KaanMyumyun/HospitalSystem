@@ -44,6 +44,7 @@ public class DoctorStatusServiceTests : UserTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor doesnt exist", result.Error);
+        Assert.Equal(FailureKind.NotFound, result.Failure);
     }
  
     [Fact]

@@ -17,16 +17,6 @@ public class ScheduleModificationController : ControllerBase
 
     [Authorize(Roles = "Admin")]
     [HttpPost("change-schedule")]
-    public async Task<IActionResult> ChangeSchedule([FromBody] ChangeScheduleDto dto)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
-        var result = await _modificationService.ChangeScheduleAsync(dto);
-
-        if (!result.IsSuccess)
-            return BadRequest(result);
-
-        return Ok(result);
-    }
+    public async Task<ActionResult<CalendarActionResult>> ChangeSchedule([FromBody] ChangeScheduleDto dto)
+        => this.ToActionResult(await _modificationService.ChangeScheduleAsync(dto));
 }

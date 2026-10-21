@@ -3,6 +3,11 @@ export function parseDateInput(value: string) {
   return new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0)
 }
 
+// Today as a date input's value, local time.
+export function todayInputValue() {
+  return toDateInputValue(new Date())
+}
+
 export function toDateInputValue(value: Date) {
   const year = value.getFullYear()
   const month = String(value.getMonth() + 1).padStart(2, '0')

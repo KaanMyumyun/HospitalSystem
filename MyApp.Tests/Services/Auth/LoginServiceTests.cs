@@ -7,7 +7,7 @@ namespace HospitalSystem.Tests;
 public class LoginServiceTests : AuthTestBase
 {
     private LoginService CreateService(ApplicationDbContext db, bool demoEnabled = true)
-        => new(db, CreateJwtOptions(), CreateDemoOptions(demoEnabled));
+        => new(db, CreateJwtOptions(), CreateDemoOptions(demoEnabled), new TestAuditLogService(db));
  
     [Fact]
     public async Task LoginAsync_CorrectCredentials_Succeeds()
@@ -113,7 +113,7 @@ public class LoginServiceTests : AuthTestBase
 
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Token);
-        Assert.Equal(role.ToString(), result.Role);
+        Assert.Equal(role, result.Role);
     }
 
     [Fact]
@@ -230,5 +230,91 @@ public class LoginServiceTests : AuthTestBase
 
         Assert.NotEqual(user.SecurityStamp, staleStamp);
         Assert.Equal(user.SecurityStamp, freshStamp);
+    }
+
+    [Theory]
+    [InlineData("test")]
+    [InlineData("TEST")]
+    [InlineData("  Test ")]
+    public async Task LoginAsync_NameInAnotherCaseOrWithSpaces_Succeeds(string name)
+    {
+        using var db = CreateDbContext();
+        await SeedUserAsync(db);
+        var service = CreateService(db);
+
+        var result = await service.LoginAsync(new LoginDto { Name = name, Password = TestPassword });
+
+        Assert.True(result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WrongPassword_IsAuditedAgainstTheUser()
+    {
+        using var db = CreateDbContext();
+        var user = await SeedUserAsync(db);
+        var service = CreateService(db);
+
+        await service.LoginAsync(new LoginDto { Name = "Test", Password = "wrongpassword" });
+
+        var entry = Assert.Single(db.AuditLogs);
+        Assert.Equal("SignInFailed", entry.Action);
+        Assert.Equal(user.Id, entry.EntityId);
+        Assert.Contains("wrong password", entry.Details);
+    }
+
+    // People sometimes type their password into the username field, so an
+    // unknown username is not written to the audit log.
+    [Fact]
+    public async Task LoginAsync_UnknownName_IsAuditedWithoutTheTypedName()
+    {
+        using var db = CreateDbContext();
+        await SeedUserAsync(db);
+        var service = CreateService(db);
+
+        await service.LoginAsync(new LoginDto { Name = "my-secret-password", Password = "whatever" });
+
+        var entry = Assert.Single(db.AuditLogs);
+        Assert.Equal("SignInFailed", entry.Action);
+        Assert.Equal(0, entry.EntityId);
+        Assert.DoesNotContain("my-secret-password", entry.Details);
+    }
+
+    [Theory]
+    [InlineData(UserRole.Pending, "account awaiting approval")]
+    [InlineData(UserRole.DemoAdmin, "demo accounts have no password sign-in")]
+    public async Task LoginAsync_RefusedRole_IsAudited(UserRole role, string reason)
+    {
+        using var db = CreateDbContext();
+        await SeedUserAsync(db, role);
+        var service = CreateService(db);
+
+        var result = await service.LoginAsync(new LoginDto { Name = "Test", Password = TestPassword });
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains(reason, Assert.Single(db.AuditLogs).Details);
+    }
+
+    [Fact]
+    public async Task LoginAsync_Success_WritesNoAuditEntry()
+    {
+        using var db = CreateDbContext();
+        await SeedUserAsync(db);
+        var service = CreateService(db);
+
+        await service.LoginAsync(new LoginDto { Name = "Test", Password = TestPassword });
+
+        Assert.Empty(db.AuditLogs);
+    }
+
+    [Fact]
+    public async Task DemoLoginAsync_ConfiguredNameInAnotherCase_Succeeds()
+    {
+        using var db = CreateDbContext();
+        await SeedUserAsync(db, UserRole.DemoFrontDesk, "demoreception");
+        var service = CreateService(db);
+
+        var result = await service.DemoLoginAsync(UserRole.DemoFrontDesk);
+
+        Assert.True(result.IsSuccess);
     }
 }

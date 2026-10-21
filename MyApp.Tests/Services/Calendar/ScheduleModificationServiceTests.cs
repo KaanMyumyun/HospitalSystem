@@ -39,11 +39,12 @@ public class ScheduleModificationServiceTests
     {
         var db = CreateDbContext();
         var service = CreateService(db, isAdmin: false);
-        var dto = new ChangeScheduleDto { ScheduleId = 1 };
+        var dto = new ChangeScheduleDto { TimeZone = "UTC", ScheduleId = 1 };
         var result = await service.ChangeScheduleAsync(dto);
 
         Assert.False(result.IsSuccess);
         Assert.Equal("You are not allowed to change a schedule", result.Error);
+        Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
 
     [Fact]
@@ -51,11 +52,12 @@ public class ScheduleModificationServiceTests
     {
         var db = CreateDbContext();
         var service = CreateService(db, isAdmin: true);
-        var dto = new ChangeScheduleDto { ScheduleId = 99 };
+        var dto = new ChangeScheduleDto { TimeZone = "UTC", ScheduleId = 99 };
         var result = await service.ChangeScheduleAsync(dto);
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Schedule not found", result.Error);
+        Assert.Equal(FailureKind.NotFound, result.Failure);
     }
 
     [Fact]
@@ -67,7 +69,7 @@ public class ScheduleModificationServiceTests
         await db.SaveChangesAsync();
 
         var service = CreateService(db, isAdmin: true);
-        var dto = new ChangeScheduleDto { ScheduleId = 1, StartHour = 14, EndHour = 10 };
+        var dto = new ChangeScheduleDto { TimeZone = "UTC", ScheduleId = 1, StartHour = 14, EndHour = 10 };
         var result = await service.ChangeScheduleAsync(dto);
 
         Assert.False(result.IsSuccess);
@@ -84,7 +86,7 @@ public class ScheduleModificationServiceTests
         await db.SaveChangesAsync();
 
         var service = CreateService(db, isAdmin: true);
-        var dto = new ChangeScheduleDto { ScheduleId = 1, StartHour = 9, EndHour = 14, SlotDurationMin = 30 };
+        var dto = new ChangeScheduleDto { TimeZone = "UTC", ScheduleId = 1, StartHour = 9, EndHour = 14, SlotDurationMin = 30 };
         var result = await service.ChangeScheduleAsync(dto);
 
         Assert.False(result.IsSuccess);
@@ -101,7 +103,7 @@ public class ScheduleModificationServiceTests
         await db.SaveChangesAsync();
 
         var service = CreateService(db, isAdmin: true);
-        var dto = new ChangeScheduleDto { ScheduleId = 1, StartHour = 9, EndHour = 14, SlotDurationMin = 30 };
+        var dto = new ChangeScheduleDto { TimeZone = "UTC", ScheduleId = 1, StartHour = 9, EndHour = 14, SlotDurationMin = 30 };
         var result = await service.ChangeScheduleAsync(dto);
 
         Assert.False(result.IsSuccess);
@@ -121,11 +123,12 @@ public class ScheduleModificationServiceTests
         await db.SaveChangesAsync();
 
         var service = CreateService(db, isAdmin: true);
-        var dto = new ChangeScheduleDto { ScheduleId = 1, StartHour = 14, EndHour = 18, SlotDurationMin = 30 };
+        var dto = new ChangeScheduleDto { TimeZone = "UTC", ScheduleId = 1, StartHour = 14, EndHour = 18, SlotDurationMin = 30 };
         var result = await service.ChangeScheduleAsync(dto);
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Schedule already exists for this time range", result.Error);
+        Assert.Equal(FailureKind.Conflict, result.Failure);
     }
 
     [Fact]
@@ -138,11 +141,12 @@ public class ScheduleModificationServiceTests
         await db.SaveChangesAsync();
 
         var service = CreateService(db, isAdmin: true);
-        var dto = new ChangeScheduleDto { ScheduleId = 1, StartHour = 9, EndHour = 14, SlotDurationMin = 30 };
+        var dto = new ChangeScheduleDto { TimeZone = "UTC", ScheduleId = 1, StartHour = 9, EndHour = 14, SlotDurationMin = 30 };
         var result = await service.ChangeScheduleAsync(dto);
 
         Assert.True(result.IsSuccess);
         var updatedCalendar = await db.Calendars.FindAsync(1);
+        Assert.NotNull(updatedCalendar);
         Assert.Equal(today.AddHours(9), updatedCalendar.StartTime);
         Assert.Equal(today.AddHours(14), updatedCalendar.EndTime);
         Assert.Equal(30, updatedCalendar.SlotDurationMin);

@@ -17,16 +17,6 @@ public class CreateDoctorController : ControllerBase
  
     [Authorize(Roles = "Admin")]
     [HttpPost("create-doctor")]
-    public async Task<IActionResult> CreateDoctor([FromBody] CreateDoctorDto dto)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
- 
-        var result = await _createDoctorService.CreateDoctorAsync(dto);
- 
-        if (!result.IsSuccess)
-            return BadRequest(result);
- 
-        return Ok(result);
-    }
+    public async Task<ActionResult<CreateDoctorResultDto>> CreateDoctor([FromBody] CreateDoctorDto dto)
+        => this.ToActionResult(await _createDoctorService.CreateDoctorAsync(dto));
 }

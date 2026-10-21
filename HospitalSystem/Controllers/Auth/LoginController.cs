@@ -19,7 +19,7 @@ public class LoginController : ControllerBase
 
     [AllowAnonymous]
     [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] LoginDto dto)
+    public async Task<ActionResult<LoginResultDto>> Login([FromBody] LoginDto dto)
     {
         var result = await _loginService.LoginAsync(dto);
 
@@ -31,7 +31,7 @@ public class LoginController : ControllerBase
 
     [AllowAnonymous]
     [HttpPost("demo-login")]
-    public async Task<IActionResult> DemoLogin([FromBody] DemoLoginDto dto)
+    public async Task<ActionResult<LoginResultDto>> DemoLogin([FromBody] DemoLoginDto dto)
     {
         var result = await _loginService.DemoLoginAsync(dto.Role);
 

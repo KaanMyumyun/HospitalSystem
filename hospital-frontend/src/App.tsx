@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  AffectedBookingsError,
   canListUsers,
   cancelAppointment,
+  changeAppointmentStatus,
   changeDepartmentStatus,
   changeDoctorDepartment,
   changeDoctorStatus,
+  changeOwnPassword,
   changeSchedule,
   changeUserRole,
   clearSession,
@@ -17,18 +20,23 @@ import {
   PossiblePatientMatchError,
   resetPassword,
   sessionExpiredEvent,
+  updatePatient,
 } from './api'
-import type { UserRole } from './api'
+import type { CancelAffected, UserRole } from './api'
 import './App.css'
+import { AffectedBookingsDialog } from './components/AffectedBookingsDialog'
+import { ChangePasswordDialog } from './components/ChangePasswordDialog'
 import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
 import { useUsersPage } from './hooks/useUsersPage'
 import { useWeekAppointments } from './hooks/useWeekAppointments'
 import { adminTitle, confirmAction } from './lib/format'
 import { AdminDashboard } from './screens/AdminDashboard'
+import { DoctorDashboard } from './screens/DoctorDashboard'
 import { LoginScreen } from './screens/LoginScreen'
 import { NoAccessScreen } from './screens/NoAccessScreen'
 import { NotFoundScreen } from './screens/NotFoundScreen'
+import { PatientsScreen } from './screens/PatientsScreen'
 import { ReceptionDashboard } from './screens/ReceptionDashboard'
 import type { ActionOutcome, ActivityEntry, HospitalData, Screen, Session } from './types'
 
@@ -47,22 +55,52 @@ function canUseReception(role: UserRole) {
   return role === 'FrontDesk' || role === 'DemoFrontDesk'
 }
 
+function canUseDoctor(role: UserRole) {
+  return role === 'Doctor'
+}
+
+// Admin and reception screens share the departments, doctors and schedules.
+function usesHospitalData(role: UserRole) {
+  return canUseAdmin(role) || canUseReception(role)
+}
+
+function initialScreen(role: UserRole): Screen {
+  if (canUseAdmin(role)) return 'departments'
+  if (canUseDoctor(role)) return 'doctor'
+  return 'reception'
+}
+
+function screenTitle(screen: Screen) {
+  if (screen === 'reception') return 'Reception'
+  if (screen === 'patients') return 'Patients'
+  if (screen === 'doctor') return 'My day'
+  return adminTitle(screen)
+}
+
+// A change the API refused because it strands future bookings, waiting for
+// the admin to cancel them with a reason or keep things as they are.
+type PendingChange = {
+  affected: AffectedBookingsError
+  confirm: (reason: string) => Promise<ActionOutcome>
+  dismiss: () => void
+}
+
 function App() {
   const [session, setSession] = useState<Session | null>(() => getStoredSession())
   const [screen, setScreen] = useState<Screen>(() => {
     const stored = getStoredSession()
-    return stored && canUseAdmin(stored.role) ? 'departments' : 'reception'
+    return stored ? initialScreen(stored.role) : 'reception'
   })
   const [data, setData] = useState<HospitalData>(emptyData)
   const [selectedDoctorId, setSelectedDoctorId] = useState<number | null>(null)
   const [weekOffset, setWeekOffset] = useState(0)
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null)
-  const [loading, setLoading] = useState(() =>
-    session !== null && (canUseAdmin(session.role) || canUseReception(session.role)),
-  )
+  const [loading, setLoading] = useState(() => session !== null && usesHospitalData(session.role))
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [pendingChange, setPendingChange] = useState<PendingChange | null>(null)
+  const [changingPassword, setChangingPassword] = useState(false)
   const [activity, setActivity] = useState<ActivityEntry[]>(() => {
     const raw = localStorage.getItem(activityStorageKey)
     if (!raw) return []
@@ -90,7 +128,7 @@ function App() {
   } = useUsersPage(session !== null && canListUsers(session.role) && screen === 'users', searchQuery, setError)
 
   const refresh = useCallback(() => {
-    if (!session || !(canUseAdmin(session.role) || canUseReception(session.role))) return
+    if (!session || !usesHospitalData(session.role)) return
 
     return loadHospitalData()
       .then((nextData) => {
@@ -106,7 +144,7 @@ function App() {
 
   // Everything on screen: the shared lists, plus the visible week or users page.
   const reloadAll = useCallback(async () => {
-    if (!session || !(canUseAdmin(session.role) || canUseReception(session.role))) return
+    if (!session || !usesHospitalData(session.role)) return
 
     setLoading(true)
     setError(null)
@@ -139,13 +177,50 @@ function App() {
       return { ok: true }
     } catch (actionError) {
       const message = actionError instanceof Error ? actionError.message : 'Operation failed'
-      // The booking dialog lists possible patient matches itself.
-      if (!(actionError instanceof PossiblePatientMatchError)) setError(message)
+      // These open a dialog of their own instead.
+      if (!(actionError instanceof PossiblePatientMatchError || actionError instanceof AffectedBookingsError)) {
+        setError(message)
+      }
       return { ok: false, error: message, cause: actionError }
     } finally {
       actionInFlight.current = false
       setLoading(false)
     }
+  }
+
+  // A change that can strand future bookings. When the API refuses it, the
+  // admin sees the bookings and decides; the outcome is that decision's.
+  const runBookingChange = async (
+    change: (cancel?: CancelAffected) => Promise<unknown>,
+    successMessage: string,
+  ): Promise<ActionOutcome> => {
+    const outcome = await runAction(() => change(), successMessage)
+    if (outcome.ok || !(outcome.cause instanceof AffectedBookingsError)) return outcome
+
+    const affected = outcome.cause
+    return new Promise<ActionOutcome>((resolve) => {
+      const finish = (result: ActionOutcome) => {
+        setPendingChange(null)
+        resolve(result)
+      }
+      setPendingChange({
+        affected,
+        confirm: async (reason) => {
+          const retried = await runAction(
+            () => change({ cancelAffectedAppointments: true, cancellationReason: reason }),
+            successMessage,
+          )
+          if (retried.ok) finish(retried)
+          else if (retried.cause instanceof AffectedBookingsError) {
+            // More bookings were made meanwhile; show the new list.
+            const latest = retried.cause
+            setPendingChange((current) => current && { ...current, affected: latest })
+          }
+          return retried
+        },
+        dismiss: () => finish({ ok: false }),
+      })
+    })
   }
 
   useEffect(() => {
@@ -174,6 +249,8 @@ function App() {
       setSelectedDoctorId(null)
       setWeekOffset(0)
       setSelectedDepartmentId(null)
+      setPendingChange(null)
+      setChangingPassword(false)
     }
 
     window.addEventListener(sessionExpiredEvent, handleSessionExpired)
@@ -182,10 +259,10 @@ function App() {
 
   const handleLogin = (nextSession: Session) => {
     setSession(nextSession)
-    setLoading(canUseAdmin(nextSession.role) || canUseReception(nextSession.role))
+    setLoading(usesHospitalData(nextSession.role))
     setError(null)
     setActivity([])
-    setScreen(canUseAdmin(nextSession.role) ? 'departments' : 'reception')
+    setScreen(initialScreen(nextSession.role))
   }
 
   const handleLogout = () => {
@@ -197,6 +274,8 @@ function App() {
     setSelectedDoctorId(null)
     setWeekOffset(0)
     setSelectedDepartmentId(null)
+    setPendingChange(null)
+    setChangingPassword(false)
   }
 
   const pathname = window.location.pathname
@@ -208,27 +287,35 @@ function App() {
     return <LoginScreen onLogin={handleLogin} />
   }
 
-  if (!canUseAdmin(session.role) && !canUseReception(session.role)) {
+  if (!usesHospitalData(session.role) && !canUseDoctor(session.role)) {
     return <NoAccessScreen role={session.role} onLogout={handleLogout} />
   }
 
+  const isReadOnly = session.role.startsWith('Demo')
   const selectedDepartment =
     data.departments.find((department) => department.id === selectedDepartmentId) ?? data.departments[0] ?? null
+  const markAppointment = (appointmentId: number, status: 'Completed' | 'NoShow') =>
+    runAction(
+      () => changeAppointmentStatus(appointmentId, status),
+      status === 'Completed' ? 'Appointment marked completed' : 'Appointment marked no-show',
+    )
 
   return (
     <div className="app-shell">
       <Sidebar
         canUseAdmin={canUseAdmin(session.role)}
         canUseReception={canUseReception(session.role)}
+        canUseDoctor={canUseDoctor(session.role)}
         screen={screen}
         onChange={setScreen}
       />
       <main className="workspace">
         <TopBar
           loading={loading}
-          role={screen === 'reception' ? 'Reception' : adminTitle(screen)}
+          role={screenTitle(screen)}
           userRole={session.role}
           searchQuery={searchQuery}
+          onChangePassword={isReadOnly ? undefined : () => setChangingPassword(true)}
           onLogout={handleLogout}
           onRefresh={reloadAll}
           onSearchChange={setSearchQuery}
@@ -249,7 +336,7 @@ function App() {
           </div>
         )}
 
-        {screen === 'reception' ? (
+        {screen === 'reception' && (
           <ReceptionDashboard
             appointments={appointments}
             departments={data.departments}
@@ -260,18 +347,35 @@ function App() {
             selectedDoctorId={selectedDoctorId}
             searchQuery={searchQuery}
             weekOffset={weekOffset}
-            isReadOnly={session.role.startsWith('Demo')}
+            isReadOnly={isReadOnly}
             onSelectDoctor={setSelectedDoctorId}
             onWeekOffsetChange={setWeekOffset}
             onCancelAppointment={(appointmentId, reason) =>
               runAction(
-                () => cancelAppointment({ AppointmentId: appointmentId, Reason: reason }),
+                () => cancelAppointment({ appointmentId, reason }),
                 'Appointment cancelled',
               )
             }
+            onChangeAppointmentStatus={markAppointment}
             onCreateAppointment={(input) => runAction(() => createAppointment(input), 'Appointment booked')}
           />
-        ) : (
+        )}
+
+        {screen === 'patients' && (
+          <PatientsScreen
+            searchQuery={searchQuery}
+            isReadOnly={isReadOnly}
+            loading={loading}
+            onError={setError}
+            onUpdatePatient={(input) => runAction(() => updatePatient(input), 'Patient details saved')}
+          />
+        )}
+
+        {screen === 'doctor' && (
+          <DoctorDashboard loading={loading} onError={setError} onChangeAppointmentStatus={markAppointment} />
+        )}
+
+        {canUseAdmin(session.role) && screen !== 'reception' && screen !== 'patients' && screen !== 'doctor' && (
           <AdminDashboard
             departments={data.departments}
             doctors={data.doctors}
@@ -281,10 +385,12 @@ function App() {
             selectedDepartmentId={selectedDepartmentId}
             section={screen}
             searchQuery={searchQuery}
-            isReadOnly={session.role.startsWith('Demo')}
+            isReadOnly={isReadOnly}
             activity={activity}
             usersPage={usersPage}
             usersLoading={usersLoading}
+            canReadAuditLog={session.role === 'Admin'}
+            onError={setError}
             onNavigate={setScreen}
             onUsersPageChange={setUsersPage}
             onSelectDepartment={setSelectedDepartmentId}
@@ -294,16 +400,19 @@ function App() {
             }}
             onChangeDepartmentStatus={async (departmentId, isActive) => {
               if (!confirmAction(`${isActive ? 'Activate' : 'Deactivate'} this department?`)) return { ok: false }
-              return runAction(() => changeDepartmentStatus(departmentId, isActive), 'Department status updated')
+              return runBookingChange(
+                (cancel) => changeDepartmentStatus(departmentId, isActive, cancel),
+                'Department status updated',
+              )
             }}
             onChangeDoctorStatus={async (doctor, isActive) => {
               if (!confirmAction(`${isActive ? 'Activate' : 'Deactivate'} ${doctor.name}?`)) return { ok: false }
-              return runAction(() => changeDoctorStatus(doctor, isActive), 'Doctor status updated')
+              return runBookingChange((cancel) => changeDoctorStatus(doctor, isActive, cancel), 'Doctor status updated')
             }}
-            onChangeSchedule={(input) => runAction(() => changeSchedule(input), 'Schedule updated')}
+            onChangeSchedule={(input) => runBookingChange((cancel) => changeSchedule(input, cancel), 'Schedule updated')}
             onChangeUserRole={async (userId, role) => {
               if (!confirmAction(`Change this user role to ${role}?`)) return { ok: false }
-              return runAction(() => changeUserRole(userId, role), 'User role updated')
+              return runBookingChange((cancel) => changeUserRole(userId, role, cancel), 'User role updated')
             }}
             onCreateDepartment={(name) => runAction(() => createDepartment(name), 'Department created')}
             onCreateSchedule={(input) => runAction(() => createSchedule(input), 'Schedule created')}
@@ -315,6 +424,27 @@ function App() {
           />
         )}
       </main>
+
+      {pendingChange && (
+        <AffectedBookingsDialog
+          affected={pendingChange.affected}
+          loading={loading}
+          onCancelBookings={pendingChange.confirm}
+          onClose={pendingChange.dismiss}
+        />
+      )}
+
+      {changingPassword && (
+        <ChangePasswordDialog
+          loading={loading}
+          onChangePassword={async (currentPassword, newPassword) => {
+            const outcome = await runAction(() => changeOwnPassword(currentPassword, newPassword), 'Password changed')
+            if (outcome.ok) setSession(getStoredSession())
+            return outcome
+          }}
+          onClose={() => setChangingPassword(false)}
+        />
+      )}
     </div>
   )
 }

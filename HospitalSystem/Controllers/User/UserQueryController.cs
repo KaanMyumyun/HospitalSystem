@@ -17,28 +17,11 @@ public class UserQueryController : ControllerBase
  
     [Authorize(Roles = "Admin")]
     [HttpGet("ListUsers")]
-    public async Task<IActionResult> ListUsers([FromQuery] UserQueryDto query)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
-        var result = await _userQueryService.ListUsersAsync(query);
- 
-        if (!result.IsSuccess)
-            return BadRequest(result);
- 
-        return Ok(result);
-    }
+    public async Task<ActionResult<ServiceResult<PagedResult<UserDisplayDto>>>> ListUsers([FromQuery] UserQueryDto query)
+        => this.ToActionResult(await _userQueryService.ListUsersAsync(query));
  
     [Authorize(Roles = "FrontDesk,Admin,DemoAdmin,DemoFrontDesk")]
     [HttpGet("ListDoctors")]
-    public async Task<IActionResult> ListDoctors()
-    {
-        var result = await _userQueryService.ListDoctorsAsync();
- 
-        if (!result.IsSuccess)
-            return BadRequest(result);
- 
-        return Ok(result);
-    }
+    public async Task<ActionResult<ServiceResult<List<DoctorDisplayDto>>>> ListDoctors()
+        => this.ToActionResult(await _userQueryService.ListDoctorsAsync());
 }

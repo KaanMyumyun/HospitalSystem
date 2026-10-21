@@ -41,6 +41,7 @@ public class AppointmentCancellationServiceTests : AppointmentTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("You are not allowed to cancel appointments", result.Error);
+        Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
  
     [Fact]
@@ -71,6 +72,7 @@ public class AppointmentCancellationServiceTests : AppointmentTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("Appointment not found", result.Error);
+        Assert.Equal(FailureKind.NotFound, result.Failure);
     }
  
     [Fact]

@@ -18,3 +18,5 @@
 hospital-frontend/package-lock.json linguist-generated=true
 HospitalSystem/Migrations/*.Designer.cs linguist-generated=true
 HospitalSystem/Migrations/ApplicationDbContextModelSnapshot.cs linguist-generated=true
+hospital-frontend/openapi.json linguist-generated=true
+hospital-frontend/src/api-schema.ts linguist-generated=true

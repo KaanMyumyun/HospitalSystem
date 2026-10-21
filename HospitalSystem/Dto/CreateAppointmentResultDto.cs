@@ -1,46 +1,12 @@
 namespace HospitalSystem.Dto;
 
-public class CreateAppointmentResultDto
+public class CreateAppointmentResultDto : OperationResult<CreateAppointmentResultDto>
 {
-    public bool IsSuccess { get; set; }
-    public string? Error { get; set; }
-    public bool IsConflict { get; set; }
+    public bool IsConflict => Failure == FailureKind.Conflict;
 
-    // Set, with IsConflict, when the details partly match patients on file.
+    // Set, with a conflict, when the details partly match patients on file.
     public List<PatientMatchDto>? PossibleMatches { get; set; }
 
-       public static CreateAppointmentResultDto Fail(string error)
-    {
-        return new CreateAppointmentResultDto
-        {
-        Error = error,
-        IsSuccess = false
-        };
-    }
-    public static CreateAppointmentResultDto FailConflict(string error)
-    {
-        return new CreateAppointmentResultDto
-        {
-            Error = error,
-            IsSuccess = false,
-            IsConflict = true
-        };
-    }
-    public static CreateAppointmentResultDto FailPossibleMatch(string error, List<PatientMatchDto> possibleMatches)
-    {
-        return new CreateAppointmentResultDto
-        {
-            Error = error,
-            IsSuccess = false,
-            IsConflict = true,
-            PossibleMatches = possibleMatches
-        };
-    }
-    public static CreateAppointmentResultDto Success()
-    {
-        return new CreateAppointmentResultDto
-        {
-            IsSuccess = true
-        };
-    }
+    public static CreateAppointmentResultDto PossibleMatch(string error, List<PatientMatchDto> possibleMatches) =>
+        new() { Error = error, Failure = FailureKind.Conflict, PossibleMatches = possibleMatches };
 }

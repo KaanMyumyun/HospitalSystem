@@ -19,6 +19,7 @@ public class UserCreationServiceTests : AuthTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("You are not allowed to create a user", result.Error);
+        Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
  
     [Fact]
@@ -32,6 +33,7 @@ public class UserCreationServiceTests : AuthTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("Name already exists", result.Error);
+        Assert.Equal(FailureKind.Conflict, result.Failure);
     }
  
     [Fact]
@@ -86,5 +88,19 @@ public class UserCreationServiceTests : AuthTestBase
         Assert.NotNull(saved.PasswordHash);
         Assert.NotEqual("Password123", saved.PasswordHash);
         Assert.Contains(db.AuditLogs, a => a.Action == "CreateUser" && a.EntityId == saved.Id);
+    }
+
+    [Fact]
+    public async Task CreateUserAsync_NameDifferingOnlyInCase_IsAConflict()
+    {
+        using var db = CreateDbContext();
+        await SeedUserAsync(db, name: "Alice");
+        var service = CreateService(db);
+
+        var result = await service.CreateUserAsync(new CreateUserDto { Name = "alice", Password = "Password123" });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Name already exists", result.Error);
+        Assert.Equal(FailureKind.Conflict, result.Failure);
     }
 }

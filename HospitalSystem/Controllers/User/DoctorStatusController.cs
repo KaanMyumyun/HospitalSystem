@@ -17,16 +17,6 @@ public class DoctorStatusController : ControllerBase
  
     [Authorize(Roles = "Admin")]
     [HttpPost("change-doctor-status")]
-    public async Task<IActionResult> ChangeDoctorStatus([FromBody] ChangeDoctorStatusDto dto)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
- 
-        var result = await _doctorStatusService.ChangeDoctorsStatusAsync(dto);
- 
-        if (!result.IsSuccess)
-            return BadRequest(result);
- 
-        return Ok(result);
-    }
+    public async Task<ActionResult<ChangeDoctorsStatusResult>> ChangeDoctorStatus([FromBody] ChangeDoctorStatusDto dto)
+        => this.ToActionResult(await _doctorStatusService.ChangeDoctorsStatusAsync(dto));
 }

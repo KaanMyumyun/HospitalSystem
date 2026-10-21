@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.User;
+using HospitalSystem.Services.Appointments;
 using HospitalSystem.Services.Auth;
  
 namespace HospitalSystem.Services.User;
@@ -23,7 +24,7 @@ public class DoctorStatusService : IDoctorStatusService
     public async Task<ChangeDoctorsStatusResult> ChangeDoctorsStatusAsync(ChangeDoctorStatusDto dto)
     {
         if (!_currentUser.IsInRole(UserRole.Admin))
-            return ChangeDoctorsStatusResult.Fail("You are not allowed to change doctor status");
+            return ChangeDoctorsStatusResult.Forbidden("You are not allowed to change doctor status");
 
         if (dto.DoctorId is not int doctorId || dto.IsActive is not bool isActive)
             return ChangeDoctorsStatusResult.Fail("Doctor id and status are required");
@@ -33,13 +34,22 @@ public class DoctorStatusService : IDoctorStatusService
             .FirstOrDefaultAsync(d => d.Id == doctorId);
  
         if (doctor == null)
-            return ChangeDoctorsStatusResult.Fail("Doctor doesnt exist");
+            return ChangeDoctorsStatusResult.NotFound("Doctor doesnt exist");
  
         if (doctor.IsActive == isActive)
             return ChangeDoctorsStatusResult.Fail("Doctor already has this status");
 
         if (isActive && doctor.User.Role != UserRole.Doctor)
             return ChangeDoctorsStatusResult.Fail("Only users with the Doctor role can be activated");
+
+        if (!isActive)
+        {
+            var stranded = await AffectedBookings.LoadFutureAsync(_context, a => a.DoctorId == doctor.Id);
+            var refusal = await AffectedBookings.ResolveAsync<ChangeDoctorsStatusResult>(
+                stranded, dto, _auditLog, $"doctor {doctor.User.Name} deactivated");
+            if (refusal is not null)
+                return refusal;
+        }
  
         doctor.IsActive = isActive;
         if (!isActive)

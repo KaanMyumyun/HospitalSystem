@@ -1,6 +1,6 @@
 namespace HospitalSystem.Interfaces;
 public interface ICurrentUserService
 {
-    string UserId { get; }
+    string? UserId { get; }
     bool IsInRole(UserRole role);
 }

@@ -11,7 +11,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "generate:api": "node scripts/generate-api-types.mjs openapi.json src/api-schema.ts"
   },
   "dependencies": {
     "lucide-react": "^1.55.0",

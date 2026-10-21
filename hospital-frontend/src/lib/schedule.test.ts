@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AppointmentDto, ScheduleDto } from '../api'
-import { buildWeekSlots, canCancelAppointment, isInWeek, weekDays, weekRange } from './schedule'
+import { buildWeekSlots, canCancelAppointment, canMarkAppointment, dayStart, isInWeek, shownDays, weekDays, weekRange } from './schedule'
 
 const oneHourSchedule: ScheduleDto = {
   scheduleId: 1,
@@ -8,6 +8,7 @@ const oneHourSchedule: ScheduleDto = {
   startTime: '2026-01-01T09:00:00Z',
   endTime: '2026-01-01T10:00:00Z',
   slotDurationMin: 60,
+  workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
 }
 
 function appointmentAt(time: Date, overrides: Partial<AppointmentDto> = {}): AppointmentDto {
@@ -66,6 +67,7 @@ describe('buildWeekSlots', () => {
       startTime: '2026-01-01T09:00:00Z',
       endTime: '2026-01-01T11:00:00Z',
       slotDurationMin: 60,
+      workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
     }
 
     const appointmentTime = new Date(targetDay)
@@ -170,6 +172,7 @@ describe('buildWeekSlots', () => {
       startTime: '2020-01-01T09:00:00Z',
       endTime: '2020-01-01T11:00:00Z',
       slotDurationMin: 60,
+      workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
     }
 
     const grid = buildWeekSlots(schedule, 42, [], farPastWeekOffset)
@@ -197,29 +200,84 @@ describe('canCancelAppointment', () => {
 })
 
 describe('isInWeek', () => {
-  it('includes the whole Friday and excludes the following Saturday', () => {
-    const days = weekDays(0)
-    const friday = new Date(days[4]!)
-    friday.setHours(23, 59, 0, 0)
-    const saturday = new Date(days[4]!)
-    saturday.setDate(saturday.getDate() + 1)
+  it('includes the whole Sunday and excludes the following Monday', () => {
+    const days = weekDays(0, ['Monday', 'Sunday'])
+    const sunday = new Date(days[1]!)
+    sunday.setHours(23, 59, 0, 0)
+    const nextMonday = new Date(days[1]!)
+    nextMonday.setDate(nextMonday.getDate() + 1)
 
     expect(isInWeek(days[0]!, 0)).toBe(true)
-    expect(isInWeek(friday, 0)).toBe(true)
-    expect(isInWeek(saturday, 0)).toBe(false)
+    expect(isInWeek(sunday, 0)).toBe(true)
+    expect(isInWeek(nextMonday, 0)).toBe(false)
   })
 })
 
 describe('weekRange', () => {
-  it('runs from Monday 00:00 to Saturday 00:00 of the week shown', () => {
-    const days = weekDays(3)
+  it('runs from Monday 00:00 to the next Monday 00:00, so weekend bookings load', () => {
+    const [monday] = weekDays(3, ['Monday'])
     const { from, to } = weekRange(3)
-    const saturday = new Date(days[4]!)
-    saturday.setDate(saturday.getDate() + 1)
 
-    expect(from.getTime()).toBe(days[0]!.getTime())
+    expect(from.getTime()).toBe(monday!.getTime())
     expect(from.getDay()).toBe(1)
-    expect(to.getTime()).toBe(saturday.getTime())
+    expect(to.getDay()).toBe(1)
     expect(to.getHours()).toBe(0)
+    expect(Math.round((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000))).toBe(7)
+  })
+})
+
+describe('shownDays', () => {
+  const weekendSchedule: ScheduleDto = { ...oneHourSchedule, workingDays: ['Saturday', 'Monday'] }
+
+  it('shows the working days, Monday first', () => {
+    expect(shownDays(weekendSchedule, [], 0)).toEqual(['Monday', 'Saturday'])
+  })
+
+  it('shows Monday to Friday for a doctor without a schedule', () => {
+    expect(shownDays(undefined, [], 0)).toEqual(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])
+  })
+
+  it('also shows another day of the week when it holds a booking', () => {
+    const [wednesday] = weekDays(520, ['Wednesday'])
+    wednesday!.setHours(9, 0, 0, 0)
+
+    expect(shownDays(weekendSchedule, [appointmentAt(wednesday!)], 520)).toEqual(['Monday', 'Wednesday', 'Saturday'])
+  })
+
+  it('marks the slots of a day the doctor does not work as off', () => {
+    const [wednesday] = weekDays(520, ['Wednesday'])
+    wednesday!.setHours(10, 0, 0, 0)
+
+    const grid = buildWeekSlots({ ...weekendSchedule, endTime: '2026-01-01T11:00:00Z' }, 42, [appointmentAt(wednesday!)], 520)
+    const wednesdaySlots = grid.map((row) => row.find((slot) => slot.day.getDay() === 3)!)
+
+    expect(wednesdaySlots.map((slot) => slot.status)).toEqual(['off', 'booked'])
+    expect(grid[0]!.map((slot) => slot.status)).toEqual(['available', 'off', 'available'])
+  })
+})
+
+describe('canMarkAppointment', () => {
+  const now = new Date('2026-06-01T12:00:00Z').getTime()
+  const started = new Date('2026-06-01T11:30:00Z')
+  const upcoming = new Date('2026-06-01T12:30:00Z')
+
+  it('allows an appointment that has started, and correcting a mark', () => {
+    expect(canMarkAppointment(appointmentAt(started), now)).toBe(true)
+    expect(canMarkAppointment(appointmentAt(started, { status: 'NoShow' }), now)).toBe(true)
+  })
+
+  it('refuses one that has not started or was cancelled', () => {
+    expect(canMarkAppointment(appointmentAt(upcoming), now)).toBe(false)
+    expect(canMarkAppointment(appointmentAt(started, { status: 'Cancelled' }), now)).toBe(false)
+  })
+})
+
+describe('dayStart', () => {
+  it('is local midnight, dayOffset days away', () => {
+    const today = dayStart(0)
+    const tomorrow = dayStart(1)
+
+    expect(today.getHours()).toBe(0)
+    expect(tomorrow.getDate()).toBe(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).getDate())
   })
 })

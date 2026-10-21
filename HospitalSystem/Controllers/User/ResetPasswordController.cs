@@ -17,16 +17,6 @@ public class ResetPasswordController : ControllerBase
  
     [Authorize(Roles = "Admin")]
     [HttpPost("reset-password")]
-    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
- 
-        var result = await _resetPasswordService.ResetPasswordAsync(dto);
- 
-        if (!result.IsSuccess)
-            return BadRequest(result);
- 
-        return Ok(result);
-    }
+    public async Task<ActionResult<ResetPasswordResultDto>> ResetPassword([FromBody] ResetPasswordDto dto)
+        => this.ToActionResult(await _resetPasswordService.ResetPasswordAsync(dto));
 }

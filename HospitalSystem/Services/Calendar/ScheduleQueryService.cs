@@ -23,7 +23,7 @@ public class ScheduleQueryService : IScheduleQueryService
             !_currentUser.IsInRole(UserRole.DemoFrontDesk))
         {
             return ServiceResult<List<ViewSchedule>>
-                .Fail("Not allowed to list deparments");
+                .Forbidden("Not allowed to list schedules");
         }
 
         var schedule = await _context.Calendars
@@ -34,7 +34,8 @@ public class ScheduleQueryService : IScheduleQueryService
                 DoctorId = u.DoctorId,
                 StartTime = u.StartTime,
                 EndTime = u.EndTime,
-                SlotDurationMin = u.SlotDurationMin
+                SlotDurationMin = u.SlotDurationMin,
+                WorkingDays = u.WorkingDays
             })
             .ToListAsync();
 

@@ -46,6 +46,7 @@ public class DepartmentCreationServiceTests : DepartmentTestBase
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Department already exists", result.Error);
+        Assert.Equal(FailureKind.Conflict, result.Failure);
     }
 
     [Fact]

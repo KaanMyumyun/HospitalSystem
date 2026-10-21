@@ -19,7 +19,7 @@ public class UserQueryService : IUserQueryService
     {
         if (!_currentUser.IsInRole(UserRole.Admin))
         {
-            return ServiceResult<PagedResult<UserDisplayDto>>.Fail("Not allowed to list users");
+            return ServiceResult<PagedResult<UserDisplayDto>>.Forbidden("Not allowed to list users");
         }
 
         if (query.Page < 1 || query.Page > UserQueryDto.MaxPage)
@@ -80,7 +80,7 @@ public class UserQueryService : IUserQueryService
             !_currentUser.IsInRole(UserRole.DemoAdmin) &&
             !_currentUser.IsInRole(UserRole.DemoFrontDesk))
         {
-            return ServiceResult<List<DoctorDisplayDto>>.Fail("You are not allowed to list doctors");
+            return ServiceResult<List<DoctorDisplayDto>>.Forbidden("You are not allowed to list doctors");
         }
  
         var doctors = await _context.Doctors
@@ -88,7 +88,7 @@ public class UserQueryService : IUserQueryService
             .Select(d => new DoctorDisplayDto
             {
                 DoctorId = d.Id,
-                DeparmentId = d.DepartmentId,
+                DepartmentId = d.DepartmentId,
                 Name = d.User.Name,
                 UserId = d.UserId,
                 IsActive = d.IsActive

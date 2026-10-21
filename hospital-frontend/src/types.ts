@@ -1,8 +1,9 @@
 import type { AppointmentDto, DepartmentDto, DoctorDto, ScheduleDto, UserRole } from './api'
 
-export type AdminSection = 'departments' | 'doctors' | 'schedules' | 'users'
-export type Screen = 'reception' | AdminSection
-export type SlotStatus = 'available' | 'booked' | 'cancelled' | 'past' | 'empty' | 'loading'
+export type AdminSection = 'departments' | 'doctors' | 'schedules' | 'users' | 'audit'
+export type Screen = 'reception' | 'patients' | 'doctor' | AdminSection
+// off: a day the doctor does not work, shown because it holds a booking.
+export type SlotStatus = 'available' | 'booked' | 'cancelled' | 'past' | 'empty' | 'loading' | 'off'
 export type Session = { token: string; role: UserRole }
 export type HospitalData = {
   departments: DepartmentDto[]

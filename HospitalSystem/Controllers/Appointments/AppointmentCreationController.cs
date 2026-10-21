@@ -19,22 +19,14 @@ public class AppointmentCreationController : ControllerBase
  
     [Authorize(Roles = "FrontDesk")]
     [HttpPost("CreateAppointment")]
-    public async Task<IActionResult> CreateAppointment([FromBody] CreateAppointmentDto dto)
+    public async Task<ActionResult<CreateAppointmentResultDto>> CreateAppointment([FromBody] CreateAppointmentDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
- 
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
             ?? User.FindFirst("UserId")?.Value;
  
         if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
             return Unauthorized(new { Message = "Invalid or missing User ID claim in token." });
  
-        var result = await _appointmentCreationService.CreateAppointmentAsync(dto, userId);
-
-        if (!result.IsSuccess)
-            return result.IsConflict ? Conflict(result) : BadRequest(result);
-
-        return Ok(result);
+        return this.ToActionResult(await _appointmentCreationService.CreateAppointmentAsync(dto, userId));
     }
 }

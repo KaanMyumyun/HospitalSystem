@@ -13,6 +13,7 @@ const nineToFive: ScheduleDto = {
   startTime: '2000-01-01T09:00:00Z',
   endTime: '2000-01-01T17:00:00Z',
   slotDurationMin: 60,
+  workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
 }
 
 function appointmentAtUtc(iso: string): AppointmentDto {

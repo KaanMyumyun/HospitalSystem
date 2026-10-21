@@ -13,12 +13,12 @@ public class AppointmentsEntity
     public DateTime CreatedAt { get; set; }
 
     public int CreatedByTheFrontDeskId { get; set; }
-    public UserEntity CreatedByTheFrontDesk { get; set; }
+    public UserEntity CreatedByTheFrontDesk { get; set; } = null!;
 
     public int PatientId { get; set; }
-    public PatientEntity Patient { get; set; }
+    public PatientEntity Patient { get; set; } = null!;
 
     public int DoctorId { get; set; }
-    public DoctorEntity Doctor { get; set; }
+    public DoctorEntity Doctor { get; set; } = null!;
 
 }

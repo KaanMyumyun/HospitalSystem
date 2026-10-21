@@ -23,6 +23,31 @@ tagged releases yet, so everything is listed under Unreleased.
   `docker compose` now waits on readiness.
 - CI audits the frontend's npm dependencies, and Dependabot now also proposes
   NuGet, npm and Docker base image updates.
+- Schedules have working days. Admins choose them in the Schedules tab, and
+  existing and new schedules default to Monday to Friday. Bookings on a
+  doctor's day off are refused, and the reception calendar shows only the
+  days the doctor works.
+- Appointments can be marked completed or no-show once they have started, by
+  the front desk or by the appointment's doctor
+  (`POST /api/Appointments/ChangeAppointmentStatus`). The calendar shows the
+  outcome on each booking.
+- A Patients screen for the front desk: search patients by name or phone
+  number, see their visits, and correct their name, phone number or date of
+  birth (`GET /api/Patients/ListPatients`, `GET /api/Patients/{patientId}`,
+  `POST /api/Patients/UpdatePatient`). Demo Reception can search and view.
+- Doctors get a "My day" screen with their own appointments, one day at a
+  time, where they can mark each one (`GET /api/Appointments/MyAppointments`).
+  Before, the Doctor role had no screens.
+- An audit log screen for admins: who did what and when, newest first, with
+  search (`GET /api/AuditLogs/ListAuditLogs`).
+- Users can change their own password from the top bar
+  (`POST /api/Auth/change-password`). Their other sessions are signed out, and
+  the current one carries on with a new token. Demo accounts cannot.
+- `hospital-frontend/openapi.json` records the API's OpenAPI document, and the
+  frontend's request and response types are generated from it
+  (`npm run generate:api`) instead of written by hand. A backend test fails
+  when the API and `openapi.json` disagree, and CI fails when the generated
+  types are out of date.
 
 ### Changed
 
@@ -90,6 +115,24 @@ tagged releases yet, so everything is listed under Unreleased.
 - `docker compose` takes the JWT signing key from a gitignored `.env` file
   (template: `.env.example`) instead of relying on
   `appsettings.Development.json` being copied into the image.
+- Refusals use the status code that fits: 403 when the caller may not do it,
+  404 when the doctor, schedule, department, appointment, patient or user does
+  not exist, and 409 when a username, department or schedule already exists.
+  Before, all of them were 400. The response body is unchanged.
+- Usernames are case-insensitive: `Admin` and `admin` sign in to the same
+  account, and a new user cannot take a name that differs from an existing one
+  only in case. The `CaseInsensitiveUserNames` migration replaces the unique
+  index on `Users.Name` with one on `lower("Name")`. If existing usernames
+  differ only in case, it stops with PostgreSQL error `P0001` and changes
+  nothing; the README shows how to find them.
+- Schedules take `workingDays`, and `POST /api/schedule/change-schedule`
+  requires `timeZone`, the IANA time zone of whoever makes the change. The
+  frontend sends the browser's. The backend image includes `tzdata`, so the
+  API can look time zones up.
+- `GET /api/Users/ListDoctors` returns `departmentId` instead of the misspelt
+  `deparmentId`.
+- The backend build treats warnings as errors, and its 42 nullable-reference
+  warnings are fixed. NuGet vulnerability advisories stay warnings.
 
 ### Fixed
 
@@ -139,10 +182,21 @@ tagged releases yet, so everything is listed under Unreleased.
 - The first sign-in after the demo API has been idle no longer times out. The
   sign-in page wakes the API as soon as it opens, sign-in waits up to 90
   seconds, and after 3 seconds the page says the server is starting.
-- Unknown paths get a real 404: on Cloudflare Pages, `/robots.txt` and other
-  missing files no longer return the app shell with a 200, and the API
-  answers paths such as `/favicon.ico` with 404 instead of 401. nginx's
-  `/health` sends a single `Content-Type`.
+- Unknown paths get a real 404: on Cloudflare Pages, missing pages and files
+  no longer return the app shell with a 200 (`/robots.txt` gets Cloudflare's
+  own file, which has no rules), and the API answers paths such as
+  `/favicon.ico` with 404 instead of 401. nginx's `/health` sends a single
+  `Content-Type`.
+- Changing a schedule, deactivating a doctor or a department, or taking the
+  Doctor role away no longer leaves future bookings at times the doctor no
+  longer works. The change is refused with `409` and a list of those bookings,
+  with patients shown by initials. Sent again with a reason, it cancels them
+  in the same save and records each cancellation in the audit log; the admin
+  screens ask for the reason.
+- Swagger works again in development. A Dependabot update had moved
+  `Microsoft.OpenApi` to 3.x, which Swashbuckle cannot use, so
+  `/swagger/v1/swagger.json` failed with a 500. It is back on 2.x, and
+  Dependabot no longer proposes major updates for it.
 
 ### Security
 
@@ -171,3 +225,13 @@ tagged releases yet, so everything is listed under Unreleased.
   `Referrer-Policy` and `Permissions-Policy` on every response, from nginx and
   from Cloudflare Pages (`public/_headers`), which also lets browsers keep the
   content-hashed files under `/assets/` for a year.
+- The frontend has a Content-Security-Policy: the page loads scripts, styles
+  and images only from its own origin, and sends requests only to itself and
+  the API it was built for. The build adds it as a `<meta>` tag, so Cloudflare
+  Pages and nginx serve the same policy.
+- The API stops at startup if `JwtSettings:SecretKey` is shorter than 32
+  bytes, instead of starting and then failing every sign-in.
+- Failed sign-ins and failed password changes are recorded in the audit log,
+  naming the account when the username exists. An unknown username is not
+  recorded, so a password typed into the username field does not end up in
+  the log.

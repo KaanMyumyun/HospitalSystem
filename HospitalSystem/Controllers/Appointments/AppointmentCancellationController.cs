@@ -18,16 +18,6 @@ public class AppointmentCancellationController : ControllerBase
  
     [Authorize(Roles = "FrontDesk")]
     [HttpPost("CancelAppointment")]
-    public async Task<IActionResult> CancelAppointment([FromBody] CancelAppointmentDto dto)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
- 
-        var result = await _appointmentCancellationService.CancelAppointmentAsync(dto);
- 
-        if (!result.IsSuccess)
-            return BadRequest(result);
- 
-        return Ok(result);
-    }
+    public async Task<ActionResult<CancelAppointmentResultDto>> CancelAppointment([FromBody] CancelAppointmentDto dto)
+        => this.ToActionResult(await _appointmentCancellationService.CancelAppointmentAsync(dto));
 }

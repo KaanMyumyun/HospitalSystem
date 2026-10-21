@@ -20,11 +20,11 @@ public class DepartmentCreationService : IDepartmentCreationService
     public async Task<DepartmentActionResultDto> CreateDepartmentAsync(CreateDepartmentDto dto)
     {
         if (!_currentUser.IsInRole(UserRole.Admin))
-            return DepartmentActionResultDto.Fail("You are not allowed to create a department");
+            return DepartmentActionResultDto.Forbidden("You are not allowed to create a department");
 
         var exists = await _context.Departments.AnyAsync(d => d.Department == dto.Name);
         if (exists)
-            return DepartmentActionResultDto.Fail("Department already exists");
+            return DepartmentActionResultDto.Conflict("Department already exists");
 
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
