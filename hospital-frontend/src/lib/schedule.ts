@@ -1,9 +1,17 @@
-import type { AppointmentDto, DoctorDto, ScheduleDto } from '../api'
+import type { AppointmentDto, DayOfWeek, DoctorDto, ScheduleDto } from '../api'
 import type { Slot } from '../types'
 import { formatHourRange } from './format'
 import { clockLabel, scheduleWindow } from './time'
 
-const daysShown = 5
+// In Date.getDay() order, like the API's DayOfWeek: Sunday is 0.
+const dayNames: DayOfWeek[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const mondayFirst: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+// What the grid shows for a doctor without a schedule.
+const weekdays: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+
+export function dayName(date: Date): DayOfWeek {
+  return dayNames[date.getDay()] ?? 'Sunday'
+}
 
 function weekStart(weekOffset: number) {
   const today = new Date()
@@ -15,22 +23,47 @@ function weekStart(weekOffset: number) {
   return monday
 }
 
-export function weekDays(weekOffset = 0) {
+// Midnight starting the day dayOffset days from today, local time.
+export function dayStart(dayOffset = 0) {
+  const day = new Date()
+  day.setHours(0, 0, 0, 0)
+  day.setDate(day.getDate() + dayOffset)
+  return day
+}
+
+// The dates of the days shown in the week, Monday first.
+export function weekDays(weekOffset = 0, shown: readonly DayOfWeek[] = weekdays) {
   const monday = weekStart(weekOffset)
 
-  return Array.from({ length: daysShown }, (_, index) => {
+  return Array.from({ length: 7 }, (_, index) => {
     const date = new Date(monday)
     date.setDate(monday.getDate() + index)
     return date
-  })
+  }).filter((date) => shown.includes(dayName(date)))
 }
 
-// Monday 00:00 up to Saturday 00:00, local time: the days the grid shows.
+// Monday 00:00 up to the next Monday 00:00, local time: the whole week, so
+// the bookings of any day the doctor works are loaded.
 export function weekRange(weekOffset = 0) {
   const from = weekStart(weekOffset)
   const to = new Date(from)
-  to.setDate(from.getDate() + daysShown)
+  to.setDate(from.getDate() + 7)
   return { from, to }
+}
+
+// The doctor's working days, and any other day of the week that holds a
+// booking, such as one made before the day was dropped from the schedule.
+export function shownDays(
+  schedule: ScheduleDto | undefined,
+  appointments: AppointmentDto[] | null,
+  weekOffset = 0,
+): DayOfWeek[] {
+  const days = new Set<DayOfWeek>(schedule?.workingDays ?? weekdays)
+  for (const appointment of appointments ?? []) {
+    const time = new Date(appointment.appointmentTime)
+    if (appointment.status !== 'Cancelled' && isInWeek(time, weekOffset)) days.add(dayName(time))
+  }
+  return mondayFirst.filter((day) => days.has(day))
 }
 
 export function dateAtTime(day: Date, time: string) {
@@ -48,7 +81,7 @@ export function buildWeekSlots(
   appointments: AppointmentDto[] | null,
   weekOffset = 0,
 ): Slot[][] {
-  const days = weekDays(weekOffset)
+  const days = weekDays(weekOffset, shownDays(schedule, appointments, weekOffset))
 
   if (!schedule || !doctorId) {
     return Array.from({ length: 5 }, (_, rowIndex) =>
@@ -88,6 +121,7 @@ export function buildWeekSlots(
         const cancelled = matching[0]
         return cancelled ? { day, time, status: 'cancelled', appointment: cancelled } : { day, time, status: 'past' }
       }
+      if (!schedule.workingDays.includes(dayName(day))) return { day, time, status: 'off' }
       return { day, time, status: 'available' }
     }),
   )
@@ -107,6 +141,12 @@ export function coverageForDepartment(schedules: ScheduleDto[], doctors: DoctorD
 
 export function canCancelAppointment(appointment: AppointmentDto, now = Date.now()) {
   return appointment.status === 'Scheduled' && new Date(appointment.appointmentTime).getTime() > now
+}
+
+// Once it has started, an appointment that was not cancelled can be marked
+// completed or no-show, and a mark can be corrected.
+export function canMarkAppointment(appointment: AppointmentDto, now = Date.now()) {
+  return appointment.status !== 'Cancelled' && new Date(appointment.appointmentTime).getTime() <= now
 }
 
 export function isInWeek(value: Date, weekOffset = 0) {

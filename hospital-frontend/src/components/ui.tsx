@@ -35,6 +35,7 @@ export function PageHint({ section }: { section: AdminSection }) {
     doctors: 'Assign doctors to departments and control active status.',
     schedules: 'Create and edit working hours and slot duration.',
     users: 'Create staff accounts, change roles, and reset passwords.',
+    audit: 'Who changed what, newest first. Search finds actions and details.',
   }
 
   return <p className="page-hint">{copy[section]}</p>

@@ -30,9 +30,10 @@ public class ApplicationDbContext : DbContext
             builder.Property(s => s.Role).IsRequired().HasConversion<string>();
             builder.Property(s => s.Name).IsRequired().HasMaxLength(50);
             builder.Property(s => s.SecurityStamp).IsRequired().HasMaxLength(64);
-            builder.HasIndex(s => s.Name).IsUnique();
-
-
+            // Usernames are unique ignoring case, through the unique index
+            // IX_Users_LowerName on lower("Name") that migration
+            // CaseInsensitiveUserNames creates in SQL: EF cannot describe an
+            // index on an expression.
         });
 
         modelBuilder.Entity<PatientEntity>(builder =>

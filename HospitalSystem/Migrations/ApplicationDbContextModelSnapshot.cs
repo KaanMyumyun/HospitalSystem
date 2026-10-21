@@ -132,6 +132,10 @@ namespace HospitalSystem.Migrations
                     b.Property<DateTime>("StartTime")
                         .HasColumnType("timestamp with time zone");
 
+                    b.PrimitiveCollection<int[]>("WorkingDays")
+                        .IsRequired()
+                        .HasColumnType("integer[]");
+
                     b.HasKey("Id");
 
                     b.HasIndex("DoctorId");
@@ -246,9 +250,6 @@ namespace HospitalSystem.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
-
                     b.ToTable("Users");
                 });
 
@@ -330,8 +331,7 @@ namespace HospitalSystem.Migrations
                 {
                     b.Navigation("CreatedAppointments");
 
-                    b.Navigation("Doctor")
-                        .IsRequired();
+                    b.Navigation("Doctor");
                 });
 #pragma warning restore 612, 618
         }

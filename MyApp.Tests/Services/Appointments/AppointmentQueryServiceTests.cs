@@ -27,6 +27,7 @@ public class AppointmentQueryServiceTests : AppointmentTestBase
         var result = await service.GetAppointmentsAsync(SeedDayFor(1));
 
         Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
         Assert.Equal(3, result.Data.Count);
 
         Assert.Contains(result.Data, a =>
@@ -65,6 +66,7 @@ public class AppointmentQueryServiceTests : AppointmentTestBase
 
         Assert.True(result.IsSuccess);
         // From is inclusive and To exclusive; same-time rows come in id order.
+        Assert.NotNull(result.Data);
         Assert.Equal(new[] { 7, 1, 2, 3 }, result.Data.Select(a => a.AppointmentId));
     }
 
@@ -91,7 +93,9 @@ public class AppointmentQueryServiceTests : AppointmentTestBase
             To = new DateTimeOffset(2026, 1, 1, 11, 0, 0, utcPlus3)
         });
 
+        Assert.NotNull(around.Data);
         Assert.Equal(3, around.Data.Count);
+        Assert.NotNull(wallClockOnly.Data);
         Assert.Empty(wallClockOnly.Data);
     }
 
@@ -147,6 +151,7 @@ public class AppointmentQueryServiceTests : AppointmentTestBase
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Not allowed to list appointments", result.Error);
+        Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
 
     [Fact]

@@ -23,7 +23,7 @@ public class CreateDoctorService : ICreateDoctorService
     public async Task<CreateDoctorResultDto> CreateDoctorAsync(CreateDoctorDto dto)
     {
         if (!_currentUser.IsInRole(UserRole.Admin))
-            return CreateDoctorResultDto.Fail("You are not allowed to create a doctor");
+            return CreateDoctorResultDto.Forbidden("You are not allowed to create a doctor");
  
         // The user's doctor row, if any, and the department come with the user:
         // one query instead of three.
@@ -40,14 +40,14 @@ public class CreateDoctorService : ICreateDoctorService
             })
             .FirstOrDefaultAsync();
         if (found == null)
-            return CreateDoctorResultDto.Fail("User not found");
+            return CreateDoctorResultDto.NotFound("User not found");
 
         var user = found.User;
         if (user.Role is not (UserRole.Pending or UserRole.Doctor))
             return CreateDoctorResultDto.Fail("Only pending users or doctors can be made a doctor");
 
         if (found.DepartmentIsActive is not bool departmentIsActive)
-            return CreateDoctorResultDto.Fail("Department not found");
+            return CreateDoctorResultDto.NotFound("Department not found");
 
         if (!departmentIsActive)
             return CreateDoctorResultDto.Fail("Department is not active");

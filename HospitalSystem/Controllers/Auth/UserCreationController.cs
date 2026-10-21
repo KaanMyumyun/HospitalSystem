@@ -17,16 +17,6 @@ public class UserCreationController : ControllerBase
  
     [Authorize(Roles = "Admin")]
     [HttpPost("CreateUser")]
-    public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
- 
-        var result = await _userCreationService.CreateUserAsync(dto);
- 
-        if (!result.IsSuccess)
-            return BadRequest(result);
- 
-        return Ok(result);
-    }
+    public async Task<ActionResult<CreateUserResultDto>> CreateUser([FromBody] CreateUserDto dto)
+        => this.ToActionResult(await _userCreationService.CreateUserAsync(dto));
 }

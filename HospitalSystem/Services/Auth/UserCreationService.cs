@@ -25,7 +25,7 @@ public class UserCreationService : IUserCreationService
     public async Task<CreateUserResultDto> CreateUserAsync(CreateUserDto dto)
     {
         if (!_currentUser.IsInRole(UserRole.Admin))
-            return CreateUserResultDto.Fail("You are not allowed to create a user");
+            return CreateUserResultDto.Forbidden("You are not allowed to create a user");
  
         if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Password))
             return CreateUserResultDto.Fail("Name and password are required");
@@ -37,9 +37,11 @@ public class UserCreationService : IUserCreationService
         if (dto.Password.Length < 8)
             return CreateUserResultDto.Fail("Password must be at least 8 characters long");
  
-        var exists = await _context.Users.AnyAsync(u => u.Name == name);
+        // Usernames ignore case, so "Admin" and "admin" cannot both exist.
+        var nameKey = name.ToLowerInvariant();
+        var exists = await _context.Users.AnyAsync(u => u.Name.ToLower() == nameKey);
         if (exists)
-            return CreateUserResultDto.Fail("Name already exists");
+            return CreateUserResultDto.Conflict("Name already exists");
  
         var user = new UserEntity
         {

@@ -17,16 +17,6 @@ public class DepartmentCreationController : ControllerBase
  
     [Authorize(Roles = "Admin")]
     [HttpPost("CreateDepartment")]
-    public async Task<IActionResult> CreateDepartment([FromBody] CreateDepartmentDto dto)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
- 
-        var result = await _departmentCreationService.CreateDepartmentAsync(dto);
- 
-        if (!result.IsSuccess)
-            return BadRequest(result);
- 
-        return Ok(result);
-    }
+    public async Task<ActionResult<DepartmentActionResultDto>> CreateDepartment([FromBody] CreateDepartmentDto dto)
+        => this.ToActionResult(await _departmentCreationService.CreateDepartmentAsync(dto));
 }

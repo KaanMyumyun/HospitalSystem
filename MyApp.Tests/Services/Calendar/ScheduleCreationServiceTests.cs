@@ -43,6 +43,7 @@ public class ScheduleCreationServiceTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal("You are not allowed to create a schedule", result.Error);
+        Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
 
     [Fact]
@@ -73,6 +74,7 @@ public class ScheduleCreationServiceTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor already has a schedule. Edit the existing schedule instead", result.Error);
+        Assert.Equal(FailureKind.Conflict, result.Failure);
     }
 
     [Fact]
@@ -146,6 +148,7 @@ public class ScheduleCreationServiceTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor not found", result.Error);
+        Assert.Equal(FailureKind.NotFound, result.Failure);
         Assert.Empty(db.Calendars);
     }
 }

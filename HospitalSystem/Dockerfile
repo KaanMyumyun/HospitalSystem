@@ -17,7 +17,10 @@ RUN dotnet publish -c Release --os linux-musl -a $TARGETARCH --self-contained fa
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
 WORKDIR /app
 
+# tzdata: a schedule change checks future bookings in the admin's time zone,
+# an IANA name such as Europe/Sofia, and the base image has no zoneinfo files.
 RUN apk upgrade --no-cache \
+    && apk add --no-cache tzdata \
     && addgroup -S appgroup \
     && adduser -S -G appgroup -h /home/appuser appuser
 

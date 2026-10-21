@@ -1,4 +1,4 @@
-import { LogOut, RefreshCw, Search } from 'lucide-react'
+import { KeyRound, LogOut, RefreshCw, Search } from 'lucide-react'
 import type { UserRole } from '../api'
 
 export function TopBar({
@@ -6,6 +6,7 @@ export function TopBar({
   role,
   searchQuery,
   userRole,
+  onChangePassword,
   onLogout,
   onRefresh,
   onSearchChange,
@@ -14,6 +15,8 @@ export function TopBar({
   role: string
   searchQuery: string
   userRole: UserRole
+  // Not given for demo accounts, which have no password.
+  onChangePassword?: () => void
   onLogout: () => void
   onRefresh: () => void
   onSearchChange: (value: string) => void
@@ -42,6 +45,12 @@ export function TopBar({
           <span className="avatar">{userRole.slice(0, 2).toUpperCase()}</span>
           <span>{userRole}</span>
         </span>
+        {onChangePassword && (
+          <button className="icon-text-button" type="button" onClick={onChangePassword}>
+            <KeyRound size={16} />
+            Password
+          </button>
+        )}
         <button className="icon-text-button" type="button" onClick={onLogout}>
           <LogOut size={16} />
           Sign out

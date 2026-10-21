@@ -1,83 +1,40 @@
+import type * as Api from './api-schema'
 import { parseBody, tooManyRequestsMessage, unreadableResponseMessage } from './lib/http'
 import { toLocalIsoString } from './lib/time'
 
-export type UserRole = 'Pending' | 'Admin' | 'Doctor' | 'FrontDesk' | 'DemoAdmin' | 'DemoFrontDesk'
+// Requests and responses are typed by src/api-schema.ts, which is generated
+// from the API's OpenAPI document (npm run generate:api).
+export type UserRole = Api.UserRole
+export type LoginResult = Api.LoginResultDto
+export type DepartmentDto = Api.ViewDepartmentDto
+export type DoctorDto = Api.DoctorDisplayDto
+export type UserDto = Api.UserDisplayDto
+export type UsersPage = Api.UserDisplayDtoPagedResult
+export type ScheduleDto = Api.ViewSchedule
+export type AppointmentStatus = Api.AppointmentStatus
+export type AppointmentDto = Api.ViewAppointmentDto
+// patientId or createNewPatient is set when booking again after the API
+// listed possible matches.
+export type CreateAppointmentInput = Api.CreateAppointmentDto
+export type PatientMatchDto = Api.PatientMatchDto
+export type CancelAppointmentInput = Api.CancelAppointmentDto
+export type CreateScheduleInput = Api.CreateSchedule
+// The time zone is added by changeSchedule.
+export type ChangeScheduleInput = Omit<Api.ChangeScheduleDto, 'timeZone'>
+export type DayOfWeek = Api.DayOfWeek
+export type AffectedAppointmentDto = Api.AffectedAppointmentDto
+export type PatientSummaryDto = Api.PatientSummaryDto
+export type PatientsPage = Api.PatientSummaryDtoPagedResult
+export type PatientDetailsDto = Api.PatientDetailsDto
+export type UpdatePatientInput = Api.UpdatePatientDto
+export type AuditLogEntryDto = Api.AuditLogEntryDto
+export type AuditLogPage = Api.AuditLogEntryDtoPagedResult
 
-export type LoginResult = {
-  isSuccess: boolean
-  token?: string
-  role?: UserRole
-  error?: string
-}
-
-export type DepartmentDto = {
-  id: number
-  name: string
-  isActive: boolean
-}
-
-export type DoctorDto = {
-  doctorId: number
-  departmentId: number
-  userId: number
-  name: string
-  isActive: boolean
-}
-
-export type UserDto = {
-  userId: number
-  userName: string
-  role: UserRole
-}
-
-export type UsersPage = {
-  items: UserDto[]
-  totalCount: number
-  page: number
-  pageSize: number
-}
+// Sent with a change the API refused because it strands future bookings.
+export type CancelAffected = { cancelAffectedAppointments: true; cancellationReason: string }
 
 export const usersPageSize = 50
-
-export type ScheduleDto = {
-  scheduleId: number
-  doctorId: number
-  startTime: string
-  endTime: string
-  slotDurationMin: number
-}
-
-export type AppointmentStatus = 'Scheduled' | 'Completed' | 'Cancelled' | 'NoShow'
-
-export type AppointmentDto = {
-  appointmentId: number
-  doctorId: number
-  doctorName: string
-  patientId: number
-  patientName: string
-  patientPhoneNumber: string
-  appointmentTime: string
-  status: AppointmentStatus
-}
-
-export type CreateAppointmentInput = {
-  DoctorId: number
-  PatientName: string
-  PhoneNumber: string
-  DateOfBirth: string
-  AppointmentTime: string
-  // Set when booking again after the API listed possible matches.
-  PatientId?: number
-  CreateNewPatient?: boolean
-}
-
-// A patient on file who shares some of a booking's patient details.
-export type PatientMatchDto = {
-  patientId: number
-  name: string
-  dateOfBirth: string
-  phoneNumber: string
-}
+export const pageSize = 50
 
 // The booking's patient details partly match patients on file. The desk
 // books for one of them or registers a new patient.
@@ -91,30 +48,23 @@ export class PossiblePatientMatchError extends Error {
   }
 }
 
-export type CancelAppointmentInput = {
-  AppointmentId: number
-  Reason: string
+// A schedule, status or role change would strand future bookings. The admin
+// can send it again with a reason, which cancels them.
+export class AffectedBookingsError extends Error {
+  readonly count: number
+  readonly bookings: AffectedAppointmentDto[]
+
+  constructor(message: string, count: number, bookings: AffectedAppointmentDto[]) {
+    super(message)
+    this.name = 'AffectedBookingsError'
+    this.count = count
+    this.bookings = bookings
+  }
 }
 
-export type CreateScheduleInput = {
-  DoctorId: number
-  StartHour: number
-  EndHour: number
-  SlotDurationMin: number
-}
-
-export type ChangeScheduleInput = CreateScheduleInput & {
-  ScheduleId: number
-}
-
-type ServiceResult<T> = {
-  isSuccess?: boolean
-  IsSuccess?: boolean
-  data?: T
-  Data?: T
-  error?: string
-  Error?: string
-}
+// Every API response carries these; list responses add data.
+type Outcome = { isSuccess: boolean; error: string | null }
+type DataOutcome = Outcome & { data: unknown }
 
 const API_ORIGIN = resolveApiOrigin(import.meta.env.VITE_API_URL)
 
@@ -161,28 +111,18 @@ export function wakeApi() {
 }
 
 export async function login(name: string, password: string): Promise<LoginResult> {
-  try {
-    const result = await request<LoginResult>('/api/Auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ name, password }),
-      signal: AbortSignal.timeout(signInTimeoutMs),
-    })
-
-    if (result.isSuccess && result.token && result.role) {
-      storeSession(result.token, result.role)
-    }
-
-    return result
-  } catch (error) {
-    return { isSuccess: false, error: getErrorMessage(error) }
-  }
+  return signIn('/api/Auth/login', { name, password } satisfies Api.LoginDto)
 }
 
 export async function demoLogin(role: 'DemoAdmin' | 'DemoFrontDesk'): Promise<LoginResult> {
+  return signIn('/api/Auth/demo-login', { role } satisfies Api.DemoLoginDto)
+}
+
+async function signIn(path: string, body: Api.LoginDto | Api.DemoLoginDto): Promise<LoginResult> {
   try {
-    const result = await request<LoginResult>('/api/Auth/demo-login', {
+    const result = await request<LoginResult>(path, {
       method: 'POST',
-      body: JSON.stringify({ role }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(signInTimeoutMs),
     })
 
@@ -192,16 +132,16 @@ export async function demoLogin(role: 'DemoAdmin' | 'DemoFrontDesk'): Promise<Lo
 
     return result
   } catch (error) {
-    return { isSuccess: false, error: getErrorMessage(error) }
+    return { isSuccess: false, token: null, role: null, error: getErrorMessage(error) }
   }
 }
 
 // Users and appointments are loaded on their own, a page or a week at a time.
 export async function loadHospitalData() {
   const [departments, doctors, schedules] = await Promise.all([
-    getServiceResult<unknown[]>('/api/Department/ViewDepartment').then((items) => items.map(normalizeDepartment)),
-    getServiceResult<unknown[]>('/api/Users/ListDoctors').then((items) => items.map(normalizeDoctor)),
-    getServiceResult<unknown[]>('/api/schedule/list-schedule').then((items) => items.map(normalizeSchedule)),
+    getData<Api.ViewDepartmentDtoListServiceResult>('/api/Department/ViewDepartment'),
+    getData<Api.DoctorDisplayDtoListServiceResult>('/api/Users/ListDoctors'),
+    getData<Api.ViewScheduleListServiceResult>('/api/schedule/list-schedule'),
   ])
 
   return { departments, doctors, schedules }
@@ -214,8 +154,7 @@ export async function loadAppointments(doctorId: number, from: Date, to: Date) {
     from: toLocalIsoString(from),
     to: toLocalIsoString(to),
   })
-  const items = await getServiceResult<unknown[]>(`/api/Appointments/ListAppointments?${query}`)
-  return items.map(normalizeAppointment)
+  return getData<Api.ViewAppointmentDtoListServiceResult>(`/api/Appointments/ListAppointments?${query}`)
 }
 
 // search matches part of a username or role; the API caps it at 50 characters.
@@ -223,80 +162,146 @@ export async function loadUsers(search: string, page: number): Promise<UsersPage
   const query = new URLSearchParams({ page: String(page), pageSize: String(usersPageSize) })
   const term = search.trim().slice(0, 50)
   if (term) query.set('search', term)
-  return normalizeUsersPage(await getServiceResult<unknown>(`/api/Users/ListUsers?${query}`))
+  return getData<Api.UserDisplayDtoPagedResultServiceResult>(`/api/Users/ListUsers?${query}`)
 }
 
 export async function createAppointment(input: CreateAppointmentInput) {
-  return postAction('/api/Appointments/CreateAppointment', input)
+  return post<Api.CreateAppointmentResultDto>('/api/Appointments/CreateAppointment', input)
 }
 
 export async function cancelAppointment(input: CancelAppointmentInput) {
-  return postAction('/api/Appointments/CancelAppointment', input)
+  return post<Api.CancelAppointmentResultDto>('/api/Appointments/CancelAppointment', input)
 }
 
 export async function createDepartment(name: string) {
-  return postAction('/api/Department/CreateDepartment', { Name: name })
+  return post<Api.DepartmentActionResultDto>('/api/Department/CreateDepartment', { name } satisfies Api.CreateDepartmentDto)
 }
 
-export async function changeDepartmentStatus(departmentId: number, isActive: boolean) {
-  return postAction('/api/Department/ChangeDepartmentStatus', { DepartmentId: departmentId, IsActive: isActive })
+export async function changeDepartmentStatus(departmentId: number, isActive: boolean, cancel?: CancelAffected) {
+  return post<Api.DepartmentActionResultDto>(
+    '/api/Department/ChangeDepartmentStatus',
+    { departmentId, isActive, ...cancel } satisfies Api.ChangeDepartmentStatusDto,
+  )
 }
 
 export async function createUser(name: string, password: string) {
-  return postAction('/api/Auth/CreateUser', { name, password })
+  return post<Api.CreateUserResultDto>('/api/Auth/CreateUser', { name, password } satisfies Api.CreateUserDto)
 }
 
-export async function changeUserRole(userId: number, newRole: UserRole) {
-  return postAction('/api/Users/change-role', { UserId: userId, NewRole: newRole })
+export async function changeUserRole(userId: number, newRole: UserRole, cancel?: CancelAffected) {
+  return post<Api.ChangeRoleResultDto>(
+    '/api/Users/change-role',
+    { userId, newRole, ...cancel } satisfies Api.ChangeRoleDto,
+  )
 }
 
 export async function resetPassword(userId: number, newPassword: string) {
-  return postAction('/api/Users/reset-password', { UserId: userId, NewPassword: newPassword })
+  return post<Api.ResetPasswordResultDto>(
+    '/api/Users/reset-password',
+    { userId, newPassword } satisfies Api.ResetPasswordDto,
+  )
 }
 
-export async function changeDoctorStatus(doctor: DoctorDto, isActive: boolean) {
-  return postAction('/api/Users/change-doctor-status', {
-    DoctorId: doctor.doctorId,
-    IsActive: isActive,
-  })
+export async function changeDoctorStatus(doctor: DoctorDto, isActive: boolean, cancel?: CancelAffected) {
+  return post<Api.ChangeDoctorsStatusResult>(
+    '/api/Users/change-doctor-status',
+    { doctorId: doctor.doctorId, isActive, ...cancel } satisfies Api.ChangeDoctorStatusDto,
+  )
 }
 
 export async function changeDoctorDepartment(doctorId: number, departmentId: number) {
-  return postAction('/api/Department/ChangeDoctorDepartment', { DoctorId: doctorId, DepartmentId: departmentId })
+  return post<Api.DepartmentActionResultDto>(
+    '/api/Department/ChangeDoctorDepartment',
+    { doctorId, departmentId } satisfies Api.ChangeDoctorDepartmentDto,
+  )
 }
 
 export async function createSchedule(input: CreateScheduleInput) {
-  return postAction('/api/schedule/create-schedule', input)
+  return post<Api.CalendarActionResult>('/api/schedule/create-schedule', input)
 }
 
-export async function changeSchedule(input: ChangeScheduleInput) {
-  return postAction('/api/schedule/change-schedule', input)
+// The API checks future bookings against the new hours as wall-clock times
+// in this browser's time zone.
+export async function changeSchedule(input: ChangeScheduleInput, cancel?: CancelAffected) {
+  return post<Api.CalendarActionResult>(
+    '/api/schedule/change-schedule',
+    { ...input, ...cancel, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } satisfies Api.ChangeScheduleDto,
+  )
+}
+
+export async function changeAppointmentStatus(appointmentId: number, status: 'Completed' | 'NoShow') {
+  return post<Api.AppointmentStatusResultDto>(
+    '/api/Appointments/ChangeAppointmentStatus',
+    { appointmentId, status } satisfies Api.ChangeAppointmentStatusDto,
+  )
+}
+
+// The signed-in doctor's appointments that start at or after `from` and before `to`.
+export async function loadMyAppointments(from: Date, to: Date) {
+  const query = new URLSearchParams({ from: toLocalIsoString(from), to: toLocalIsoString(to) })
+  return getData<Api.ViewAppointmentDtoListServiceResult>(`/api/Appointments/MyAppointments?${query}`)
+}
+
+// search matches part of a name, or at least three digits of a phone number.
+export async function loadPatients(search: string, page: number): Promise<PatientsPage> {
+  return getData<Api.PatientSummaryDtoPagedResultServiceResult>(`/api/Patients/ListPatients?${pageQuery(search, page)}`)
+}
+
+export async function loadPatient(patientId: number) {
+  return getData<Api.PatientDetailsDtoServiceResult>(`/api/Patients/${patientId}`)
+}
+
+export async function updatePatient(input: UpdatePatientInput) {
+  return post<Api.PatientActionResultDto>('/api/Patients/UpdatePatient', input)
+}
+
+// search matches part of an action or of the details.
+export async function loadAuditLogs(search: string, page: number): Promise<AuditLogPage> {
+  return getData<Api.AuditLogEntryDtoPagedResultServiceResult>(`/api/AuditLogs/ListAuditLogs?${pageQuery(search, page)}`)
+}
+
+// Changing the password signs out every other session; this one carries on
+// with the token that comes back.
+export async function changeOwnPassword(currentPassword: string, newPassword: string) {
+  const result = await post<Api.ChangePasswordResultDto>(
+    '/api/Auth/change-password',
+    { currentPassword, newPassword } satisfies Api.ChangePasswordDto,
+  )
+  const role = getStoredSession()?.role
+  if (result.token && role) storeSession(result.token, role)
+  return result
+}
+
+// The API caps search terms at 50 characters.
+function pageQuery(search: string, page: number) {
+  const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  const term = search.trim().slice(0, 50)
+  if (term) query.set('search', term)
+  return query
 }
 
 export function canListUsers(role: UserRole) {
   return role === 'Admin'
 }
 
-async function getServiceResult<T>(path: string): Promise<T> {
-  const result = await request<ServiceResult<T>>(path)
-  const isSuccess = result.isSuccess ?? result.IsSuccess
-
-  if (isSuccess === false) {
-    throw new Error(result.error ?? result.Error ?? 'Request failed')
+// The data of a successful list request. Failures arrive as error statuses,
+// which request() turns into errors.
+async function getData<R extends DataOutcome>(path: string): Promise<NonNullable<R['data']>> {
+  const result = await request<R>(path)
+  if (!result.isSuccess || result.data == null) {
+    throw new Error(result.error ?? 'Request failed')
   }
-
-  return (result.data ?? result.Data ?? ([] as T)) as T
+  return result.data
 }
 
-async function postAction(path: string, body: unknown) {
-  const result = await request<ServiceResult<unknown>>(path, {
+async function post<R extends Outcome>(path: string, body: unknown): Promise<R> {
+  const result = await request<R>(path, {
     method: 'POST',
     body: JSON.stringify(body),
   })
-  const isSuccess = result.isSuccess ?? result.IsSuccess
 
-  if (isSuccess === false) {
-    throw new Error(result.error ?? result.Error ?? 'Operation failed')
+  if (!result.isSuccess) {
+    throw new Error(result.error ?? 'Operation failed')
   }
 
   return result
@@ -351,11 +356,19 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (response.status === 429) {
       throw new Error(tooManyRequestsMessage(response.headers.get('Retry-After')))
     }
-    const possibleMatches = payload?.possibleMatches ?? payload?.PossibleMatches
+    const possibleMatches: unknown = payload?.possibleMatches
     if (response.status === 409 && Array.isArray(possibleMatches) && possibleMatches.length > 0) {
       throw new PossiblePatientMatchError(
         message ?? 'These details partly match a patient on file.',
-        possibleMatches.map(normalizePatientMatch),
+        possibleMatches as PatientMatchDto[],
+      )
+    }
+    const affected: unknown = payload?.affectedAppointments
+    if (response.status === 409 && Array.isArray(affected) && affected.length > 0) {
+      throw new AffectedBookingsError(
+        message ?? 'This change affects future bookings.',
+        typeof payload?.affectedAppointmentCount === 'number' ? payload.affectedAppointmentCount : affected.length,
+        affected as AffectedAppointmentDto[],
       )
     }
     if (!isJson) {
@@ -381,94 +394,6 @@ function getModelStateMessage(errors: unknown) {
   }
 
   return null
-}
-
-function normalizeDepartment(value: unknown): DepartmentDto {
-  const item = value as Record<string, unknown>
-  return {
-    id: numberValue(item.id ?? item.Id),
-    name: stringValue(item.name ?? item.Name),
-    isActive: booleanValue(item.isActive ?? item.IsActive),
-  }
-}
-
-function normalizeDoctor(value: unknown): DoctorDto {
-  const item = value as Record<string, unknown>
-  return {
-    doctorId: numberValue(item.doctorId ?? item.DoctorId),
-    departmentId: numberValue(item.departmentId ?? item.DepartmentId ?? item.deparmentId ?? item.DeparmentId),
-    userId: numberValue(item.userId ?? item.UserId),
-    name: stringValue(item.name ?? item.Name),
-    isActive: booleanValue(item.isActive ?? item.IsActive),
-  }
-}
-
-function normalizeUser(value: unknown): UserDto {
-  const item = value as Record<string, unknown>
-  return {
-    userId: numberValue(item.userId ?? item.UserId),
-    userName: stringValue(item.userName ?? item.UserName ?? item.name ?? item.Name),
-    role: stringValue(item.role ?? item.Role) as UserRole,
-  }
-}
-
-function normalizeUsersPage(value: unknown): UsersPage {
-  const page = (value ?? {}) as Record<string, unknown>
-  const items = page.items ?? page.Items
-  return {
-    items: Array.isArray(items) ? items.map(normalizeUser) : [],
-    totalCount: numberValue(page.totalCount ?? page.TotalCount),
-    page: numberValue(page.page ?? page.Page, 1),
-    pageSize: numberValue(page.pageSize ?? page.PageSize, usersPageSize),
-  }
-}
-
-function normalizeSchedule(value: unknown): ScheduleDto {
-  const item = value as Record<string, unknown>
-  return {
-    scheduleId: numberValue(item.scheduleId ?? item.ScheduleId),
-    doctorId: numberValue(item.doctorId ?? item.DoctorId),
-    startTime: stringValue(item.startTime ?? item.StartTime),
-    endTime: stringValue(item.endTime ?? item.EndTime),
-    slotDurationMin: numberValue(item.slotDurationMin ?? item.SlotDurationMin, 30),
-  }
-}
-
-function normalizeAppointment(value: unknown): AppointmentDto {
-  const item = value as Record<string, unknown>
-  return {
-    appointmentId: numberValue(item.appointmentId ?? item.AppointmentId),
-    doctorId: numberValue(item.doctorId ?? item.DoctorId),
-    doctorName: stringValue(item.doctorName ?? item.DoctorName),
-    patientId: numberValue(item.patientId ?? item.PatientId),
-    patientName: stringValue(item.patientName ?? item.PatientName),
-    patientPhoneNumber: stringValue(item.patientPhoneNumber ?? item.PatientPhoneNumber),
-    appointmentTime: stringValue(item.appointmentTime ?? item.AppointmentTime ?? item.timeOfAppointment),
-    status: stringValue(item.status ?? item.Status, 'Scheduled') as AppointmentStatus,
-  }
-}
-
-function normalizePatientMatch(value: unknown): PatientMatchDto {
-  const item = value as Record<string, unknown>
-  return {
-    patientId: numberValue(item.patientId ?? item.PatientId),
-    name: stringValue(item.name ?? item.Name),
-    dateOfBirth: stringValue(item.dateOfBirth ?? item.DateOfBirth),
-    phoneNumber: stringValue(item.phoneNumber ?? item.PhoneNumber),
-  }
-}
-
-function numberValue(value: unknown, fallback = 0) {
-  const number = Number(value)
-  return Number.isFinite(number) ? number : fallback
-}
-
-function stringValue(value: unknown, fallback = '') {
-  return typeof value === 'string' && value.length > 0 ? value : fallback
-}
-
-function booleanValue(value: unknown) {
-  return value === true || value === 'true' || value === 'True'
 }
 
 function getErrorMessage(error: unknown) {

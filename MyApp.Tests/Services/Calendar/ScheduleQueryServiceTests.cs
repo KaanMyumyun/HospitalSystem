@@ -45,6 +45,7 @@ public class ScheduleQueryServiceTests
         var result = await service.ViewScheduleAsync();
 
         Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
         Assert.Equal(3, result.Data.Count);
         Assert.Contains(result.Data, c => c.ScheduleId == 1 && c.DoctorId == 1 && c.SlotDurationMin == 30);
         Assert.Contains(result.Data, c => c.ScheduleId == 2 && c.DoctorId == 2 && c.SlotDurationMin == 15);
@@ -59,6 +60,7 @@ public class ScheduleQueryServiceTests
         var result = await service.ViewScheduleAsync();
 
         Assert.False(result.IsSuccess);
-        Assert.Equal("Not allowed to list deparments", result.Error);
+        Assert.Equal("Not allowed to list schedules", result.Error);
+        Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
 }

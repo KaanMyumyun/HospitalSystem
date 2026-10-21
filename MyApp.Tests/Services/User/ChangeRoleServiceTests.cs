@@ -55,6 +55,7 @@ public class ChangeRoleServiceTests : UserTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("User not found", result.Error);
+        Assert.Equal(FailureKind.NotFound, result.Failure);
     }
  
     [Fact]

@@ -10,6 +10,7 @@ import type {
 import { EmptyState, Metric, PageHint, StatusBadge } from '../../components/ui'
 import { adminTitle, formatTime, initials } from '../../lib/format'
 import type { ActionOutcome, ActivityEntry, AdminSection, Screen } from '../../types'
+import { AuditLogTab } from './AuditLogTab'
 import { DepartmentsTab } from './DepartmentsTab'
 import { DoctorsTab } from './DoctorsTab'
 import { SchedulesTab } from './SchedulesTab'
@@ -28,6 +29,7 @@ export function AdminDashboard({
   activity,
   usersPage,
   usersLoading,
+  canReadAuditLog,
   onAssignDoctor,
   onChangeDepartmentStatus,
   onChangeDoctorStatus,
@@ -36,6 +38,7 @@ export function AdminDashboard({
   onCreateDepartment,
   onCreateSchedule,
   onCreateUser,
+  onError,
   onNavigate,
   onResetPassword,
   onSelectDepartment,
@@ -53,6 +56,8 @@ export function AdminDashboard({
   activity: ActivityEntry[]
   usersPage: UsersPage | null
   usersLoading: boolean
+  // Admins only: entries name users, which demo admins may not see.
+  canReadAuditLog: boolean
   onAssignDoctor: (doctorId: number, departmentId: number) => Promise<ActionOutcome>
   onChangeDepartmentStatus: (departmentId: number, isActive: boolean) => Promise<ActionOutcome>
   onChangeDoctorStatus: (doctor: DoctorDto, isActive: boolean) => Promise<ActionOutcome>
@@ -61,6 +66,7 @@ export function AdminDashboard({
   onCreateDepartment: (name: string) => Promise<ActionOutcome>
   onCreateSchedule: (input: CreateScheduleInput) => Promise<ActionOutcome>
   onCreateUser: (name: string, password: string) => Promise<ActionOutcome>
+  onError: (message: string) => void
   onNavigate: (screen: Screen) => void
   onResetPassword: (userId: number, password: string) => Promise<ActionOutcome>
   onSelectDepartment: (departmentId: number) => void
@@ -122,6 +128,10 @@ export function AdminDashboard({
             onChangeSchedule={onChangeSchedule}
             onCreateSchedule={onCreateSchedule}
           />
+        )}
+
+        {section === 'audit' && (
+          <AuditLogTab enabled={canReadAuditLog} searchQuery={searchQuery} onError={onError} />
         )}
 
         {section === 'users' && (

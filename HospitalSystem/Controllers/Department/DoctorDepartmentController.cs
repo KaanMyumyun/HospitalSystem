@@ -17,17 +17,7 @@ public class DoctorDepartmentController : ControllerBase
  
     [Authorize(Roles = "Admin")]
     [HttpPost("ChangeDoctorDepartment")]
-    public async Task<IActionResult> ChangeDoctorDepartment([FromBody] ChangeDoctorDepartmentDto dto)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
- 
-        var result = await _doctorDepartmentService.ChangeDoctorDepartmentAsync(dto);
- 
-        if (!result.IsSuccess)
-            return BadRequest(result);
- 
-        return Ok(result);
-    }
+    public async Task<ActionResult<DepartmentActionResultDto>> ChangeDoctorDepartment([FromBody] ChangeDoctorDepartmentDto dto)
+        => this.ToActionResult(await _doctorDepartmentService.ChangeDoctorDepartmentAsync(dto));
 }
     

@@ -19,17 +19,18 @@ public class ScheduleCreationService : IScheduleCreationService
     public async Task<CalendarActionResult> CreateScheduleAsync(CreateSchedule dto)
     {
         if (!_currentUser.IsInRole(UserRole.Admin))
-            return CalendarActionResult.Fail("You are not allowed to create a schedule");
+            return CalendarActionResult.Forbidden("You are not allowed to create a schedule");
 
         var validationError = await ScheduleValidation.ValidateAsync(
             _context,
             dto.DoctorId,
             dto.StartHour,
             dto.EndHour,
-            dto.SlotDurationMin);
+            dto.SlotDurationMin,
+            dto.WorkingDays);
 
         if (validationError is not null)
-            return CalendarActionResult.Fail(validationError);
+            return validationError;
 
         var dummyDate = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var start = dummyDate.AddHours(dto.StartHour);
@@ -44,7 +45,8 @@ public class ScheduleCreationService : IScheduleCreationService
             DoctorId = dto.DoctorId,
             StartTime = start,
             EndTime = end,
-            SlotDurationMin = dto.SlotDurationMin
+            SlotDurationMin = dto.SlotDurationMin,
+            WorkingDays = ScheduleDays.Normalize(dto.WorkingDays ?? CalendarEntity.Weekdays)
         };
         _context.Calendars.Add(calendar);
         await _context.SaveChangesAsync();

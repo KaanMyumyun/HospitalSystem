@@ -1,8 +1,19 @@
 import { useState } from 'react'
-import type { ChangeScheduleInput, CreateScheduleInput, DepartmentDto, DoctorDto, ScheduleDto } from '../../api'
+import type {
+  ChangeScheduleInput,
+  CreateScheduleInput,
+  DayOfWeek,
+  DepartmentDto,
+  DoctorDto,
+  ScheduleDto,
+} from '../../api'
 import { EmptyState, SkeletonRows } from '../../components/ui'
+import { formatWorkingDays } from '../../lib/format'
 import { clockLabel, scheduleWindow } from '../../lib/time'
 import type { ActionOutcome } from '../../types'
+
+const weekOrder: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+const mondayToFriday = weekOrder.slice(0, 5)
 
 export function SchedulesTab({
   schedules,
@@ -27,10 +38,12 @@ export function SchedulesTab({
   const [scheduleStartHour, setScheduleStartHour] = useState('8')
   const [scheduleEndHour, setScheduleEndHour] = useState('16')
   const [scheduleSlotDuration, setScheduleSlotDuration] = useState('15')
+  const [scheduleDays, setScheduleDays] = useState<DayOfWeek[]>(mondayToFriday)
   const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null)
   const [editStartHour, setEditStartHour] = useState('')
   const [editEndHour, setEditEndHour] = useState('')
   const [editSlotDuration, setEditSlotDuration] = useState('')
+  const [editDays, setEditDays] = useState<DayOfWeek[]>([])
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
   const visibleSchedules = schedules.filter((schedule) => {
@@ -46,10 +59,11 @@ export function SchedulesTab({
   )
 
   const scheduleInput = (): CreateScheduleInput => ({
-    DoctorId: Number(scheduleDoctorId),
-    StartHour: Number(scheduleStartHour),
-    EndHour: Number(scheduleEndHour),
-    SlotDurationMin: Number(scheduleSlotDuration),
+    doctorId: Number(scheduleDoctorId),
+    startHour: Number(scheduleStartHour),
+    endHour: Number(scheduleEndHour),
+    slotDurationMin: Number(scheduleSlotDuration),
+    workingDays: scheduleDays,
   })
   const startScheduleEdit = (schedule: ScheduleDto) => {
     setEditingScheduleId(schedule.scheduleId)
@@ -57,6 +71,7 @@ export function SchedulesTab({
     setEditStartHour(String(startMinutes / 60))
     setEditEndHour(String(endMinutes / 60))
     setEditSlotDuration(String(schedule.slotDurationMin))
+    setEditDays(schedule.workingDays)
   }
 
   return (
@@ -83,9 +98,16 @@ export function SchedulesTab({
           Slot
           <input aria-label="Slot duration" type="number" min="5" step="5" value={scheduleSlotDuration} onChange={(event) => setScheduleSlotDuration(event.target.value)} />
         </label>
+        <DayPicker label="Working days" days={scheduleDays} onChange={setScheduleDays} />
         <button
           className="secondary-button"
-          disabled={!scheduleDoctorId || Number(scheduleStartHour) >= Number(scheduleEndHour) || isReadOnly || loading}
+          disabled={
+            !scheduleDoctorId ||
+            Number(scheduleStartHour) >= Number(scheduleEndHour) ||
+            scheduleDays.length === 0 ||
+            isReadOnly ||
+            loading
+          }
           title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
           type="button"
           onClick={async () => {
@@ -102,6 +124,7 @@ export function SchedulesTab({
             <th>Start</th>
             <th>End</th>
             <th>Slot</th>
+            <th>Days</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -134,19 +157,26 @@ export function SchedulesTab({
                 </td>
                 <td>
                   {editingScheduleId === schedule.scheduleId ? (
+                    <DayPicker label={`Working days for ${doctor?.name ?? 'this doctor'}`} days={editDays} onChange={setEditDays} />
+                  ) : (
+                    formatWorkingDays(schedule.workingDays)
+                  )}
+                </td>
+                <td>
+                  {editingScheduleId === schedule.scheduleId ? (
                     <div className="table-actions">
                       <button
                         className="secondary-button compact-action"
-                        disabled={Number(editStartHour) >= Number(editEndHour) || isReadOnly || loading}
+                        disabled={Number(editStartHour) >= Number(editEndHour) || editDays.length === 0 || isReadOnly || loading}
                         title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
                         type="button"
                         onClick={async () => {
                           const outcome = await onChangeSchedule({
-                            ScheduleId: schedule.scheduleId,
-                            DoctorId: schedule.doctorId,
-                            StartHour: Number(editStartHour),
-                            EndHour: Number(editEndHour),
-                            SlotDurationMin: Number(editSlotDuration),
+                            scheduleId: schedule.scheduleId,
+                            startHour: Number(editStartHour),
+                            endHour: Number(editEndHour),
+                            slotDurationMin: Number(editSlotDuration),
+                            workingDays: editDays,
                           })
                           if (outcome.ok) setEditingScheduleId(null)
                         }}
@@ -177,5 +207,26 @@ export function SchedulesTab({
       {loading && <SkeletonRows count={5} />}
       {!loading && visibleSchedules.length === 0 && <EmptyState text="No schedules found." />}
     </>
+  )
+}
+
+// One checkbox per day, Monday first.
+function DayPicker({ label, days, onChange }: { label: string; days: DayOfWeek[]; onChange: (days: DayOfWeek[]) => void }) {
+  return (
+    <fieldset className="day-picker">
+      <legend className="visually-hidden">{label}</legend>
+      {weekOrder.map((day) => (
+        <label key={day} title={day}>
+          <input
+            checked={days.includes(day)}
+            type="checkbox"
+            onChange={(event) =>
+              onChange(weekOrder.filter((item) => (item === day ? event.target.checked : days.includes(item))))
+            }
+          />
+          {day.slice(0, 3)}
+        </label>
+      ))}
+    </fieldset>
   )
 }

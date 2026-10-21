@@ -1,17 +1,51 @@
-import { Activity, CalendarDays, Clock3, ShieldCheck, Stethoscope, UsersRound } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import {
+  Activity,
+  CalendarCheck,
+  CalendarDays,
+  Clock3,
+  Contact,
+  ScrollText,
+  ShieldCheck,
+  Stethoscope,
+  UsersRound,
+} from 'lucide-react'
 import type { Screen } from '../types'
+
+type Item = { screen: Screen; label: string; icon: LucideIcon }
+
+const receptionItems: Item[] = [
+  { screen: 'reception', label: 'Reception', icon: CalendarDays },
+  { screen: 'patients', label: 'Patients', icon: Contact },
+]
+const doctorItems: Item[] = [{ screen: 'doctor', label: 'My day', icon: CalendarCheck }]
+const adminItems: Item[] = [
+  { screen: 'departments', label: 'Departments', icon: ShieldCheck },
+  { screen: 'doctors', label: 'Doctors', icon: Stethoscope },
+  { screen: 'schedules', label: 'Schedules', icon: Clock3 },
+  { screen: 'users', label: 'Users', icon: UsersRound },
+  { screen: 'audit', label: 'Audit log', icon: ScrollText },
+]
 
 export function Sidebar({
   canUseAdmin,
   canUseReception,
+  canUseDoctor,
   screen,
   onChange,
 }: {
   canUseAdmin: boolean
   canUseReception: boolean
+  canUseDoctor: boolean
   screen: Screen
   onChange: (screen: Screen) => void
 }) {
+  const items = [
+    ...(canUseReception ? receptionItems : []),
+    ...(canUseDoctor ? doctorItems : []),
+    ...(canUseAdmin ? adminItems : []),
+  ]
+
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -25,56 +59,17 @@ export function Sidebar({
       </div>
 
       <nav className="nav-list" aria-label="Main navigation">
-        {canUseReception && (
+        {items.map(({ screen: target, label, icon: Icon }) => (
           <button
-            className={`nav-item ${screen === 'reception' ? 'active' : ''}`}
+            className={`nav-item ${screen === target ? 'active' : ''}`}
+            key={target}
             type="button"
-            onClick={() => onChange('reception')}
+            onClick={() => onChange(target)}
           >
-            <CalendarDays size={18} />
-            Reception
+            <Icon size={18} />
+            {label}
           </button>
-        )}
-        {canUseAdmin && (
-          <button
-            className={`nav-item ${screen === 'departments' ? 'active' : ''}`}
-            type="button"
-            onClick={() => onChange('departments')}
-          >
-            <ShieldCheck size={18} />
-            Departments
-          </button>
-        )}
-        {canUseAdmin && (
-          <button
-            className={`nav-item ${screen === 'doctors' ? 'active' : ''}`}
-            type="button"
-            onClick={() => onChange('doctors')}
-          >
-            <Stethoscope size={18} />
-            Doctors
-          </button>
-        )}
-        {canUseAdmin && (
-          <button
-            className={`nav-item ${screen === 'schedules' ? 'active' : ''}`}
-            type="button"
-            onClick={() => onChange('schedules')}
-          >
-            <Clock3 size={18} />
-            Schedules
-          </button>
-        )}
-        {canUseAdmin && (
-          <button
-            className={`nav-item ${screen === 'users' ? 'active' : ''}`}
-            type="button"
-            onClick={() => onChange('users')}
-          >
-            <UsersRound size={18} />
-            Users
-          </button>
-        )}
+        ))}
       </nav>
     </aside>
   )

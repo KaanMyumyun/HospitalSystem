@@ -1,4 +1,4 @@
-import type { DepartmentDto, ScheduleDto } from '../api'
+import type { AppointmentStatus, DayOfWeek, DepartmentDto, ScheduleDto } from '../api'
 import type { AdminSection, SlotStatus } from '../types'
 import { clockLabel, scheduleWindow } from './time'
 
@@ -33,6 +33,7 @@ export function slotLabel(status: SlotStatus) {
   if (status === 'cancelled') return 'Cancelled'
   if (status === 'past') return 'Past'
   if (status === 'loading') return 'Loading'
+  if (status === 'off') return 'Day off'
   return 'No schedule'
 }
 
@@ -47,6 +48,7 @@ export function adminTitle(section: AdminSection) {
     doctors: 'Doctors',
     schedules: 'Schedules',
     users: 'Users',
+    audit: 'Audit log',
   }
 
   return titles[section]
@@ -58,4 +60,18 @@ export function departmentName(departments: DepartmentDto[], id: number | undefi
 
 export function confirmAction(message: string) {
   return window.confirm(message)
+}
+
+export function statusLabel(status: AppointmentStatus) {
+  return status === 'NoShow' ? 'No-show' : status
+}
+
+// "Mon-Fri" for a run of days in a row, otherwise "Mon, Wed, Sat".
+export function formatWorkingDays(days: DayOfWeek[]) {
+  const order: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+  const indexes = days.map((day) => order.indexOf(day)).sort((left, right) => left - right)
+  const short = (index: number) => (order[index] ?? '').slice(0, 3)
+  const consecutive = indexes.every((index, position) => position === 0 || index === (indexes[position - 1] ?? -2) + 1)
+  if (indexes.length > 2 && consecutive) return `${short(indexes[0]!)}-${short(indexes[indexes.length - 1]!)}`
+  return indexes.map(short).join(', ')
 }

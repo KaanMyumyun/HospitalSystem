@@ -99,6 +99,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("You are not allowed to create appointments", result.Error);
+        Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
  
     [Fact]
@@ -120,6 +121,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor not found", result.Error);
+        Assert.Equal(FailureKind.NotFound, result.Failure);
     }
  
     [Fact]
@@ -579,5 +581,52 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Appointment time is outside the doctor's working hours", result.Error);
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_DayTheDoctorDoesNotWork_Fails()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+
+        // 3 January 2026 is a Saturday; the seeded schedule works Monday to Friday.
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 3, 10, 0, 0, DateTimeKind.Utc)), 5);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("The doctor does not work on Saturdays", result.Error);
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_WeekendDayTheDoctorWorks_Succeeds()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        (await db.Calendars.FindAsync(1))!.WorkingDays = [DayOfWeek.Saturday];
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 3, 10, 0, 0, DateTimeKind.Utc)), 5);
+
+        Assert.True(result.IsSuccess);
+    }
+
+    // The day is the desk's: Saturday 01:00 at UTC+3 is still Friday in UTC.
+    [Fact]
+    public async Task CreateAppointmentAsync_WorkingDayIsTheDesksWallClockDay()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var calendar = (await db.Calendars.FindAsync(1))!;
+        calendar.StartTime = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        calendar.EndTime = new DateTime(2000, 1, 2, 0, 0, 0, DateTimeKind.Utc);
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+        var dto = NewPatientAt(new DateTime(2026, 1, 2, 22, 0, 0, DateTimeKind.Utc));
+        dto.AppointmentTime = new DateTimeOffset(2026, 1, 3, 1, 0, 0, TimeSpan.FromHours(3));
+
+        var result = await service.CreateAppointmentAsync(dto, 5);
+
+        Assert.Equal("The doctor does not work on Saturdays", result.Error);
     }
 }

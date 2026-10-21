@@ -33,6 +33,7 @@ public class UserQueryServiceTests : UserTestBase
         var result = await service.ListUsersAsync(new UserQueryDto());
 
         Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
         Assert.Equal(2, result.Data.Items.Count);
         Assert.Equal(2, result.Data.TotalCount);
         Assert.Contains(result.Data.Items, u => u.UserId == 1 && u.UserName == "Alice" && u.Role == UserRole.Doctor);
@@ -51,6 +52,7 @@ public class UserQueryServiceTests : UserTestBase
         var result = await service.ListUsersAsync(new UserQueryDto { Page = 2, PageSize = 2 });
 
         Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
         Assert.Equal(new[] { "Carol", "Dave" }, result.Data.Items.Select(u => u.UserName));
         Assert.Equal(5, result.Data.TotalCount);
         Assert.Equal(2, result.Data.Page);
@@ -66,6 +68,7 @@ public class UserQueryServiceTests : UserTestBase
 
         var result = await service.ListUsersAsync(new UserQueryDto { PageSize = 2 });
 
+        Assert.NotNull(result.Data);
         Assert.Equal(new[] { "Alice", "Bob" }, result.Data.Items.Select(u => u.UserName));
         Assert.Equal(3, result.Data.TotalCount);
     }
@@ -80,6 +83,7 @@ public class UserQueryServiceTests : UserTestBase
         var result = await service.ListUsersAsync(new UserQueryDto { Page = 3, PageSize = 2 });
 
         Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
         Assert.Empty(result.Data.Items);
         Assert.Equal(2, result.Data.TotalCount);
     }
@@ -102,6 +106,7 @@ public class UserQueryServiceTests : UserTestBase
         var result = await service.ListUsersAsync(new UserQueryDto { Search = search });
 
         Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
         Assert.Equal(expected, result.Data.Items.Select(u => u.UserName));
         Assert.Equal(expected.Length, result.Data.TotalCount);
     }
@@ -132,6 +137,7 @@ public class UserQueryServiceTests : UserTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("Not allowed to list users", result.Error);
+        Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
  
     [Fact]
@@ -156,6 +162,7 @@ public class UserQueryServiceTests : UserTestBase
         var result = await service.ListDoctorsAsync();
  
         Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
         Assert.Equal(2, result.Data.Count);
         Assert.Contains(result.Data, d => d.UserId == 1 && d.Name == "Alice" && d.IsActive == true);
         Assert.Contains(result.Data, d => d.UserId == 2 && d.Name == "Bob" && d.IsActive == false);
@@ -171,6 +178,7 @@ public class UserQueryServiceTests : UserTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("You are not allowed to list doctors", result.Error);
+        Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
  
     [Fact]
@@ -196,6 +204,7 @@ public class UserQueryServiceTests : UserTestBase
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Not allowed to list users", result.Error);
+        Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
 
     [Theory]
@@ -212,5 +221,6 @@ public class UserQueryServiceTests : UserTestBase
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Not allowed to list users", result.Error);
+        Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
 }

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createAppointment, PossiblePatientMatchError, wakeApi } from './api'
+import { AffectedBookingsError, changeOwnPassword, changeSchedule, createAppointment, PossiblePatientMatchError, wakeApi } from './api'
 
 const booking = {
-  DoctorId: 1,
-  PatientName: 'Child Ivanov',
-  PhoneNumber: '0888 111 222',
-  DateOfBirth: '2016-08-20',
-  AppointmentTime: '2027-03-01T09:20:00+03:00',
+  doctorId: 1,
+  patientName: 'Child Ivanov',
+  phoneNumber: '0888 111 222',
+  dateOfBirth: '2016-08-20',
+  appointmentTime: '2027-03-01T09:20:00+03:00',
 }
 
 function respondWith(status: number, body: unknown) {
@@ -15,9 +15,20 @@ function respondWith(status: number, body: unknown) {
   return fetchMock
 }
 
+// The tests run in Node, which has no localStorage.
+let stored: Record<string, string> = {}
+
 beforeEach(() => {
-  // The tests run in Node, which has no localStorage.
-  vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined, removeItem: () => undefined })
+  stored = {}
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => stored[key] ?? null,
+    setItem: (key: string, value: string) => {
+      stored[key] = value
+    },
+    removeItem: (key: string) => {
+      delete stored[key]
+    },
+  })
 })
 
 afterEach(() => {
@@ -60,5 +71,46 @@ describe('wakeApi', () => {
       mode: 'no-cors',
       cache: 'no-store',
     })
+  })
+})
+
+describe('changeSchedule', () => {
+  it('sends the browser time zone, so the API reads bookings as local times', async () => {
+    const fetchMock = respondWith(200, { isSuccess: true, error: null, affectedAppointmentCount: 0, affectedAppointments: null })
+
+    await changeSchedule({ scheduleId: 1, startHour: 9, endHour: 17, slotDurationMin: 30 })
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.timeZone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone)
+  })
+
+  it('reports bookings the change would strand', async () => {
+    respondWith(409, {
+      isSuccess: false,
+      error: 'This change affects 3 future bookings.',
+      affectedAppointmentCount: 3,
+      affectedAppointments: [{ appointmentId: 10, appointmentTime: '2030-06-03T06:00:00Z', doctorName: 'drhouse', patientInitials: 'MI' }],
+    })
+
+    const error = await changeSchedule({ scheduleId: 1, startHour: 12, endHour: 17, slotDurationMin: 30 }).catch(
+      (caught: unknown) => caught,
+    )
+
+    expect(error).toBeInstanceOf(AffectedBookingsError)
+    expect((error as AffectedBookingsError).count).toBe(3)
+    expect((error as AffectedBookingsError).bookings.map((booking) => booking.patientInitials)).toEqual(['MI'])
+  })
+})
+
+describe('changeOwnPassword', () => {
+  it('keeps the session going with the token that comes back', async () => {
+    stored['hospital-frontend-token'] = 'old-token'
+    stored['hospital-frontend-role'] = 'FrontDesk'
+    respondWith(200, { isSuccess: true, error: null, token: 'new-token' })
+
+    await changeOwnPassword('old-password', 'new-password')
+
+    expect(stored['hospital-frontend-token']).toBe('new-token')
+    expect(stored['hospital-frontend-role']).toBe('FrontDesk')
   })
 })

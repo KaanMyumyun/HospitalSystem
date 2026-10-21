@@ -22,7 +22,7 @@ public class DepartmentQueryService : IDepartmentQueryService
             !_currentUser.IsInRole(UserRole.DemoAdmin) &&
             !_currentUser.IsInRole(UserRole.DemoFrontDesk))
         {
-            return ServiceResult<List<ViewDepartmentDto>>.Fail("Not allowed to list deparments");
+            return ServiceResult<List<ViewDepartmentDto>>.Forbidden("Not allowed to list departments");
         }
  
         var departments = await _context.Departments

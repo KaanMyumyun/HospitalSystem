@@ -16,11 +16,22 @@ import {
   formatHourRange,
   formatLongDate,
   formatTime,
+  formatWorkingDays,
   initials,
   isSameDay,
   slotLabel,
+  statusLabel,
 } from '../lib/format'
-import { buildWeekSlots, canCancelAppointment, dateAtTime, getNextAvailableSlot, isInWeek, weekDays } from '../lib/schedule'
+import {
+  buildWeekSlots,
+  canCancelAppointment,
+  canMarkAppointment,
+  dateAtTime,
+  getNextAvailableSlot,
+  isInWeek,
+  shownDays,
+  weekDays,
+} from '../lib/schedule'
 import { toLocalIsoString } from '../lib/time'
 import { toDateInputValue, validateAppointmentInput } from '../lib/validation'
 import type { ActionOutcome, Slot } from '../types'
@@ -37,6 +48,7 @@ export function ReceptionDashboard({
   weekOffset,
   isReadOnly,
   onCancelAppointment,
+  onChangeAppointmentStatus,
   onCreateAppointment,
   onSelectDoctor,
   onWeekOffsetChange,
@@ -53,6 +65,7 @@ export function ReceptionDashboard({
   weekOffset: number
   isReadOnly: boolean
   onCancelAppointment: (appointmentId: number, reason: string) => Promise<ActionOutcome>
+  onChangeAppointmentStatus: (appointmentId: number, status: 'Completed' | 'NoShow') => Promise<ActionOutcome>
   onCreateAppointment: (input: CreateAppointmentInput) => Promise<ActionOutcome>
   onSelectDoctor: (doctorId: number) => void
   onWeekOffsetChange: Dispatch<SetStateAction<number>>
@@ -95,6 +108,10 @@ export function ReceptionDashboard({
     }
   }, [activeDoctors, onSelectDoctor, selectedDoctorId])
   const selectedSchedule = schedules.find((schedule) => schedule.doctorId === selectedDoctor?.doctorId)
+  const days = useMemo(
+    () => weekDays(weekOffset, shownDays(selectedSchedule, appointments, weekOffset)),
+    [appointments, selectedSchedule, weekOffset],
+  )
   const slots = useMemo(
     () => buildWeekSlots(selectedSchedule, selectedDoctor?.doctorId, appointments, weekOffset),
     [appointments, selectedDoctor?.doctorId, selectedSchedule, weekOffset],
@@ -133,7 +150,7 @@ export function ReceptionDashboard({
     setCancelError(null)
   }
   // patient is set when booking again after the API listed possible matches.
-  const submitBooking = async (patient?: Pick<CreateAppointmentInput, 'PatientId' | 'CreateNewPatient'>) => {
+  const submitBooking = async (patient?: Pick<CreateAppointmentInput, 'patientId' | 'createNewPatient'>) => {
     if (!selectedSlot || !selectedDoctor) return
     const appointmentTime = dateAtTime(selectedSlot.day, selectedSlot.time)
     const validationError = validateAppointmentInput(patientName, phoneNumber, dateOfBirth, appointmentTime)
@@ -143,11 +160,11 @@ export function ReceptionDashboard({
     }
 
     const outcome = await onCreateAppointment({
-      DoctorId: selectedDoctor.doctorId,
-      PatientName: patientName.trim(),
-      PhoneNumber: phoneNumber.trim(),
-      DateOfBirth: dateOfBirth,
-      AppointmentTime: toLocalIsoString(appointmentTime),
+      doctorId: selectedDoctor.doctorId,
+      patientName: patientName.trim(),
+      phoneNumber: phoneNumber.trim(),
+      dateOfBirth,
+      appointmentTime: toLocalIsoString(appointmentTime),
       ...patient,
     })
     if (!outcome.ok) {
@@ -234,7 +251,7 @@ export function ReceptionDashboard({
             <h2>{selectedDoctor?.name ?? 'Select a doctor'}</h2>
             <p className="subtle">
               {selectedSchedule
-                ? `${departmentName(departments, selectedDoctor?.departmentId)} · ${selectedSchedule.slotDurationMin} min slots · ${formatHourRange(selectedSchedule)}`
+                ? `${departmentName(departments, selectedDoctor?.departmentId)} · ${selectedSchedule.slotDurationMin} min slots · ${formatHourRange(selectedSchedule)} · ${formatWorkingDays(selectedSchedule.workingDays)}`
                 : 'No schedule returned for this doctor'}
             </p>
           </div>
@@ -258,9 +275,9 @@ export function ReceptionDashboard({
         </div>
 
         <div className="schedule-scroll">
-          <div className="schedule-grid" role="grid" aria-label="Weekly appointment schedule">
+          <div className={`schedule-grid days-${days.length}`} role="grid" aria-label="Weekly appointment schedule">
             <div className="grid-corner">Time</div>
-            {weekDays(weekOffset).map((day) => (
+            {days.map((day) => (
               <div className={`day-cell ${isSameDay(day, new Date()) ? 'today' : ''}`} key={day.toISOString()}>
                 {formatDay(day)}
                 {isSameDay(day, new Date()) ? <small>Today</small> : null}
@@ -273,8 +290,8 @@ export function ReceptionDashboard({
                 </div>,
                 ...row.map((slot) => (
                   <button
-                    className={`slot-cell ${slot.status}`}
-                    disabled={slot.status === 'empty' || slot.status === 'past' || slot.status === 'loading'}
+                    className={`slot-cell ${slot.status} ${slot.appointment ? `appointment-${slot.appointment.status.toLowerCase()}` : ''}`}
+                    disabled={slot.status === 'empty' || slot.status === 'past' || slot.status === 'loading' || slot.status === 'off'}
                     onClick={() => {
                       if (slot.appointment) {
                         setSelectedAppointmentId(slot.appointment.appointmentId)
@@ -289,7 +306,7 @@ export function ReceptionDashboard({
                     {/* Initials only: the grid is visible to anyone near the desk. */}
                     <small>
                       {slot.status === 'booked' && slot.appointment
-                        ? initials(slot.appointment.patientName)
+                        ? `${initials(slot.appointment.patientName)}${attendanceLabel(slot.appointment.status)}`
                         : slotLabel(slot.status)}
                     </small>
                   </button>
@@ -307,7 +324,7 @@ export function ReceptionDashboard({
             <h2>Appointment</h2>
           </div>
           <StatusBadge tone={visibleAppointment ? 'blue' : 'muted'}>
-            {visibleAppointment?.status ?? 'None'}
+            {visibleAppointment ? statusLabel(visibleAppointment.status) : 'None'}
           </StatusBadge>
         </div>
 
@@ -336,7 +353,7 @@ export function ReceptionDashboard({
               </div>
               <div>
                 <dt>Status</dt>
-                <dd>{visibleAppointment.status}</dd>
+                <dd>{statusLabel(visibleAppointment.status)}</dd>
               </div>
               <div>
                 <dt>Phone</dt>
@@ -369,6 +386,28 @@ export function ReceptionDashboard({
           >
             Cancel Appointment
           </button>
+          {visibleAppointment && canMarkAppointment(visibleAppointment) && (
+            <>
+              <button
+                className="secondary-button"
+                disabled={visibleAppointment.status === 'Completed' || isReadOnly || loading}
+                title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
+                type="button"
+                onClick={() => void onChangeAppointmentStatus(visibleAppointment.appointmentId, 'Completed')}
+              >
+                Mark completed
+              </button>
+              <button
+                className="secondary-button"
+                disabled={visibleAppointment.status === 'NoShow' || isReadOnly || loading}
+                title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
+                type="button"
+                onClick={() => void onChangeAppointmentStatus(visibleAppointment.appointmentId, 'NoShow')}
+              >
+                Mark no-show
+              </button>
+            </>
+          )}
         </div>
       </aside>
 
@@ -436,7 +475,7 @@ export function ReceptionDashboard({
                       className="secondary-button"
                       disabled={isReadOnly || loading}
                       type="button"
-                      onClick={() => void submitBooking({ PatientId: match.patientId })}
+                      onClick={() => void submitBooking({ patientId: match.patientId })}
                     >
                       Book for this patient
                     </button>
@@ -454,7 +493,7 @@ export function ReceptionDashboard({
                 className="primary-button"
                 disabled={isReadOnly || loading}
                 type="button"
-                onClick={() => void submitBooking({ CreateNewPatient: true })}
+                onClick={() => void submitBooking({ createNewPatient: true })}
               >
                 Register as new patient
               </button>
@@ -511,4 +550,11 @@ export function ReceptionDashboard({
       )}
     </section>
   )
+}
+
+// After a booked slot's initials: how the appointment went, once marked.
+function attendanceLabel(status: AppointmentDto['status']) {
+  if (status === 'Completed') return ' · done'
+  if (status === 'NoShow') return ' · no-show'
+  return ''
 }

@@ -17,16 +17,6 @@ public class ChangeRoleController : ControllerBase
  
     [Authorize(Roles = "Admin")]
     [HttpPost("change-role")]
-    public async Task<IActionResult> ChangeRole([FromBody] ChangeRoleDto dto)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
- 
-        var result = await _changeRoleService.ChangeRoleAsync(dto);
- 
-        if (!result.IsSuccess)
-            return BadRequest(result);
- 
-        return Ok(result);
-    }
+    public async Task<ActionResult<ChangeRoleResultDto>> ChangeRole([FromBody] ChangeRoleDto dto)
+        => this.ToActionResult(await _changeRoleService.ChangeRoleAsync(dto));
 }

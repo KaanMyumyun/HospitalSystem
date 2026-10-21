@@ -1,25 +1,9 @@
 namespace HospitalSystem.Dto;
 
-public class ChangeDoctorsStatusResult
+public class ChangeDoctorsStatusResult : BookingChangeResult<ChangeDoctorsStatusResult>
 {
-    public bool IsSuccess { get; set; }
-    public string? Error { get; set; }
     public ChangeDoctorsStatus? Name { get; set; }
-    public static ChangeDoctorsStatusResult Fail(string error)
-    {
-        return new ChangeDoctorsStatusResult
-        {
-            Error = error,
-            IsSuccess = false
-        };
-    }
 
-    public static ChangeDoctorsStatusResult Success(ChangeDoctorsStatus name)
-    {
-        return new ChangeDoctorsStatusResult
-        {
-            Name = name,
-            IsSuccess = true
-        };
-    }
+    public static ChangeDoctorsStatusResult Success(ChangeDoctorsStatus name) =>
+        new() { IsSuccess = true, Name = name };
 }

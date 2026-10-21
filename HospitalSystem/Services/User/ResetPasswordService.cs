@@ -25,7 +25,7 @@ public class ResetPasswordService : IResetPasswordService
     public async Task<ResetPasswordResultDto> ResetPasswordAsync(ResetPasswordDto dto)
     {
         if (!_currentUser.IsInRole(UserRole.Admin))
-            return ResetPasswordResultDto.Fail("You are not allowed to reset password");
+            return ResetPasswordResultDto.Forbidden("You are not allowed to reset password");
  
         if (string.IsNullOrWhiteSpace(dto.NewPassword))
             return ResetPasswordResultDto.Fail("No password entered");
@@ -35,7 +35,7 @@ public class ResetPasswordService : IResetPasswordService
  
         var user = await _context.Users.FindAsync(dto.UserId);
         if (user == null)
-            return ResetPasswordResultDto.Fail("User not found");
+            return ResetPasswordResultDto.NotFound("User not found");
  
         user.PasswordHash = _hasher.HashPassword(user, dto.NewPassword);
         user.SecurityStamp = Guid.NewGuid().ToString();

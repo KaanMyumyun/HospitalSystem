@@ -44,5 +44,6 @@ public class DepartmentStatusServiceTests : DepartmentTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("Department doesnt exist", result.Error);
+        Assert.Equal(FailureKind.NotFound, result.Failure);
     }
 }

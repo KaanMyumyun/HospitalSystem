@@ -7,5 +7,5 @@ public class CancelAppointmentDto
 [Required]
 public int? AppointmentId { get; set; }
 [MaxLength(500)]
-public string Reason { get; set; }
+public string Reason { get; set; } = "";
 }

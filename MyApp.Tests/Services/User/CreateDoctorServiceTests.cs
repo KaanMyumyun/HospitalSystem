@@ -52,6 +52,7 @@ public class CreateDoctorServiceTests : UserTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("User not found", result.Error);
+        Assert.Equal(FailureKind.NotFound, result.Failure);
     }
  
     [Fact]
@@ -66,6 +67,7 @@ public class CreateDoctorServiceTests : UserTestBase
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Department not found", result.Error);
+        Assert.Equal(FailureKind.NotFound, result.Failure);
     }
  
     [Fact]

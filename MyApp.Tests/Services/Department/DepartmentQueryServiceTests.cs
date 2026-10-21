@@ -23,6 +23,7 @@ public class DepartmentQueryServiceTests : DepartmentTestBase
         var result = await service.ListDepartmentsAsync();
  
         Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
         Assert.Equal(2, result.Data.Count);
         Assert.Contains(result.Data, d => d.Id == 1 && d.Name == "Cardiology" && d.IsActive == true);
         Assert.Contains(result.Data, d => d.Id == 2 && d.Name == "Neurology" && d.IsActive == false);
@@ -37,6 +38,7 @@ public class DepartmentQueryServiceTests : DepartmentTestBase
         var result = await service.ListDepartmentsAsync();
  
         Assert.False(result.IsSuccess);
-        Assert.Equal("Not allowed to list deparments", result.Error);
+        Assert.Equal("Not allowed to list departments", result.Error);
+        Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
 }

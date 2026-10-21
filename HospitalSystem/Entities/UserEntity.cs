@@ -6,14 +6,14 @@ public class UserEntity
 {
     public int Id { get; set; }
     [Required]
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
     [Required]
-    public string PasswordHash { get; set; }
+    public string PasswordHash { get; set; } = null!;
     public UserRole Role { get; set; }
 
     [Required]
     public string SecurityStamp { get; set; } = Guid.NewGuid().ToString();
-    public DoctorEntity Doctor { get; set; }
+    public DoctorEntity? Doctor { get; set; }
     public ICollection<AppointmentsEntity> CreatedAppointments { get; set; } = new List<AppointmentsEntity>();
 
 }

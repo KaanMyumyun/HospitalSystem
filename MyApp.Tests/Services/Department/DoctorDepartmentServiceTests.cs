@@ -43,6 +43,7 @@ public class DoctorDepartmentServiceTests : DepartmentTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor doesnt exist ", result.Error);
+        Assert.Equal(FailureKind.NotFound, result.Failure);
     }
  
     [Fact]
@@ -69,6 +70,7 @@ public class DoctorDepartmentServiceTests : DepartmentTestBase
  
         Assert.False(result.IsSuccess);
         Assert.Equal("Department doesnt exist", result.Error);
+        Assert.Equal(FailureKind.NotFound, result.Failure);
     }
  
     [Fact]

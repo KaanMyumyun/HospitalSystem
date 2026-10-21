@@ -65,6 +65,11 @@ var builder = WebApplication.CreateBuilder(args);
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(c =>
     {
+        // string means never null and string? may be null, so the frontend's
+        // generated types say which fields can be missing.
+        c.SupportNonNullableReferenceTypes();
+        // Lets a property that refers to another schema say it may be null.
+        c.UseAllOfToExtendReferenceSchemas();
         c.SwaggerDoc("v1", new OpenApiInfo
         {
             Title = "HospitalSystem API",
@@ -90,17 +95,21 @@ var builder = WebApplication.CreateBuilder(args);
 
     builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
     builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+    builder.Services.AddScoped<IAuditLogQueryService, AuditLogQueryService>();
 
     builder.Services.AddScoped<IPatientService, PatientService>();
     builder.Services.AddScoped<IAppointmentQueryService, AppointmentQueryService>();
     builder.Services.AddScoped<IAppointmentCancellationService, AppointmentCancellationService>();
     builder.Services.AddScoped<IAppointmentCreationService, AppointmentCreationService>();
+    builder.Services.AddScoped<IAppointmentStatusService, AppointmentStatusService>();
+    builder.Services.AddScoped<IPatientRecordService, PatientRecordService>();
 
     builder.Services.AddScoped<ILoginService, LoginService>();
     builder.Services.AddHostedService<SignInWarmup>();
     builder.Services.AddMemoryCache();
     builder.Services.AddSingleton<SecurityStampCache>();
     builder.Services.AddScoped<IUserCreationService, UserCreationService>();
+    builder.Services.AddScoped<IChangePasswordService, ChangePasswordService>();
 
     builder.Services.AddScoped<IScheduleCreationService, ScheduleCreationService>();
     builder.Services.AddScoped<IScheduleModificationService, ScheduleModificationService>();
@@ -124,7 +133,11 @@ var builder = WebApplication.CreateBuilder(args);
 
     var jwtSecret = builder.Configuration["JwtSettings:SecretKey"];
     if (string.IsNullOrWhiteSpace(jwtSecret))
-        throw new Exception("JWT SecretKey is not configured");
+        throw new InvalidOperationException("JWT SecretKey is not configured");
+    // Tokens are signed with HMAC-SHA256, which needs a 256-bit key. A shorter
+    // key would start fine and then fail every sign-in.
+    if (Encoding.UTF8.GetByteCount(jwtSecret) < 32)
+        throw new InvalidOperationException("JWT SecretKey must be at least 32 bytes (256 bits) long");
 
     builder.Services.AddAuthentication("Bearer")
         .AddJwtBearer(options =>

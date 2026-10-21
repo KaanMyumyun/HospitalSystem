@@ -3,7 +3,7 @@ import type { ScheduleDto } from '../api'
 import { clockLabel, scheduleWindow, toLocalIsoString } from './time'
 
 function schedule(startTime: string, endTime: string): ScheduleDto {
-  return { scheduleId: 1, doctorId: 1, startTime, endTime, slotDurationMin: 30 }
+  return { scheduleId: 1, doctorId: 1, startTime, endTime, slotDurationMin: 30, workingDays: ['Monday'] }
 }
 
 describe('scheduleWindow', () => {

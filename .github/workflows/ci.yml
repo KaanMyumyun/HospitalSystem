@@ -62,6 +62,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The backend's OpenApiContractTests keeps openapi.json equal to the API;
+      # this keeps the types the frontend compiles against equal to openapi.json.
+      - name: Check the generated API types are current
+        run: |
+          npm run generate:api
+          git diff --exit-code -- src/api-schema.ts
+
       - name: Audit dependencies
         run: npm audit --audit-level=high
 

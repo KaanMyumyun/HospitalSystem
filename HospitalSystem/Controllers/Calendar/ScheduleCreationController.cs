@@ -17,16 +17,6 @@ public class ScheduleCreationController : ControllerBase
 
     [Authorize(Roles = "Admin")]
     [HttpPost("create-schedule")]
-    public async Task<IActionResult> CreateSchedule([FromBody] CreateSchedule dto)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
-        var result = await _creationService.CreateScheduleAsync(dto);
-
-        if (!result.IsSuccess)
-            return BadRequest(result);
-
-        return Ok(result);
-    }
+    public async Task<ActionResult<CalendarActionResult>> CreateSchedule([FromBody] CreateSchedule dto)
+        => this.ToActionResult(await _creationService.CreateScheduleAsync(dto));
 }

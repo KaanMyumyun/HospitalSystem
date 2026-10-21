@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.Appointments;
-using System.Text.RegularExpressions;
 
 namespace HospitalSystem.Services.Appointments;
  
@@ -14,7 +13,6 @@ public class AppointmentCreationService : IAppointmentCreationService
     private readonly IAuditLogService _auditLog;
 
     private const int MaxPossibleMatches = 10;
-    private static readonly Regex AllowedPhoneCharacters = new(@"^\+?[0-9\s().-]+$", RegexOptions.Compiled);
 
     public AppointmentCreationService(
         ApplicationDbContext context,
@@ -31,7 +29,7 @@ public class AppointmentCreationService : IAppointmentCreationService
     public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppointmentDto dto, int frontDeskUserId)
     {
         if (!_currentUser.IsInRole(UserRole.FrontDesk))
-            return CreateAppointmentResultDto.Fail("You are not allowed to create appointments");
+            return CreateAppointmentResultDto.Forbidden("You are not allowed to create appointments");
 
         if (dto.AppointmentTime is not DateTimeOffset requestedTime)
             return CreateAppointmentResultDto.Fail("Appointment time is required");
@@ -39,7 +37,7 @@ public class AppointmentCreationService : IAppointmentCreationService
         var appointmentTime = requestedTime.UtcDateTime;
         var patientName = dto.PatientName?.Trim() ?? "";
         var patientNameKey = patientName.ToLowerInvariant();
-        var phoneNumber = NormalizePhoneNumber(dto.PhoneNumber);
+        var phoneNumber = PatientDetails.NormalizePhoneNumber(dto.PhoneNumber);
         var dateOfBirth = dto.DateOfBirth;
         var chosenPatientId = dto.PatientId;
         // Possible matches only matter while the desk has not yet picked a
@@ -67,7 +65,7 @@ public class AppointmentCreationService : IAppointmentCreationService
                 d.IsActive,
                 d.User.Role,
                 DepartmentIsActive = d.Department.IsActive,
-                Schedule = c == null ? null : new WorkingHours(c.StartTime, c.EndTime, c.SlotDurationMin),
+                Schedule = c == null ? null : new WorkingHours(c.StartTime, c.EndTime, c.SlotDurationMin, c.WorkingDays),
                 // The nearest bookings on either side. Whether they overlap
                 // depends on the slot length, known once the schedule is loaded.
                 PreviousStart = d.Appointments
@@ -99,7 +97,7 @@ public class AppointmentCreationService : IAppointmentCreationService
             })
             .FirstOrDefaultAsync();
         if (doctor == null)
-            return CreateAppointmentResultDto.Fail("Doctor not found");
+            return CreateAppointmentResultDto.NotFound("Doctor not found");
 
         if (!doctor.IsActive || doctor.Role != UserRole.Doctor)
             return CreateAppointmentResultDto.Fail("Doctor is not available for booking");
@@ -125,7 +123,7 @@ public class AppointmentCreationService : IAppointmentCreationService
             return CreateAppointmentResultDto.Fail("Doctor already booked for that time slot");
 
         if (chosenPatientId is not null && !doctor.ChosenPatientExists)
-            return CreateAppointmentResultDto.Fail("Patient not found");
+            return CreateAppointmentResultDto.NotFound("Patient not found");
 
         // A patient whose phone number, name and date of birth all match is
         // booked again. When only some match (a relative sharing a phone, a
@@ -134,7 +132,7 @@ public class AppointmentCreationService : IAppointmentCreationService
         var patientId = chosenPatientId ?? doctor.SamePatientId;
         if (patientId is null && doctor.PossibleMatches.Count > 0)
         {
-            return CreateAppointmentResultDto.FailPossibleMatch(
+            return CreateAppointmentResultDto.PossibleMatch(
                 "These details partly match a patient on file. Book for that patient, or register a new one.",
                 doctor.PossibleMatches);
         }
@@ -163,7 +161,7 @@ public class AppointmentCreationService : IAppointmentCreationService
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             _context.Entry(appointment).State = EntityState.Detached;
-            return CreateAppointmentResultDto.FailConflict("Doctor already booked for that time slot");
+            return CreateAppointmentResultDto.Conflict("Doctor already booked for that time slot");
         }
 
         await _auditLog.LogAsync("CreateAppointment", "Appointment", appointment.Id, $"Created appointment for doctor {dto.DoctorId}");
@@ -175,18 +173,12 @@ public class AppointmentCreationService : IAppointmentCreationService
 
     private static string? ValidateAppointment(CreateAppointmentDto dto, DateTimeOffset requestedTime)
     {
-        var patientName = dto.PatientName?.Trim();
-        var phoneNumber = dto.PhoneNumber?.Trim();
-
-        if (string.IsNullOrWhiteSpace(patientName))
+        if (string.IsNullOrWhiteSpace(dto.PatientName))
             return "Patient name is required";
 
-        if (string.IsNullOrWhiteSpace(phoneNumber))
-            return "Phone number is required";
-
-        var digitCount = phoneNumber.Count(char.IsDigit);
-        if (!AllowedPhoneCharacters.IsMatch(phoneNumber) || digitCount < 7 || digitCount > 15)
-            return "Phone number must contain 7 to 15 digits and no letters";
+        var phoneError = PatientDetails.PhoneNumberError(dto.PhoneNumber);
+        if (phoneError is not null)
+            return phoneError;
 
         if (dto.DateOfBirth is null)
             return "Date of birth is required";
@@ -200,19 +192,13 @@ public class AppointmentCreationService : IAppointmentCreationService
         return null;
     }
 
-    // Patients are stored and matched by digits only, keeping a leading +, so
-    // "+359 888 111-222" and "+359888111222" are the same number.
-    private static string NormalizePhoneNumber(string? phoneNumber)
-    {
-        var trimmed = phoneNumber?.Trim() ?? "";
-        var digits = string.Concat(trimmed.Where(char.IsAsciiDigit));
-        return trimmed.StartsWith('+') ? "+" + digits : digits;
-    }
-
-    // Working hours are whole wall-clock hours, compared with the time as the
+    // Working days and hours are wall-clock ones, compared with the time as the
     // desk sent it, not with its UTC equivalent.
     private static string? CheckWorkingHours(WorkingHours schedule, DateTimeOffset requestedTime)
     {
+        if (!schedule.WorkingDays.Contains(requestedTime.DayOfWeek))
+            return $"The doctor does not work on {requestedTime.DayOfWeek}s";
+
         // Stored on a placeholder date; an end hour of 24 is midnight of the next day.
         var startMinutes = (schedule.StartTime - schedule.StartTime.Date).TotalMinutes;
         var endMinutes = (schedule.EndTime - schedule.StartTime.Date).TotalMinutes;
@@ -224,5 +210,5 @@ public class AppointmentCreationService : IAppointmentCreationService
         return null;
     }
 
-    private sealed record WorkingHours(DateTime StartTime, DateTime EndTime, int SlotDurationMin);
+    private sealed record WorkingHours(DateTime StartTime, DateTime EndTime, int SlotDurationMin, List<DayOfWeek> WorkingDays);
 }
