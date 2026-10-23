@@ -69,15 +69,36 @@ export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }
             void submit()
           }}
         >
+          {/* name and autocomplete let password managers fill the form. */}
           <label>
             Username
-            <input value={name} onChange={(event) => setName(event.target.value)} />
+            <input
+              autoCapitalize="none"
+              autoComplete="username"
+              maxLength={50}
+              name="username"
+              required
+              spellCheck={false}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
           </label>
           <label>
             Password
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+            <input
+              autoComplete="current-password"
+              name="password"
+              required
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
           </label>
-          {error && <div className="form-error">{error}</div>}
+          {error && (
+            <div className="form-error" role="alert">
+              {error}
+            </div>
+          )}
           <button className="primary-button" disabled={pending !== null} type="submit">
             {pending === 'password' ? 'Signing in...' : 'Sign in'}
           </button>
