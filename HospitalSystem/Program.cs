@@ -235,6 +235,22 @@ var builder = WebApplication.CreateBuilder(args);
                 QueueLimit = 0
             });
         });
+
+        // Password sign-ins from one address, whatever usernames it tries:
+        // enough for a ward signing in through one office address at shift
+        // change, too few to spray a password across every account. Each
+        // username also gets five a minute (LoginRateLimitFilter), and ten
+        // wrong passwords in a row lock the account.
+        options.AddPolicy("sign-in", httpContext =>
+        {
+            var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            return RateLimitPartition.GetFixedWindowLimiter(clientIp, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+        });
     });
 
 

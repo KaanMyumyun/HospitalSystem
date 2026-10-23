@@ -36,6 +36,7 @@ import { useWeekAppointments } from './hooks/useWeekAppointments'
 import { adminTitle } from './lib/format'
 import { newId } from './lib/id'
 import { canUseAdmin, canUseDoctor, canUseReception, hashFor, screenFor, usesHospitalData } from './lib/routes'
+import { defaultDoctor } from './lib/schedule'
 import { sessionAfterTokenRotation } from './lib/session'
 import { AdminDashboard } from './screens/AdminDashboard'
 import { DoctorDashboard } from './screens/DoctorDashboard'
@@ -95,7 +96,7 @@ function App() {
 
   const selectedDoctor =
     data.doctors.find((doctor) => doctor.doctorId === selectedDoctorId) ??
-    data.doctors.find((doctor) => doctor.isActive) ??
+    defaultDoctor(data.doctors, data.schedules) ??
     null
   const { appointments, reload: reloadAppointments } = useWeekAppointments(
     session && canUseReception(session.role) ? (selectedDoctor?.doctorId ?? null) : null,
@@ -132,7 +133,7 @@ function App() {
       .then((nextData) => {
         if (request.signal.aborted) return
         setData(nextData)
-        setSelectedDoctorId((current) => current ?? nextData.doctors.find((doctor) => doctor.isActive)?.doctorId ?? null)
+        setSelectedDoctorId((current) => current ?? defaultDoctor(nextData.doctors, nextData.schedules)?.doctorId ?? null)
         setSelectedDepartmentId((current) => current ?? nextData.departments[0]?.id ?? null)
       })
       .catch((refreshError) => {

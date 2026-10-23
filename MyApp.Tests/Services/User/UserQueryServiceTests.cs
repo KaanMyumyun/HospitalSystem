@@ -167,6 +167,8 @@ public class UserQueryServiceTests : UserTestBase
         Assert.Equal(2, result.Data.Count);
         Assert.Contains(result.Data, d => d.UserId == 1 && d.Name == "Alice" && d.IsActive == true);
         Assert.Contains(result.Data, d => d.UserId == 2 && d.Name == "Bob" && d.IsActive == false);
+        // In name order, so every screen lists them the same way.
+        Assert.Equal(["Alice", "Bob"], result.Data.Select(d => d.Name));
     }
 
     [Fact]

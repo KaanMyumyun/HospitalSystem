@@ -54,4 +54,7 @@ function originOf(url: string) {
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), notFoundPage(), contentSecurityPolicy(loadEnv(mode, process.cwd(), 'VITE_').VITE_API_URL)],
+  // Production stack traces point at the source. The code is public anyway,
+  // and browsers fetch the maps only with developer tools open.
+  build: { sourcemap: true },
 }))

@@ -10,8 +10,11 @@ namespace HospitalSystem.Controllers;
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
+    // Two limits: 20 a minute per address across usernames, and 5 a minute
+    // per address and username (LoginRateLimitFilter).
     [AllowAnonymous]
     [HttpPost("login")]
+    [EnableRateLimiting("sign-in")]
     [ServiceFilter(typeof(LoginRateLimitFilter))]
     public async Task<ActionResult<LoginResultDto>> Login([FromBody] LoginDto dto, [FromServices] ILoginService service)
     {

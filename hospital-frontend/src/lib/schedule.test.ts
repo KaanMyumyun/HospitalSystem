@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import type { AppointmentDto, ScheduleDto } from '../api'
-import { buildWeekSlots, canCancelAppointment, canMarkAppointment, dayStart, isInWeek, shownDays, weekDays, weekRange } from './schedule'
+import type { AppointmentDto, DoctorDto, ScheduleDto } from '../api'
+import {
+  buildWeekSlots,
+  canCancelAppointment,
+  canMarkAppointment,
+  dayStart,
+  defaultDoctor,
+  isInWeek,
+  shownDays,
+  weekDays,
+  weekRange,
+} from './schedule'
 
 const oneHourSchedule: ScheduleDto = {
   scheduleId: 1,
@@ -279,5 +289,30 @@ describe('dayStart', () => {
 
     expect(today.getHours()).toBe(0)
     expect(tomorrow.getDate()).toBe(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).getDate())
+  })
+})
+
+describe('defaultDoctor', () => {
+  const doctor = (doctorId: number, isActive = true): DoctorDto => ({ doctorId, departmentId: 1, name: `Doctor ${doctorId}`, userId: doctorId, isActive })
+  const scheduleFor = (doctorId: number): ScheduleDto => ({
+    scheduleId: doctorId,
+    doctorId,
+    startTime: '2000-01-01T08:00:00Z',
+    endTime: '2000-01-01T16:00:00Z',
+    slotDurationMin: 30,
+    workingDays: ['Monday'],
+  })
+
+  it('opens on an active doctor who has a schedule, not the first one listed', () => {
+    expect(defaultDoctor([doctor(1), doctor(2)], [scheduleFor(2)])?.doctorId).toBe(2)
+  })
+
+  it('skips inactive doctors, even with a schedule', () => {
+    expect(defaultDoctor([doctor(1, false), doctor(2)], [scheduleFor(1)])?.doctorId).toBe(2)
+  })
+
+  it('falls back to any active doctor, then to none', () => {
+    expect(defaultDoctor([doctor(3)], [])?.doctorId).toBe(3)
+    expect(defaultDoctor([doctor(4, false)], [])).toBeNull()
   })
 })

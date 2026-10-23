@@ -30,8 +30,7 @@ The application uses a three-stage GitHub Actions pipeline:
 1. `CI` workflow
    - Runs on pull requests, pushes to `main`, and weekly (Mondays 03:00 UTC)
      so published images pick up base image security fixes
-   - Restores, builds and tests the backend against a temporary PostgreSQL
-     service, including migration and constraint checks
+   - Restores, builds and tests the backend
    - Lints, tests and builds the frontend (the build type-checks it), and
      checks that its generated API types match `openapi.json` (see
      [API contract](#api-contract))
@@ -554,11 +553,9 @@ It calls the API at `http://localhost:5272/api` unless `VITE_API_URL` is set.
 
 ## API Endpoints
 
-These resource routes replace the former action-named routes. The old paths
-remain as temporary aliases for one release while the backend and frontend
-deploy separately; deploy the compatible backend first, then update clients
-to these routes. The old role-change request cannot promote a first-time
-doctor unless it supplies a department ID.
+Routes are lowercase, plural resources with the record's id in the path, such
+as `PATCH /api/users/{userId}/role`. They replaced the former action-named
+routes (`/api/Users/change-role` and the like), which no longer answer.
 
 ### Authentication
 
@@ -776,9 +773,10 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 A global rate limiter is implemented using ASP.NET Core's built-in rate-limiting middleware:
 
 * **Strategy:** Fixed Window Limiter
-* **Limit:** 60 requests per minute per client IP globally; 5 password
-  sign-ins per minute per client IP and normalized username; 5 per minute per
-  client IP for demo sign-in and password changes
+* **Limit:** 60 requests per minute per client IP globally; for password
+  sign-in, 20 per minute per client IP across usernames and 5 per minute per
+  client IP and username; 5 per minute per client IP for demo sign-in and
+  password changes
 * **Queue:** Disabled — exceeding requests are immediately rejected
 * **Response:** `429 Too Many Requests` with a JSON error and `Retry-After`
 
@@ -792,10 +790,28 @@ the API can be reached **only** through a proxy that controls
 deployment and set `ForwardedHeaders__ForwardLimit` to the number of proxy hops
 that append an address (normally `1`). Do not enable that option on an API
 reachable directly from clients: they could then choose their own rate-limit
-bucket. Temporarily set `ForwardedHeaders__LogClientAddress=true` and inspect
-the resulting client addresses after deployment. Without a trusted proxy
-configuration, clients behind the same proxy share its 60-per-minute global
-bucket and the 5-per-minute demo/password-change bucket.
+bucket. Without a trusted proxy configuration, clients behind the same proxy
+share its 60-per-minute global bucket and the per-address sign-in limits.
+
+Check the setting once after a deploy. Set
+`ForwardedHeaders__LogClientAddress=true`, send a request with an address of
+your own invention, and read the API's log:
+
+```bash
+curl -s -o /dev/null -H 'X-Forwarded-For: 203.0.113.9' https://<api-host>/health
+```
+
+The logged client address should be your real public address. If it is
+`203.0.113.9`, `ForwardLimit` is too high and clients can pick their own
+address; if it is one of the platform's proxies, raise `ForwardLimit` by one.
+Render does not document how many entries its proxies add (reports range from
+one to two, with Cloudflare in front), so measure rather than assume. Then
+remove `LogClientAddress`: it logs every request's address.
+
+`AllowedHosts` is `*`, so the API answers any `Host` header; it builds no
+links from it. To restrict it, set `AllowedHosts` per deployment to the
+semicolon-separated host names clients use, and include the hosts health
+probes send: Kubernetes probes, for example, call the pod's own address.
 
 ---
 
@@ -818,10 +834,14 @@ service tests. They also exercise the HTTP pipeline through
 
 The service suite also covers `PatientService`, `ScheduleValidation` and
 `CurrentUserService`. The twelve PostgreSQL tests check actual migrations,
-indexes, constraints and concurrent account lockout updates. CI runs them
-against its temporary PostgreSQL service; locally they are skipped unless
-`HOSPITALSYSTEM_TEST_POSTGRES` contains a connection string to a PostgreSQL
-server where the tests can create temporary databases.
+indexes, constraints and concurrent account lockout updates. They run only
+when `HOSPITALSYSTEM_TEST_POSTGRES` holds a connection string to a PostgreSQL
+server where the tests can create temporary databases, and are reported as
+skipped otherwise, as in CI:
+
+```bash
+HOSPITALSYSTEM_TEST_POSTGRES='Host=localhost;Port=5432;Username=hospitaluser;Password=strongpassword;Database=postgres' dotnet test
+```
 
 The Appointments, Auth, Department and User tests share seed data through
 `*TestBase` classes.

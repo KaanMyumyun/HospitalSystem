@@ -48,6 +48,15 @@ tagged releases yet, so everything is listed under Unreleased.
   (`npm run generate:api`) instead of written by hand. A backend test fails
   when the API and `openapi.json` disagree, and CI fails when the generated
   types are out of date.
+- Every screen has an address after the `#` (`#/reception`, `#/patients`,
+  `#/my-day`, `#/admin/users` and so on), so the back button, a refresh and a
+  bookmark all work.
+- The Users tab shows which accounts are locked and until when.
+- Tests through the real request pipeline (requests without a token, token
+  checks, rate limits, forwarded addresses, status codes, the exception
+  handler), and a PostgreSQL tier for migrations, indexes, constraints and
+  concurrent lockout updates. The PostgreSQL tests run when
+  `HOSPITALSYSTEM_TEST_POSTGRES` names a server and are skipped otherwise.
 
 ### Changed
 
@@ -133,6 +142,28 @@ tagged releases yet, so everything is listed under Unreleased.
   `deparmentId`.
 - The backend build treats warnings as errors, and its 42 nullable-reference
   warnings are fixed. NuGet vulnerability advisories stay warnings.
+- API routes are lowercase plural resources with the record's id in the path,
+  and the verb says what a request does, for example
+  `PATCH /api/users/{userId}/role`, `PUT /api/schedules/{scheduleId}` and
+  `POST /api/appointments/{appointmentId}/cancel`. The former action-named
+  routes no longer answer.
+- Making someone a doctor through a role change takes `departmentId`, an
+  active department, and the doctor starts active. Before, the new doctor was
+  filed under department 1. The Users tab asks for the department.
+- Department names are unique regardless of case. The
+  `CaseInsensitiveDepartmentNames` migration stops with PostgreSQL error
+  `P0001`, changing nothing, while names differ only in case.
+- A time that is already booked gets `409`, as when a concurrent booking wins.
+- The doctor list is in name order, and the reception calendar opens on an
+  active doctor who has a schedule.
+- The session is kept per browser tab and ends when the tab closes.
+- Confirmations use the app's own dialogs instead of `window.confirm`;
+  dialogs keep keyboard focus inside them and close on Escape.
+- Lint fails on warnings and checks accessibility rules, and production builds
+  include source maps.
+- Controllers are grouped by resource; role checks, read-only controls and
+  table states are written once; services take the password hasher and the
+  clock from dependency injection; misspelt folders and files are renamed.
 
 ### Fixed
 
@@ -197,6 +228,19 @@ tagged releases yet, so everything is listed under Unreleased.
   `Microsoft.OpenApi` to 3.x, which Swashbuckle cannot use, so
   `/swagger/v1/swagger.json` failed with a 500. It is back on 2.x, and
   Dependabot no longer proposes major updates for it.
+- The API refuses bookings in the past; before, only the calendar greyed them
+  out.
+- A department status change without `isActive` is refused instead of
+  deactivating the department.
+- A refresh can no longer replace newer data with an older answer that
+  arrives late.
+- Recent activity works when the app is served over plain HTTP, where
+  `crypto.randomUUID` does not exist.
+- The admin Departments tab no longer shows a search box that did nothing; the
+  top bar's search filters the table.
+- Every form field has a label, the sign-in form works with password managers,
+  the reception calendar's slots name their day and time for screen readers,
+  and several error messages are spelt correctly.
 
 ### Security
 
@@ -235,3 +279,13 @@ tagged releases yet, so everything is listed under Unreleased.
   naming the account when the username exists. An unknown username is not
   recorded, so a password typed into the username field does not end up in
   the log.
+- Ten wrong passwords in a row lock an account for 15 minutes; changing your
+  own password counts too. An admin's password reset lifts the lock. Locks are
+  audited, and the sign-in response is the same as for any other failure.
+- Password sign-in is limited to 5 attempts a minute per client address and
+  username, and 20 a minute per address across usernames.
+- Behind a proxy, the API can take the client's address from
+  `X-Forwarded-For` (`ForwardedHeaders:TrustAllProxies` and `ForwardLimit`),
+  so rate limits apply per client; the README explains how to check it.
+- The API refuses to start with a published example JWT key, and a token
+  stops working 30 seconds after it expires instead of five minutes.
