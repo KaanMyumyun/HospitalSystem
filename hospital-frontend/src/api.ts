@@ -17,7 +17,6 @@ export type AppointmentDto = Api.ViewAppointmentDto
 // listed possible matches.
 export type CreateAppointmentInput = Api.CreateAppointmentDto
 export type PatientMatchDto = Api.PatientMatchDto
-export type CancelAppointmentInput = Api.CancelAppointmentDto
 export type CreateScheduleInput = Api.CreateSchedule
 // The time zone is added by changeSchedule.
 export type ChangeScheduleInput = Omit<Api.ChangeScheduleDto, 'timeZone'>
@@ -80,6 +79,16 @@ function apiUrl(path: string) {
 
 const tokenStorageKey = 'hospital-frontend-token'
 const roleStorageKey = 'hospital-frontend-role'
+// A second login can receive the same JWT within one clock second. The local
+// revision still distinguishes its requests from the previous session's.
+let sessionRevision = 0
+
+// The session lives in sessionStorage: it ends when the tab closes, so the
+// next person at a shared desk computer does not find someone else signed in.
+// Builds before this kept it in localStorage; main.tsx removes those copies.
+export function removeLegacySession() {
+  for (const key of [tokenStorageKey, roleStorageKey]) localStorage.removeItem(key)
+}
 const requestTimeoutMs = 15000
 // A free-tier host stops an idle API and can take about a minute to start it
 // again, so sign-in waits longer than other requests.
@@ -88,19 +97,25 @@ const signInTimeoutMs = 90_000
 export const sessionExpiredEvent = 'hospital-frontend:session-expired'
 
 export function getStoredSession() {
-  const token = localStorage.getItem(tokenStorageKey)
-  const role = localStorage.getItem(roleStorageKey) as UserRole | null
+  const token = sessionStorage.getItem(tokenStorageKey)
+  const role = sessionStorage.getItem(roleStorageKey) as UserRole | null
   return token && role ? { token, role } : null
 }
 
 export function storeSession(token: string, role: UserRole) {
-  localStorage.setItem(tokenStorageKey, token)
-  localStorage.setItem(roleStorageKey, role)
+  sessionRevision++
+  sessionStorage.setItem(tokenStorageKey, token)
+  sessionStorage.setItem(roleStorageKey, role)
 }
 
 export function clearSession() {
-  localStorage.removeItem(tokenStorageKey)
-  localStorage.removeItem(roleStorageKey)
+  sessionRevision++
+  sessionStorage.removeItem(tokenStorageKey)
+  sessionStorage.removeItem(roleStorageKey)
+}
+
+export function isDemoRole(role: UserRole | null | undefined) {
+  return role === 'DemoAdmin' || role === 'DemoFrontDesk'
 }
 
 // Starts an idle API while the visitor is still on the sign-in page; nothing
@@ -111,20 +126,16 @@ export function wakeApi() {
 }
 
 export async function login(name: string, password: string): Promise<LoginResult> {
-  return signIn('/api/Auth/login', { name, password } satisfies Api.LoginDto)
+  return signIn('/api/auth/login', { name, password } satisfies Api.LoginDto)
 }
 
 export async function demoLogin(role: 'DemoAdmin' | 'DemoFrontDesk'): Promise<LoginResult> {
-  return signIn('/api/Auth/demo-login', { role } satisfies Api.DemoLoginDto)
+  return signIn('/api/auth/demo-login', { role } satisfies Api.DemoLoginDto)
 }
 
 async function signIn(path: string, body: Api.LoginDto | Api.DemoLoginDto): Promise<LoginResult> {
   try {
-    const result = await request<LoginResult>(path, {
-      method: 'POST',
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(signInTimeoutMs),
-    })
+    const result = await request<LoginResult>(path, { method: 'POST', body: JSON.stringify(body) }, signInTimeoutMs)
 
     if (result.isSuccess && result.token && result.role) {
       storeSession(result.token, result.role)
@@ -137,11 +148,12 @@ async function signIn(path: string, body: Api.LoginDto | Api.DemoLoginDto): Prom
 }
 
 // Users and appointments are loaded on their own, a page or a week at a time.
-export async function loadHospitalData() {
+// Aborting the signal drops a load that a newer one has replaced.
+export async function loadHospitalData(signal?: AbortSignal) {
   const [departments, doctors, schedules] = await Promise.all([
-    getData<Api.ViewDepartmentDtoListServiceResult>('/api/Department/ViewDepartment'),
-    getData<Api.DoctorDisplayDtoListServiceResult>('/api/Users/ListDoctors'),
-    getData<Api.ViewScheduleListServiceResult>('/api/schedule/list-schedule'),
+    getData<Api.ViewDepartmentDtoListServiceResult>('/api/departments', signal),
+    getData<Api.DoctorDisplayDtoListServiceResult>('/api/doctors', signal),
+    getData<Api.ViewScheduleListServiceResult>('/api/schedules', signal),
   ])
 
   return { departments, doctors, schedules }
@@ -154,7 +166,7 @@ export async function loadAppointments(doctorId: number, from: Date, to: Date) {
     from: toLocalIsoString(from),
     to: toLocalIsoString(to),
   })
-  return getData<Api.ViewAppointmentDtoListServiceResult>(`/api/Appointments/ListAppointments?${query}`)
+  return getData<Api.ViewAppointmentDtoListServiceResult>(`/api/appointments?${query}`)
 }
 
 // search matches part of a username or role; the API caps it at 50 characters.
@@ -162,113 +174,129 @@ export async function loadUsers(search: string, page: number): Promise<UsersPage
   const query = new URLSearchParams({ page: String(page), pageSize: String(usersPageSize) })
   const term = search.trim().slice(0, 50)
   if (term) query.set('search', term)
-  return getData<Api.UserDisplayDtoPagedResultServiceResult>(`/api/Users/ListUsers?${query}`)
+  return getData<Api.UserDisplayDtoPagedResultServiceResult>(`/api/users?${query}`)
 }
 
 export async function createAppointment(input: CreateAppointmentInput) {
-  return post<Api.CreateAppointmentResultDto>('/api/Appointments/CreateAppointment', input)
+  return send<Api.CreateAppointmentResultDto>('POST', '/api/appointments', input)
 }
 
-export async function cancelAppointment(input: CancelAppointmentInput) {
-  return post<Api.CancelAppointmentResultDto>('/api/Appointments/CancelAppointment', input)
+export async function cancelAppointment(appointmentId: number, reason: string) {
+  return send<Api.CancelAppointmentResultDto>(
+    'POST',
+    `/api/appointments/${appointmentId}/cancel`,
+    { reason } satisfies Api.CancelAppointmentDto,
+  )
 }
 
 export async function createDepartment(name: string) {
-  return post<Api.DepartmentActionResultDto>('/api/Department/CreateDepartment', { name } satisfies Api.CreateDepartmentDto)
+  return send<Api.DepartmentActionResultDto>('POST', '/api/departments', { name } satisfies Api.CreateDepartmentDto)
 }
 
 export async function changeDepartmentStatus(departmentId: number, isActive: boolean, cancel?: CancelAffected) {
-  return post<Api.DepartmentActionResultDto>(
-    '/api/Department/ChangeDepartmentStatus',
-    { departmentId, isActive, ...cancel } satisfies Api.ChangeDepartmentStatusDto,
+  return send<Api.DepartmentActionResultDto>(
+    'PATCH',
+    `/api/departments/${departmentId}/status`,
+    { isActive, ...cancel } satisfies Api.ChangeDepartmentStatusDto,
   )
 }
 
 export async function createUser(name: string, password: string) {
-  return post<Api.CreateUserResultDto>('/api/Auth/CreateUser', { name, password } satisfies Api.CreateUserDto)
+  return send<Api.CreateUserResultDto>('POST', '/api/users', { name, password } satisfies Api.CreateUserDto)
 }
 
-export async function changeUserRole(userId: number, newRole: UserRole, cancel?: CancelAffected) {
-  return post<Api.ChangeRoleResultDto>(
-    '/api/Users/change-role',
-    { userId, newRole, ...cancel } satisfies Api.ChangeRoleDto,
+// departmentId is where a user who has never been a doctor will work.
+export async function changeUserRole(userId: number, newRole: UserRole, departmentId?: number, cancel?: CancelAffected) {
+  return send<Api.ChangeRoleResultDto>(
+    'PATCH',
+    `/api/users/${userId}/role`,
+    { newRole, departmentId, ...cancel } satisfies Api.ChangeRoleDto,
   )
 }
 
 export async function resetPassword(userId: number, newPassword: string) {
-  return post<Api.ResetPasswordResultDto>(
-    '/api/Users/reset-password',
-    { userId, newPassword } satisfies Api.ResetPasswordDto,
+  return send<Api.ResetPasswordResultDto>(
+    'PUT',
+    `/api/users/${userId}/password`,
+    { newPassword } satisfies Api.ResetPasswordDto,
   )
 }
 
 export async function changeDoctorStatus(doctor: DoctorDto, isActive: boolean, cancel?: CancelAffected) {
-  return post<Api.ChangeDoctorsStatusResult>(
-    '/api/Users/change-doctor-status',
-    { doctorId: doctor.doctorId, isActive, ...cancel } satisfies Api.ChangeDoctorStatusDto,
+  return send<Api.ChangeDoctorsStatusResult>(
+    'PATCH',
+    `/api/doctors/${doctor.doctorId}/status`,
+    { isActive, ...cancel } satisfies Api.ChangeDoctorStatusDto,
   )
 }
 
 export async function changeDoctorDepartment(doctorId: number, departmentId: number) {
-  return post<Api.DepartmentActionResultDto>(
-    '/api/Department/ChangeDoctorDepartment',
-    { doctorId, departmentId } satisfies Api.ChangeDoctorDepartmentDto,
+  return send<Api.DepartmentActionResultDto>(
+    'PATCH',
+    `/api/doctors/${doctorId}/department`,
+    { departmentId } satisfies Api.ChangeDoctorDepartmentDto,
   )
 }
 
 export async function createSchedule(input: CreateScheduleInput) {
-  return post<Api.CalendarActionResult>('/api/schedule/create-schedule', input)
+  return send<Api.CalendarActionResult>('POST', '/api/schedules', input)
 }
 
 // The API checks future bookings against the new hours as wall-clock times
 // in this browser's time zone.
-export async function changeSchedule(input: ChangeScheduleInput, cancel?: CancelAffected) {
-  return post<Api.CalendarActionResult>(
-    '/api/schedule/change-schedule',
+export async function changeSchedule(scheduleId: number, input: ChangeScheduleInput, cancel?: CancelAffected) {
+  return send<Api.CalendarActionResult>(
+    'PUT',
+    `/api/schedules/${scheduleId}`,
     { ...input, ...cancel, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } satisfies Api.ChangeScheduleDto,
   )
 }
 
 export async function changeAppointmentStatus(appointmentId: number, status: 'Completed' | 'NoShow') {
-  return post<Api.AppointmentStatusResultDto>(
-    '/api/Appointments/ChangeAppointmentStatus',
-    { appointmentId, status } satisfies Api.ChangeAppointmentStatusDto,
+  return send<Api.AppointmentStatusResultDto>(
+    'PATCH',
+    `/api/appointments/${appointmentId}/status`,
+    { status } satisfies Api.ChangeAppointmentStatusDto,
   )
 }
 
 // The signed-in doctor's appointments that start at or after `from` and before `to`.
 export async function loadMyAppointments(from: Date, to: Date) {
   const query = new URLSearchParams({ from: toLocalIsoString(from), to: toLocalIsoString(to) })
-  return getData<Api.ViewAppointmentDtoListServiceResult>(`/api/Appointments/MyAppointments?${query}`)
+  return getData<Api.ViewAppointmentDtoListServiceResult>(`/api/appointments/mine?${query}`)
 }
 
 // search matches part of a name, or at least three digits of a phone number.
 export async function loadPatients(search: string, page: number): Promise<PatientsPage> {
-  return getData<Api.PatientSummaryDtoPagedResultServiceResult>(`/api/Patients/ListPatients?${pageQuery(search, page)}`)
+  return getData<Api.PatientSummaryDtoPagedResultServiceResult>(`/api/patients?${pageQuery(search, page)}`)
 }
 
 export async function loadPatient(patientId: number) {
-  return getData<Api.PatientDetailsDtoServiceResult>(`/api/Patients/${patientId}`)
+  return getData<Api.PatientDetailsDtoServiceResult>(`/api/patients/${patientId}`)
 }
 
-export async function updatePatient(input: UpdatePatientInput) {
-  return post<Api.PatientActionResultDto>('/api/Patients/UpdatePatient', input)
+export async function updatePatient(patientId: number, input: UpdatePatientInput) {
+  return send<Api.PatientActionResultDto>('PUT', `/api/patients/${patientId}`, input)
 }
 
 // search matches part of an action or of the details.
 export async function loadAuditLogs(search: string, page: number): Promise<AuditLogPage> {
-  return getData<Api.AuditLogEntryDtoPagedResultServiceResult>(`/api/AuditLogs/ListAuditLogs?${pageQuery(search, page)}`)
+  return getData<Api.AuditLogEntryDtoPagedResultServiceResult>(`/api/audit-logs?${pageQuery(search, page)}`)
 }
 
 // Changing the password signs out every other session; this one carries on
 // with the token that comes back.
 export async function changeOwnPassword(currentPassword: string, newPassword: string) {
-  const result = await post<Api.ChangePasswordResultDto>(
-    '/api/Auth/change-password',
+  const session = getStoredSession()
+  const revision = sessionRevision
+  const result = await send<Api.ChangePasswordResultDto>(
+    'POST',
+    '/api/auth/change-password',
     { currentPassword, newPassword } satisfies Api.ChangePasswordDto,
   )
-  const role = getStoredSession()?.role
-  if (result.token && role) storeSession(result.token, role)
+  if (result.token && session && sessionRevision === revision && getStoredSession()?.token === session.token) {
+    storeSession(result.token, session.role)
+  }
   return result
 }
 
@@ -286,17 +314,17 @@ export function canListUsers(role: UserRole) {
 
 // The data of a successful list request. Failures arrive as error statuses,
 // which request() turns into errors.
-async function getData<R extends DataOutcome>(path: string): Promise<NonNullable<R['data']>> {
-  const result = await request<R>(path)
+async function getData<R extends DataOutcome>(path: string, signal?: AbortSignal): Promise<NonNullable<R['data']>> {
+  const result = await request<R>(path, { signal })
   if (!result.isSuccess || result.data == null) {
     throw new Error(result.error ?? 'Request failed')
   }
   return result.data
 }
 
-async function post<R extends Outcome>(path: string, body: unknown): Promise<R> {
+async function send<R extends Outcome>(method: 'POST' | 'PUT' | 'PATCH', path: string, body: unknown): Promise<R> {
   const result = await request<R>(path, {
-    method: 'POST',
+    method,
     body: JSON.stringify(body),
   })
 
@@ -307,14 +335,19 @@ async function post<R extends Outcome>(path: string, body: unknown): Promise<R> 
   return result
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem(tokenStorageKey)
+// A caller's signal cancels a request that is no longer wanted; the timeout
+// gives up on one that takes too long.
+async function request<T>(path: string, init: RequestInit = {}, timeoutMs = requestTimeoutMs): Promise<T> {
+  const session = getStoredSession()
+  const token = session?.token
+  const revision = sessionRevision
 
   let response: Response
   try {
+    const timeout = AbortSignal.timeout(timeoutMs)
     response = await fetch(apiUrl(path), {
       ...init,
-      signal: init.signal ?? AbortSignal.timeout(requestTimeoutMs),
+      signal: init.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -322,8 +355,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       },
     })
   } catch (error) {
-    if (error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
-      throw new Error('Request timed out. Please try again.')
+    // A request the caller cancelled stays an AbortError, which callers ignore.
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new Error('Request timed out. Please try again.', { cause: error })
     }
     throw error
   }
@@ -341,14 +375,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       payload?.Title ??
       getModelStateMessage(payload?.errors ?? payload?.Errors)
     if (response.status === 401 && token) {
-      clearSession()
-      window.dispatchEvent(new Event(sessionExpiredEvent))
+      // A response from a previous account can arrive after a new sign-in.
+      // Only that request's own session may be expired by its 401.
+      if (sessionRevision === revision && getStoredSession()?.token === token) {
+        clearSession()
+        window.dispatchEvent(new Event(sessionExpiredEvent))
+      }
       throw new Error('Your session has expired. Please sign in again.')
     }
     if (response.status === 403) {
-      const role = localStorage.getItem(roleStorageKey)
       throw new Error(
-        role?.startsWith('Demo')
+        isDemoRole(session?.role)
           ? 'Not allowed to do that. Demo accounts are read-only.'
           : 'Not allowed to do that.',
       )

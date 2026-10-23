@@ -5,36 +5,28 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HospitalSystem.Services.Calendar;
 
-public class ScheduleModificationService : IScheduleModificationService
+public class ScheduleModificationService(
+    ApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IAuditLogService auditLog) : IScheduleModificationService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly ICurrentUserService _currentUser;
-    private readonly IAuditLogService _auditLog;
-
-    public ScheduleModificationService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
-    {
-        _context = context;
-        _currentUser = currentUser;
-        _auditLog = auditLog;
-    }
-
     public async Task<CalendarActionResult> ChangeScheduleAsync(ChangeScheduleDto dto)
     {
-        if (!_currentUser.IsInRole(UserRole.Admin))
-            return CalendarActionResult.Forbidden("You are not allowed to change a schedule");
+        if (currentUser.RequireAdmin<CalendarActionResult>("change a schedule") is { } refusal)
+            return refusal;
 
         if (string.IsNullOrWhiteSpace(dto.TimeZone) || !TimeZoneInfo.TryFindSystemTimeZoneById(dto.TimeZone, out var timeZone))
             return CalendarActionResult.Fail("A valid time zone is required, such as Europe/Sofia");
 
         // The doctor and the doctor's other schedules come with the schedule:
         // one query instead of three. Doctors normally have no other schedule.
-        var found = await _context.Calendars
+        var found = await context.Calendars
             .Where(c => c.Id == dto.ScheduleId)
             .Select(c => new
             {
                 Calendar = c,
                 Doctor = new ScheduleValidation.DoctorState(c.Doctor.IsActive, c.Doctor.Department.IsActive),
-                OtherSchedules = _context.Calendars
+                OtherSchedules = context.Calendars
                     .Where(u => u.DoctorId == c.DoctorId && u.Id != c.Id)
                     .Select(u => new { u.StartTime, u.EndTime })
                     .ToList()
@@ -65,21 +57,21 @@ public class ScheduleModificationService : IScheduleModificationService
 
         // Bookings already made must still fall on a working day, inside the
         // hours and on the slot grid, read as wall-clock times where the admin is.
-        var future = await AffectedBookings.LoadFutureAsync(_context, a => a.DoctorId == calendar.DoctorId);
+        var future = await AffectedBookings.LoadFutureAsync(context, a => a.DoctorId == calendar.DoctorId);
         var stranded = future
             .Where(a => !FitsSchedule(TimeZoneInfo.ConvertTimeFromUtc(a.TimeOfAppointment, timeZone), dto, workingDays))
             .ToList();
-        var refusal = await AffectedBookings.ResolveAsync<CalendarActionResult>(
-            stranded, dto, _auditLog, $"schedule change for doctor {calendar.DoctorId}");
-        if (refusal is not null)
-            return refusal;
+        var bookingRefusal = await AffectedBookings.ResolveAsync<CalendarActionResult>(
+            stranded, dto, auditLog, $"schedule change for doctor {calendar.DoctorId}");
+        if (bookingRefusal is not null)
+            return bookingRefusal;
 
         calendar.StartTime = start;
         calendar.EndTime = end;
         calendar.SlotDurationMin = dto.SlotDurationMin;
         calendar.WorkingDays = workingDays;
-        await _auditLog.LogAsync("ChangeSchedule", "Calendar", calendar.Id, $"Updated schedule for doctor {calendar.DoctorId}");
-        await _context.SaveChangesAsync();
+        await auditLog.LogAsync("ChangeSchedule", "Calendar", calendar.Id, $"Updated schedule for doctor {calendar.DoctorId}");
+        await context.SaveChangesAsync();
         return CalendarActionResult.Success();
     }
 

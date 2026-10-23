@@ -1,26 +1,18 @@
 using Microsoft.EntityFrameworkCore;
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.User;
- 
+
 namespace HospitalSystem.Services.User;
- 
-public class UserQueryService : IUserQueryService
+
+public class UserQueryService(
+    ApplicationDbContext context,
+    ICurrentUserService currentUser,
+    TimeProvider clock) : IUserQueryService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly ICurrentUserService _currentUser;
- 
-    public UserQueryService(ApplicationDbContext context, ICurrentUserService currentUser)
-    {
-        _context = context;
-        _currentUser = currentUser;
-    }
- 
     public async Task<ServiceResult<PagedResult<UserDisplayDto>>> ListUsersAsync(UserQueryDto query)
     {
-        if (!_currentUser.IsInRole(UserRole.Admin))
-        {
+        if (!currentUser.IsAdmin())
             return ServiceResult<PagedResult<UserDisplayDto>>.Forbidden("Not allowed to list users");
-        }
 
         if (query.Page < 1 || query.Page > UserQueryDto.MaxPage)
             return ServiceResult<PagedResult<UserDisplayDto>>.Fail($"Page must be between 1 and {UserQueryDto.MaxPage}");
@@ -28,7 +20,7 @@ public class UserQueryService : IUserQueryService
         if (query.PageSize < 1 || query.PageSize > UserQueryDto.MaxPageSize)
             return ServiceResult<PagedResult<UserDisplayDto>>.Fail($"Page size must be between 1 and {UserQueryDto.MaxPageSize}");
 
-        var users = _context.Users.AsQueryable();
+        var users = context.Users.AsQueryable();
         var search = query.Search?.Trim().ToLowerInvariant();
         if (!string.IsNullOrEmpty(search))
         {
@@ -40,6 +32,7 @@ public class UserQueryService : IUserQueryService
             users = users.Where(u => u.Name.ToLower().Contains(search) || matchingRoles.Contains(u.Role));
         }
 
+        var now = clock.GetUtcNow().UtcDateTime;
         var rows = await users
             .OrderBy(u => u.Name)
             .Skip((query.Page - 1) * query.PageSize)
@@ -50,7 +43,8 @@ public class UserQueryService : IUserQueryService
                 {
                     UserId = u.Id,
                     UserName = u.Name,
-                    Role = u.Role
+                    Role = u.Role,
+                    LockedUntil = u.LockedUntil > now ? u.LockedUntil : null
                 },
                 // Counted by the same statement, so a page and its total cost
                 // one round trip.
@@ -72,18 +66,13 @@ public class UserQueryService : IUserQueryService
             PageSize = query.PageSize
         });
     }
- 
+
     public async Task<ServiceResult<List<DoctorDisplayDto>>> ListDoctorsAsync()
     {
-        if (!_currentUser.IsInRole(UserRole.Admin) &&
-            !_currentUser.IsInRole(UserRole.FrontDesk) &&
-            !_currentUser.IsInRole(UserRole.DemoAdmin) &&
-            !_currentUser.IsInRole(UserRole.DemoFrontDesk))
-        {
+        if (!currentUser.CanReadReferenceData())
             return ServiceResult<List<DoctorDisplayDto>>.Forbidden("You are not allowed to list doctors");
-        }
- 
-        var doctors = await _context.Doctors
+
+        var doctors = await context.Doctors
             .Where(d => d.User.Role == UserRole.Doctor)
             .Select(d => new DoctorDisplayDto
             {
@@ -94,7 +83,7 @@ public class UserQueryService : IUserQueryService
                 IsActive = d.IsActive
             })
             .ToListAsync();
- 
+
         return ServiceResult<List<DoctorDisplayDto>>.Success(doctors);
     }
 }

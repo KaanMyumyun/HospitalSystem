@@ -4,29 +4,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HospitalSystem.Services.Calendar;
 
-public class ScheduleQueryService : IScheduleQueryService
+public class ScheduleQueryService(
+    ApplicationDbContext context,
+    ICurrentUserService currentUser) : IScheduleQueryService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly ICurrentUserService _currentUser;
-
-    public ScheduleQueryService(ApplicationDbContext context, ICurrentUserService currentUser)
-    {
-        _context = context;
-        _currentUser = currentUser;
-    }
-
     public async Task<ServiceResult<List<ViewSchedule>>> ViewScheduleAsync()
     {
-        if (!_currentUser.IsInRole(UserRole.FrontDesk) &&
-            !_currentUser.IsInRole(UserRole.Admin) &&
-            !_currentUser.IsInRole(UserRole.DemoAdmin) &&
-            !_currentUser.IsInRole(UserRole.DemoFrontDesk))
-        {
-            return ServiceResult<List<ViewSchedule>>
-                .Forbidden("Not allowed to list schedules");
-        }
+        if (!currentUser.CanReadReferenceData())
+            return ServiceResult<List<ViewSchedule>>.Forbidden("Not allowed to list schedules");
 
-        var schedule = await _context.Calendars
+        var schedule = await context.Calendars
             .AsNoTracking()
             .Select(u => new ViewSchedule
             {

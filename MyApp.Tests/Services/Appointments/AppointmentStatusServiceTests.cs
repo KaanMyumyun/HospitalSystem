@@ -130,7 +130,7 @@ public class AppointmentStatusServiceTests : AppointmentTestBase
         await SeedStandardDataAsync(db);
         db.Users.Add(new UserEntity { Id = 2, Name = "Dr. Other", PasswordHash = "x", Role = UserRole.Doctor });
         db.Doctors.Add(new DoctorEntity { Id = 2, UserId = 2, DepartmentId = 1, IsActive = true });
-        db.Appointments.Add(new AppointmentsEntity
+        db.Appointments.Add(new AppointmentEntity
         {
             Id = 20, DoctorId = 2, PatientId = 1, CreatedByTheFrontDeskId = 5, Status = AppointmentStatus.Scheduled,
             TimeOfAppointment = new DateTime(2026, 1, 1, 11, 0, 0, DateTimeKind.Utc), CreatedAt = DateTime.UtcNow

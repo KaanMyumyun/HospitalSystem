@@ -2,38 +2,29 @@ using Microsoft.EntityFrameworkCore;
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.User;
 using HospitalSystem.Services.Auth;
- 
-namespace HospitalSystem.Services.User;
- 
-public class CreateDoctorService : ICreateDoctorService
-{
-    private readonly ApplicationDbContext _context;
-    private readonly ICurrentUserService _currentUser;
-    private readonly IAuditLogService _auditLog;
-    private readonly SecurityStampCache _stamps;
 
-    public CreateDoctorService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog, SecurityStampCache stamps)
-    {
-        _context = context;
-        _currentUser = currentUser;
-        _auditLog = auditLog;
-        _stamps = stamps;
-    }
- 
+namespace HospitalSystem.Services.User;
+
+public class CreateDoctorService(
+    ApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IAuditLogService auditLog,
+    SecurityStampCache stamps) : ICreateDoctorService
+{
     public async Task<CreateDoctorResultDto> CreateDoctorAsync(CreateDoctorDto dto)
     {
-        if (!_currentUser.IsInRole(UserRole.Admin))
-            return CreateDoctorResultDto.Forbidden("You are not allowed to create a doctor");
- 
+        if (currentUser.RequireAdmin<CreateDoctorResultDto>("create a doctor") is { } refusal)
+            return refusal;
+
         // The user's doctor row, if any, and the department come with the user:
         // one query instead of three.
-        var found = await _context.Users
+        var found = await context.Users
             .Where(u => u.Id == dto.UserId)
             .Select(u => new
             {
                 User = u,
                 u.Doctor,
-                DepartmentIsActive = _context.Departments
+                DepartmentIsActive = context.Departments
                     .Where(d => d.Id == dto.DepartmentId)
                     .Select(d => (bool?)d.IsActive)
                     .FirstOrDefault()
@@ -52,17 +43,17 @@ public class CreateDoctorService : ICreateDoctorService
         if (!departmentIsActive)
             return CreateDoctorResultDto.Fail("Department is not active");
 
-        await using var transaction = await _context.Database.BeginTransactionAsync();
+        await using var transaction = await context.Database.BeginTransactionAsync();
 
         if (user.Role != UserRole.Doctor)
         {
-            var roleError = await RoleChange.ApplyAsync(_context, _currentUser, user, UserRole.Doctor);
+            var roleError = await RoleChange.ApplyAsync(context, currentUser, user, UserRole.Doctor);
             if (roleError is not null)
                 return CreateDoctorResultDto.Fail(roleError);
         }
 
         var doctor = found.Doctor;
- 
+
         if (doctor == null)
         {
             doctor = new DoctorEntity
@@ -71,7 +62,7 @@ public class CreateDoctorService : ICreateDoctorService
                 DepartmentId = dto.DepartmentId,
                 IsActive = true
             };
-            _context.Doctors.Add(doctor);
+            context.Doctors.Add(doctor);
         }
         else
         {
@@ -79,12 +70,12 @@ public class CreateDoctorService : ICreateDoctorService
             doctor.IsActive = true;
         }
 
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
-        await _auditLog.LogAsync("CreateDoctor", "Doctor", doctor.Id, $"User {user.Name} made a doctor in department {dto.DepartmentId}");
-        await _context.SaveChangesAsync();
+        await auditLog.LogAsync("CreateDoctor", "Doctor", doctor.Id, $"User {user.Name} made a doctor in department {dto.DepartmentId}");
+        await context.SaveChangesAsync();
         await transaction.CommitAsync();
-        _stamps.Forget(user.Id);
+        stamps.Forget(user.Id);
 
         return CreateDoctorResultDto.Success();
     }

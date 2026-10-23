@@ -5,12 +5,12 @@ using HospitalSystem.Services.Auth;
 using HospitalSystem.Services.User;
 
 namespace HospitalSystem.Tests;
- 
+
 public class CreateDoctorServiceTests : UserTestBase
 {
     private CreateDoctorService CreateService(ApplicationDbContext db, bool isAdmin = true, SecurityStampCache? stamps = null)
         => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db), stamps ?? CreateStampCache());
- 
+
     [Fact]
     public async Task CreateDoctorAsync_Admin_Succeeds()
     {
@@ -19,9 +19,9 @@ public class CreateDoctorServiceTests : UserTestBase
         db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.Pending });
         await db.SaveChangesAsync();
         var service = CreateService(db);
- 
+
         var result = await service.CreateDoctorAsync(new CreateDoctorDto { UserId = 1, DepartmentId = 1 });
- 
+
         Assert.True(result.IsSuccess);
         var doctor = await db.Doctors.FirstOrDefaultAsync(d => d.UserId == 1);
         Assert.NotNull(doctor);
@@ -30,31 +30,31 @@ public class CreateDoctorServiceTests : UserTestBase
         Assert.Equal(UserRole.Doctor, (await db.Users.FindAsync(1))!.Role);
         Assert.Contains(db.AuditLogs, a => a.Action == "CreateDoctor" && a.EntityId == doctor.Id);
     }
- 
+
     [Fact]
     public async Task CreateDoctorAsync_NotAdmin_Fails()
     {
         var db = CreateDbContext();
         var service = CreateService(db, isAdmin: false);
- 
+
         var result = await service.CreateDoctorAsync(new CreateDoctorDto { UserId = 1 });
- 
+
         Assert.False(result.IsSuccess);
     }
- 
+
     [Fact]
     public async Task CreateDoctorAsync_UserNotFound_Fails()
     {
         var db = CreateDbContext();
         var service = CreateService(db);
- 
+
         var result = await service.CreateDoctorAsync(new CreateDoctorDto { UserId = 1000, DepartmentId = 1 });
- 
+
         Assert.False(result.IsSuccess);
         Assert.Equal("User not found", result.Error);
         Assert.Equal(FailureKind.NotFound, result.Failure);
     }
- 
+
     [Fact]
     public async Task CreateDoctorAsync_DepartmentNotFound_Fails()
     {
@@ -69,7 +69,7 @@ public class CreateDoctorServiceTests : UserTestBase
         Assert.Equal("Department not found", result.Error);
         Assert.Equal(FailureKind.NotFound, result.Failure);
     }
- 
+
     [Fact]
     public async Task CreateDoctorAsync_ExistingDoctor_UpdatesAndReactivates()
     {
@@ -78,9 +78,9 @@ public class CreateDoctorServiceTests : UserTestBase
         db.Departments.Add(new DepartmentEntity { Id = 2, Department = "Neurology", IsActive = true });
         await db.SaveChangesAsync();
         var service = CreateService(db);
- 
+
         var result = await service.CreateDoctorAsync(new CreateDoctorDto { UserId = 1, DepartmentId = 2 });
- 
+
         Assert.True(result.IsSuccess);
         var doctor = await db.Doctors.FirstOrDefaultAsync(d => d.UserId == 1);
         Assert.True(doctor!.IsActive);

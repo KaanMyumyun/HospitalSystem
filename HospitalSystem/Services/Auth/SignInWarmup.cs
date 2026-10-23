@@ -9,24 +9,18 @@ namespace HospitalSystem.Services.Auth;
 // sign-ins after every start pay for them. The password check is left out on
 // purpose: it costs the same on every sign-in, so running it here would only
 // slow startup.
-public sealed class SignInWarmup : IHostedService
+public sealed class SignInWarmup(
+    IServiceScopeFactory scopeFactory,
+    IOptions<JwtSettings> jwtOptions,
+    ILogger<SignInWarmup> logger) : IHostedService
 {
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly JwtSettings _jwtSettings;
-    private readonly ILogger<SignInWarmup> _logger;
-
-    public SignInWarmup(IServiceScopeFactory scopeFactory, IOptions<JwtSettings> jwtOptions, ILogger<SignInWarmup> logger)
-    {
-        _scopeFactory = scopeFactory;
-        _jwtSettings = jwtOptions.Value;
-        _logger = logger;
-    }
+    private readonly JwtSettings _jwtSettings = jwtOptions.Value;
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await using var scope = _scopeFactory.CreateAsyncScope();
+            await using var scope = scopeFactory.CreateAsyncScope();
             var services = scope.ServiceProvider;
 
             // Does nothing unless demo sign-in is enabled.
@@ -39,7 +33,7 @@ public sealed class SignInWarmup : IHostedService
         catch (Exception exception)
         {
             // A slower first sign-in is better than not starting at all.
-            _logger.LogWarning(exception, "Sign-in warm-up failed; the first sign-in will be slower");
+            logger.LogWarning(exception, "Sign-in warm-up failed; the first sign-in will be slower");
         }
     }
 

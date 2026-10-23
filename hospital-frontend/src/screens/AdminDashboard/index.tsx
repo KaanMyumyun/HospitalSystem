@@ -4,6 +4,7 @@ import type {
   DepartmentDto,
   DoctorDto,
   ScheduleDto,
+  UserDto,
   UserRole,
   UsersPage,
 } from '../../api'
@@ -58,17 +59,17 @@ export function AdminDashboard({
   usersLoading: boolean
   // Admins only: entries name users, which demo admins may not see.
   canReadAuditLog: boolean
-  onAssignDoctor: (doctorId: number, departmentId: number) => Promise<ActionOutcome>
-  onChangeDepartmentStatus: (departmentId: number, isActive: boolean) => Promise<ActionOutcome>
+  onAssignDoctor: (doctor: DoctorDto, departmentId: number) => Promise<ActionOutcome>
+  onChangeDepartmentStatus: (department: DepartmentDto, isActive: boolean) => Promise<ActionOutcome>
   onChangeDoctorStatus: (doctor: DoctorDto, isActive: boolean) => Promise<ActionOutcome>
-  onChangeSchedule: (input: ChangeScheduleInput) => Promise<ActionOutcome>
-  onChangeUserRole: (userId: number, role: UserRole) => Promise<ActionOutcome>
+  onChangeSchedule: (scheduleId: number, input: ChangeScheduleInput) => Promise<ActionOutcome>
+  onChangeUserRole: (user: UserDto, role: UserRole) => Promise<ActionOutcome>
   onCreateDepartment: (name: string) => Promise<ActionOutcome>
   onCreateSchedule: (input: CreateScheduleInput) => Promise<ActionOutcome>
   onCreateUser: (name: string, password: string) => Promise<ActionOutcome>
   onError: (message: string) => void
   onNavigate: (screen: Screen) => void
-  onResetPassword: (userId: number, password: string) => Promise<ActionOutcome>
+  onResetPassword: (user: UserDto, password: string) => Promise<ActionOutcome>
   onSelectDepartment: (departmentId: number) => void
   onUsersPageChange: (page: number) => void
 }) {

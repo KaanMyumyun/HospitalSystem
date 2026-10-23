@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Moq;
 using HospitalSystem.Interfaces;
 using Xunit;
@@ -5,11 +6,11 @@ using HospitalSystem.Services;
 using HospitalSystem.Services.User;
 
 namespace HospitalSystem.Tests;
- 
+
 public class UserQueryServiceTests : UserTestBase
 {
     private UserQueryService CreateService(ApplicationDbContext db, bool isAdmin = true, bool isFrontDesk = false)
-        => new(db, CreateCurrentUser(isAdmin, isFrontDesk));
+        => new(db, CreateCurrentUser(isAdmin, isFrontDesk), TimeProvider.System);
 
     private static async Task SeedUsersAsync(ApplicationDbContext db, params (string Name, UserRole Role)[] users)
     {
@@ -134,12 +135,12 @@ public class UserQueryServiceTests : UserTestBase
         var service = CreateService(db, isAdmin: false);
 
         var result = await service.ListUsersAsync(new UserQueryDto());
- 
+
         Assert.False(result.IsSuccess);
         Assert.Equal("Not allowed to list users", result.Error);
         Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
- 
+
     [Fact]
     public async Task ListDoctorsAsync_Admin_Succeeds()
     {
@@ -158,37 +159,37 @@ public class UserQueryServiceTests : UserTestBase
         );
         await db.SaveChangesAsync();
         var service = CreateService(db);
- 
+
         var result = await service.ListDoctorsAsync();
- 
+
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Data);
         Assert.Equal(2, result.Data.Count);
         Assert.Contains(result.Data, d => d.UserId == 1 && d.Name == "Alice" && d.IsActive == true);
         Assert.Contains(result.Data, d => d.UserId == 2 && d.Name == "Bob" && d.IsActive == false);
     }
- 
+
     [Fact]
     public async Task ListDoctorsAsync_NotAdmin_Fails()
     {
         var db = CreateDbContext();
         var service = CreateService(db, isAdmin: false);
- 
+
         var result = await service.ListDoctorsAsync();
- 
+
         Assert.False(result.IsSuccess);
         Assert.Equal("You are not allowed to list doctors", result.Error);
         Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
- 
+
     [Fact]
     public async Task ListDoctorsAsync_FrontDesk_Succeeds()
     {
         var db = CreateDbContext();
         var service = CreateService(db, isAdmin: false, isFrontDesk: true);
- 
+
         var result = await service.ListDoctorsAsync();
- 
+
         Assert.True(result.IsSuccess);
     }
 
@@ -215,12 +216,33 @@ public class UserQueryServiceTests : UserTestBase
         var db = CreateDbContext();
         var currentUser = new Mock<ICurrentUserService>();
         currentUser.Setup(x => x.IsInRole(demoRole)).Returns(true);
-        var service = new UserQueryService(db, currentUser.Object);
+        var service = new UserQueryService(db, currentUser.Object, TimeProvider.System);
 
         var result = await service.ListUsersAsync(new UserQueryDto());
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Not allowed to list users", result.Error);
         Assert.Equal(FailureKind.Forbidden, result.Failure);
+    }
+
+    [Fact]
+    public async Task ListUsersAsync_ShowsOnlyLocksThatHaveNotRunOut()
+    {
+        var db = CreateDbContext();
+        var now = new DateTimeOffset(2026, 3, 2, 12, 0, 0, TimeSpan.Zero);
+        db.Users.AddRange(
+            new UserEntity { Id = 1, Name = "locked", PasswordHash = "x", Role = UserRole.FrontDesk, LockedUntil = now.UtcDateTime.AddMinutes(5) },
+            new UserEntity { Id = 2, Name = "lapsed", PasswordHash = "x", Role = UserRole.FrontDesk, LockedUntil = now.UtcDateTime.AddMinutes(-5) },
+            new UserEntity { Id = 3, Name = "open", PasswordHash = "x", Role = UserRole.FrontDesk });
+        await db.SaveChangesAsync();
+        var service = new UserQueryService(db, CreateCurrentUser(), new FixedClock(now));
+
+        var result = await service.ListUsersAsync(new UserQueryDto());
+
+        Assert.NotNull(result.Data);
+        var lockedUntil = result.Data.Items.ToDictionary(u => u.UserName, u => u.LockedUntil);
+        Assert.Equal(now.UtcDateTime.AddMinutes(5), lockedUntil["locked"]);
+        Assert.Null(lockedUntil["lapsed"]);
+        Assert.Null(lockedUntil["open"]);
     }
 }

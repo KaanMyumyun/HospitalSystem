@@ -1,7 +1,7 @@
 using HospitalSystem.Interfaces;
 using HospitalSystem.Services.Auth;
 using HospitalSystem.Services.Calendar;
-using HospitalSystem.Services.Deparment;
+using HospitalSystem.Services.Department;
 using HospitalSystem.Services.User;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -60,7 +60,7 @@ public class AffectedBookingsTests
         await db.SaveChangesAsync();
     }
 
-    private static AppointmentsEntity Booking(int id, DateTime time, AppointmentStatus status = AppointmentStatus.Scheduled) => new()
+    private static AppointmentEntity Booking(int id, DateTime time, AppointmentStatus status = AppointmentStatus.Scheduled) => new()
     {
         Id = id,
         DoctorId = 1,

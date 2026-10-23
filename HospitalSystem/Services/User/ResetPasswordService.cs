@@ -1,52 +1,58 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.User;
 using HospitalSystem.Services.Auth;
- 
+
 namespace HospitalSystem.Services.User;
- 
-public class ResetPasswordService : IResetPasswordService
+
+public class ResetPasswordService(
+    ApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IAuditLogService auditLog,
+    SecurityStampCache stamps,
+    IPasswordHasher<UserEntity> hasher) : IResetPasswordService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly ICurrentUserService _currentUser;
-    private readonly PasswordHasher<UserEntity> _hasher;
-    private readonly IAuditLogService _auditLog;
-    private readonly SecurityStampCache _stamps;
- 
-    public ResetPasswordService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog, SecurityStampCache stamps)
-    {
-        _context = context;
-        _currentUser = currentUser;
-        _auditLog = auditLog;
-        _stamps = stamps;
-        _hasher = new PasswordHasher<UserEntity>();
-    }
- 
     public async Task<ResetPasswordResultDto> ResetPasswordAsync(ResetPasswordDto dto)
     {
-        if (!_currentUser.IsInRole(UserRole.Admin))
-            return ResetPasswordResultDto.Forbidden("You are not allowed to reset password");
- 
+        if (currentUser.RequireAdmin<ResetPasswordResultDto>("reset a password") is { } refusal)
+            return refusal;
+
         if (string.IsNullOrWhiteSpace(dto.NewPassword))
             return ResetPasswordResultDto.Fail("No password entered");
 
         if (dto.NewPassword.Length < 8)
             return ResetPasswordResultDto.Fail("Password must be at least 8 characters long");
- 
-        var user = await _context.Users.FindAsync(dto.UserId);
+
+        await using var transaction = context.Database.IsNpgsql()
+            ? await context.Database.BeginTransactionAsync()
+            : null;
+        var result = await ResetPasswordWithLockedUserAsync(dto);
+        if (transaction is not null)
+            await transaction.CommitAsync();
+        if (result.IsSuccess)
+            stamps.Forget(dto.UserId);
+        return result;
+    }
+
+    private async Task<ResetPasswordResultDto> ResetPasswordWithLockedUserAsync(ResetPasswordDto dto)
+    {
+        var user = await SignInLockout.FindByIdForUpdateAsync(context, dto.UserId);
         if (user == null)
             return ResetPasswordResultDto.NotFound("User not found");
- 
-        user.PasswordHash = _hasher.HashPassword(user, dto.NewPassword);
+
+        user.PasswordHash = hasher.HashPassword(user, dto.NewPassword);
         user.SecurityStamp = Guid.NewGuid().ToString();
-        await _auditLog.LogAsync(
+        // A reset is also how an admin lets a locked-out user back in.
+        var unlocked = user.LockedUntil is not null;
+        SignInLockout.Clear(user);
+        await auditLog.LogAsync(
             "ResetPassword",
             "User",
             user.Id,
-            $"Password reset for user {user.Name}");
-        await _context.SaveChangesAsync();
-        _stamps.Forget(user.Id);
- 
+            $"Password reset for user {user.Name}{(unlocked ? ", which lifted the sign-in lock" : "")}");
+        await context.SaveChangesAsync();
+
         return ResetPasswordResultDto.Success();
     }
 }

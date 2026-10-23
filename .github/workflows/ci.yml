@@ -20,6 +20,18 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432/tcp
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -38,6 +50,8 @@ jobs:
         run: dotnet build --no-restore
 
       - name: Test
+        env:
+          HOSPITALSYSTEM_TEST_POSTGRES: Host=127.0.0.1;Port=${{ job.services.postgres.ports[5432] }};Username=postgres;Password=postgres;Database=postgres;Pooling=false
         run: dotnet test --no-build --verbosity normal
 
   frontend:

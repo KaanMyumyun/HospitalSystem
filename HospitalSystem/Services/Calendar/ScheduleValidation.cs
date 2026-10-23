@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HospitalSystem.Services.Calendar;
 
-internal static class ScheduleValidation
+public static class ScheduleValidation
 {
     // What the checks need to know about the schedule's doctor.
     public sealed record DoctorState(bool IsActive, bool DepartmentIsActive);

@@ -4,35 +4,32 @@ using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.Appointments;
 
 namespace HospitalSystem.Services.Appointments;
- 
-public class AppointmentCreationService : IAppointmentCreationService
-{
-    private readonly ApplicationDbContext _context;
-    private readonly ICurrentUserService _currentUser;
-    private readonly IPatientService _patientService;
-    private readonly IAuditLogService _auditLog;
 
+public class AppointmentCreationService(
+    ApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IPatientService patientService,
+    IAuditLogService auditLog,
+    TimeProvider clock) : IAppointmentCreationService
+{
     private const int MaxPossibleMatches = 10;
 
-    public AppointmentCreationService(
-        ApplicationDbContext context,
-        ICurrentUserService currentUser,
-        IPatientService patientService,
-        IAuditLogService auditLog)
+    public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppointmentDto dto)
     {
-        _context = context;
-        _currentUser = currentUser;
-        _patientService = patientService;
-        _auditLog = auditLog;
-    }
- 
-    public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppointmentDto dto, int frontDeskUserId)
-    {
-        if (!_currentUser.IsInRole(UserRole.FrontDesk))
+        if (!currentUser.IsDesk())
             return CreateAppointmentResultDto.Forbidden("You are not allowed to create appointments");
+
+        if (!int.TryParse(currentUser.UserId, out var frontDeskUserId))
+            return CreateAppointmentResultDto.Forbidden("Sign in to create appointments");
 
         if (dto.AppointmentTime is not DateTimeOffset requestedTime)
             return CreateAppointmentResultDto.Fail("Appointment time is required");
+
+        // The calendar greys out slots that have started; the API refuses
+        // them too.
+        var now = clock.GetUtcNow();
+        if (requestedTime <= now)
+            return CreateAppointmentResultDto.Fail("Appointments cannot be booked in the past");
 
         var appointmentTime = requestedTime.UtcDateTime;
         var patientName = dto.PatientName?.Trim() ?? "";
@@ -47,13 +44,13 @@ public class AppointmentCreationService : IAppointmentCreationService
         // Fetched together so the checks below and the patient lookup cost one
         // round trip, not four.
         var doctor = await (
-            from d in _context.Doctors
+            from d in context.Doctors
             where d.Id == dto.DoctorId
             // A join, not FirstOrDefault on d.Calendars, which EF turns into a
             // numbering of every schedule on file; the join reads this
             // doctor's from the DoctorId index.
             from c in d.Calendars.DefaultIfEmpty()
-            let samePatientId = _context.Patients
+            let samePatientId = context.Patients
                 .Where(p => p.PhoneNumber == phoneNumber && p.Name.ToLower() == patientNameKey && p.DateOfBirth == dateOfBirth)
                 .OrderBy(p => p.Id)
                 .Select(p => (int?)p.Id)
@@ -79,7 +76,7 @@ public class AppointmentCreationService : IAppointmentCreationService
                 // and date of birth, may be the patient being booked. Not read
                 // when a patient matches exactly, so a phone that many patients
                 // share costs nothing on a booking for one of them.
-                PossibleMatches = _context.Patients
+                PossibleMatches = context.Patients
                     .Where(p => listPossibleMatches && samePatientId == null
                         && (p.PhoneNumber == phoneNumber || (p.Name.ToLower() == patientNameKey && p.DateOfBirth == dateOfBirth)))
                     .OrderBy(p => p.Name)
@@ -93,7 +90,7 @@ public class AppointmentCreationService : IAppointmentCreationService
                         PhoneNumber = p.PhoneNumber
                     })
                     .ToList(),
-                ChosenPatientExists = chosenPatientId != null && _context.Patients.Any(p => p.Id == chosenPatientId)
+                ChosenPatientExists = chosenPatientId != null && context.Patients.Any(p => p.Id == chosenPatientId)
             })
             .FirstOrDefaultAsync();
         if (doctor == null)
@@ -120,7 +117,7 @@ public class AppointmentCreationService : IAppointmentCreationService
         // when it starts less than a slot before or after it.
         var slotLength = TimeSpan.FromMinutes(schedule.SlotDurationMin);
         if (doctor.PreviousStart > appointmentTime - slotLength || doctor.NextStart < appointmentTime + slotLength)
-            return CreateAppointmentResultDto.Fail("Doctor already booked for that time slot");
+            return CreateAppointmentResultDto.Conflict("Doctor already booked for that time slot");
 
         if (chosenPatientId is not null && !doctor.ChosenPatientExists)
             return CreateAppointmentResultDto.NotFound("Patient not found");
@@ -137,35 +134,35 @@ public class AppointmentCreationService : IAppointmentCreationService
                 doctor.PossibleMatches);
         }
 
-        await using var transaction = await _context.Database.BeginTransactionAsync();
+        await using var transaction = await context.Database.BeginTransactionAsync();
 
         var bookedPatientId = patientId
-            ?? await _patientService.CreatePatientAsync(patientName, phoneNumber, dateOfBirth!.Value);
+            ?? await patientService.CreatePatientAsync(patientName, phoneNumber, dateOfBirth!.Value);
 
-        var appointment = new AppointmentsEntity
+        var appointment = new AppointmentEntity
         {
             DoctorId = dto.DoctorId,
             PatientId = bookedPatientId,
             TimeOfAppointment = appointmentTime,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = now.UtcDateTime,
             CreatedByTheFrontDeskId = frontDeskUserId,
             Status = AppointmentStatus.Scheduled
         };
- 
-        _context.Appointments.Add(appointment);
+
+        context.Appointments.Add(appointment);
 
         try
         {
-            await _context.SaveChangesAsync();
+            await context.SaveChangesAsync();
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
-            _context.Entry(appointment).State = EntityState.Detached;
+            context.Entry(appointment).State = EntityState.Detached;
             return CreateAppointmentResultDto.Conflict("Doctor already booked for that time slot");
         }
 
-        await _auditLog.LogAsync("CreateAppointment", "Appointment", appointment.Id, $"Created appointment for doctor {dto.DoctorId}");
-        await _context.SaveChangesAsync();
+        await auditLog.LogAsync("CreateAppointment", "Appointment", appointment.Id, $"Created appointment for doctor {dto.DoctorId}");
+        await context.SaveChangesAsync();
         await transaction.CommitAsync();
 
         return CreateAppointmentResultDto.Success();

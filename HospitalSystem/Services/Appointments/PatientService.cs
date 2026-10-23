@@ -3,15 +3,8 @@ using HospitalSystem.Interfaces.Appointments;
 
 namespace HospitalSystem.Services.Appointments;
 
-public class PatientService : IPatientService
+public class PatientService(ApplicationDbContext context) : IPatientService
 {
-    private readonly ApplicationDbContext _context;
-
-    public PatientService(ApplicationDbContext context)
-    {
-        _context = context;
-    }
-
     // Booking looks for the patient in its own query and calls this only when
     // a new patient is to be registered.
     public async Task<int> CreatePatientAsync(string name, string phoneNumber, DateOnly dateOfBirth)
@@ -23,8 +16,8 @@ public class PatientService : IPatientService
             DateOfBirth = dateOfBirth
         };
 
-        _context.Patients.Add(patient);
-        await _context.SaveChangesAsync();
+        context.Patients.Add(patient);
+        await context.SaveChangesAsync();
 
         return patient.Id;
     }

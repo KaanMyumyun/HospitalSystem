@@ -13,7 +13,13 @@ public class UserEntity
 
     [Required]
     public string SecurityStamp { get; set; } = Guid.NewGuid().ToString();
+
+    // Wrong passwords in a row since the last successful sign-in, and the end
+    // of the lock they cause (see SignInLockout).
+    public int FailedSignInCount { get; set; }
+    public DateTime? LockedUntil { get; set; }
+
     public DoctorEntity? Doctor { get; set; }
-    public ICollection<AppointmentsEntity> CreatedAppointments { get; set; } = new List<AppointmentsEntity>();
+    public ICollection<AppointmentEntity> CreatedAppointments { get; set; } = new List<AppointmentEntity>();
 
 }

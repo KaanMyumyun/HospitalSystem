@@ -14,6 +14,11 @@ export function isSameDay(left: Date, right: Date) {
   )
 }
 
+// Reads the clock, so screens call this instead of new Date() while they render.
+export function isToday(day: Date) {
+  return isSameDay(day, new Date())
+}
+
 export function formatLongDate(day: Date) {
   return day.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: '2-digit' })
 }

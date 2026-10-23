@@ -3,39 +3,30 @@ using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.User;
 using HospitalSystem.Services.Appointments;
 using HospitalSystem.Services.Auth;
- 
+
 namespace HospitalSystem.Services.User;
- 
-public class DoctorStatusService : IDoctorStatusService
+
+public class DoctorStatusService(
+    ApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IAuditLogService auditLog,
+    SecurityStampCache stamps) : IDoctorStatusService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly ICurrentUserService _currentUser;
-    private readonly IAuditLogService _auditLog;
-    private readonly SecurityStampCache _stamps;
- 
-    public DoctorStatusService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog, SecurityStampCache stamps)
-    {
-        _context = context;
-        _currentUser = currentUser;
-        _auditLog = auditLog;
-        _stamps = stamps;
-    }
- 
     public async Task<ChangeDoctorsStatusResult> ChangeDoctorsStatusAsync(ChangeDoctorStatusDto dto)
     {
-        if (!_currentUser.IsInRole(UserRole.Admin))
-            return ChangeDoctorsStatusResult.Forbidden("You are not allowed to change doctor status");
+        if (currentUser.RequireAdmin<ChangeDoctorsStatusResult>("change a doctor's status") is { } refusal)
+            return refusal;
 
-        if (dto.DoctorId is not int doctorId || dto.IsActive is not bool isActive)
-            return ChangeDoctorsStatusResult.Fail("Doctor id and status are required");
- 
-        var doctor = await _context.Doctors
+        if (dto.IsActive is not bool isActive)
+            return ChangeDoctorsStatusResult.Fail("Doctor status is required");
+
+        var doctor = await context.Doctors
             .Include(d => d.User)
-            .FirstOrDefaultAsync(d => d.Id == doctorId);
- 
+            .FirstOrDefaultAsync(d => d.Id == dto.DoctorId);
+
         if (doctor == null)
-            return ChangeDoctorsStatusResult.NotFound("Doctor doesnt exist");
- 
+            return ChangeDoctorsStatusResult.NotFound("Doctor not found");
+
         if (doctor.IsActive == isActive)
             return ChangeDoctorsStatusResult.Fail("Doctor already has this status");
 
@@ -44,25 +35,25 @@ public class DoctorStatusService : IDoctorStatusService
 
         if (!isActive)
         {
-            var stranded = await AffectedBookings.LoadFutureAsync(_context, a => a.DoctorId == doctor.Id);
-            var refusal = await AffectedBookings.ResolveAsync<ChangeDoctorsStatusResult>(
-                stranded, dto, _auditLog, $"doctor {doctor.User.Name} deactivated");
-            if (refusal is not null)
-                return refusal;
+            var stranded = await AffectedBookings.LoadFutureAsync(context, a => a.DoctorId == doctor.Id);
+            var bookingRefusal = await AffectedBookings.ResolveAsync<ChangeDoctorsStatusResult>(
+                stranded, dto, auditLog, $"doctor {doctor.User.Name} deactivated");
+            if (bookingRefusal is not null)
+                return bookingRefusal;
         }
- 
+
         doctor.IsActive = isActive;
         if (!isActive)
             doctor.User.SecurityStamp = Guid.NewGuid().ToString();
-        await _auditLog.LogAsync(
+        await auditLog.LogAsync(
             "ChangeDoctorStatus",
             "Doctor",
             doctor.Id,
             $"Doctor {doctor.User.Name} set to {(isActive ? "active" : "inactive")}");
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
         if (!isActive)
-            _stamps.Forget(doctor.UserId);
- 
+            stamps.Forget(doctor.UserId);
+
         return ChangeDoctorsStatusResult.Success(new ChangeDoctorsStatus
         {
             DoctorId = doctor.Id,

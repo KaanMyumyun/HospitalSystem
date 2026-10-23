@@ -5,23 +5,16 @@ using HospitalSystem.Interfaces.Appointments;
 
 namespace HospitalSystem.Services.Appointments;
 
-public class AppointmentQueryService : IAppointmentQueryService
+public class AppointmentQueryService(
+    ApplicationDbContext context,
+    ICurrentUserService currentUser) : IAppointmentQueryService
 {
     // Six weeks covers a month view and keeps one response small.
     private static readonly TimeSpan MaxWindow = TimeSpan.FromDays(42);
 
-    private readonly ApplicationDbContext _context;
-    private readonly ICurrentUserService _currentUser;
-
-    public AppointmentQueryService(ApplicationDbContext context, ICurrentUserService currentUser)
-    {
-        _context = context;
-        _currentUser = currentUser;
-    }
-
     public async Task<ServiceResult<List<ViewAppointmentDto>>> GetAppointmentsAsync(AppointmentQueryDto query)
     {
-        if (!_currentUser.IsInRole(UserRole.FrontDesk) && !_currentUser.IsInRole(UserRole.DemoFrontDesk))
+        if (!currentUser.IsDesk() && !currentUser.IsInRole(UserRole.DemoFrontDesk))
             return ServiceResult<List<ViewAppointmentDto>>.Forbidden("Not allowed to list appointments");
 
         if (query.DoctorId is not int doctorId || query.From is not DateTimeOffset from || query.To is not DateTimeOffset to)
@@ -38,7 +31,7 @@ public class AppointmentQueryService : IAppointmentQueryService
     // A doctor sees only their own appointments.
     public async Task<ServiceResult<List<ViewAppointmentDto>>> GetMyAppointmentsAsync(MyAppointmentsQueryDto query)
     {
-        if (!_currentUser.IsInRole(UserRole.Doctor) || !int.TryParse(_currentUser.UserId, out var userId))
+        if (!currentUser.IsInRole(UserRole.Doctor) || !int.TryParse(currentUser.UserId, out var userId))
             return ServiceResult<List<ViewAppointmentDto>>.Forbidden("Only doctors have their own appointments");
 
         if (query.From is not DateTimeOffset from || query.To is not DateTimeOffset to)
@@ -66,14 +59,14 @@ public class AppointmentQueryService : IAppointmentQueryService
     // Appointments in every status that start at or after from and before to,
     // in time order.
     private Task<List<ViewAppointmentDto>> ListAsync(
-        Expression<Func<AppointmentsEntity, bool>> whose,
+        Expression<Func<AppointmentEntity, bool>> whose,
         DateTimeOffset from,
         DateTimeOffset to)
     {
         var fromUtc = from.UtcDateTime;
         var toUtc = to.UtcDateTime;
 
-        return _context.Appointments
+        return context.Appointments
             .AsNoTracking()
             .Where(whose)
             .Where(a => a.TimeOfAppointment >= fromUtc && a.TimeOfAppointment < toUtc)

@@ -1,49 +1,50 @@
+using Microsoft.AspNetCore.Identity;
 using HospitalSystem.Services.Auth;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace HospitalSystem.Tests;
- 
+
 public class UserCreationServiceTests : AuthTestBase
 {
     private UserCreationService CreateService(ApplicationDbContext db, bool isAdmin = true)
-        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db));
- 
+        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db), new PasswordHasher<UserEntity>());
+
     [Fact]
     public async Task CreateUserAsync_NotAdmin_Fails()
     {
         using var db = CreateDbContext();
         var service = CreateService(db, isAdmin: false);
- 
+
         var result = await service.CreateUserAsync(new CreateUserDto { Name = "NewUser", Password = "Password123" });
- 
+
         Assert.False(result.IsSuccess);
         Assert.Equal("You are not allowed to create a user", result.Error);
         Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
- 
+
     [Fact]
     public async Task CreateUserAsync_UserAlreadyExists_Fails()
     {
         using var db = CreateDbContext();
         await SeedUserAsync(db);
         var service = CreateService(db);
- 
+
         var result = await service.CreateUserAsync(new CreateUserDto { Name = "Test", Password = "Password123" });
- 
+
         Assert.False(result.IsSuccess);
         Assert.Equal("Name already exists", result.Error);
         Assert.Equal(FailureKind.Conflict, result.Failure);
     }
- 
+
     [Fact]
     public async Task CreateUserAsync_EmptyNameOrPassword_Fails()
     {
         using var db = CreateDbContext();
         var service = CreateService(db);
- 
+
         var result = await service.CreateUserAsync(new CreateUserDto { Name = "", Password = "" });
- 
+
         Assert.False(result.IsSuccess);
         Assert.Equal("Name and password are required", result.Error);
     }
@@ -71,17 +72,17 @@ public class UserCreationServiceTests : AuthTestBase
         Assert.False(result.IsSuccess);
         Assert.Equal("Username must start with a letter and use only letters, numbers, dots, hyphens, or underscores", result.Error);
     }
- 
+
     [Fact]
     public async Task CreateUserAsync_ValidData_Succeeds()
     {
         using var db = CreateDbContext();
         var service = CreateService(db);
- 
+
         var result = await service.CreateUserAsync(new CreateUserDto { Name = "BrandNewUser", Password = "Password123" });
- 
+
         Assert.True(result.IsSuccess);
- 
+
         var saved = await db.Users.FirstOrDefaultAsync(u => u.Name == "BrandNewUser");
         Assert.NotNull(saved);
         Assert.Equal(UserRole.Pending, saved!.Role);

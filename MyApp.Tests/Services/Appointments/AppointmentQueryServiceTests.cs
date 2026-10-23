@@ -13,7 +13,7 @@ public class AppointmentQueryServiceTests : AppointmentTestBase
     private static AppointmentQueryDto SeedDayFor(int doctorId) =>
         new() { DoctorId = doctorId, From = SeedDay, To = SeedDay.AddDays(1) };
 
-    private static AppointmentsEntity AppointmentAt(int id, int doctorId, DateTime time, AppointmentStatus status = AppointmentStatus.Scheduled) =>
+    private static AppointmentEntity AppointmentAt(int id, int doctorId, DateTime time, AppointmentStatus status = AppointmentStatus.Scheduled) =>
         new() { Id = id, Status = status, DoctorId = doctorId, PatientId = 1, TimeOfAppointment = time, CreatedAt = time, CreatedByTheFrontDeskId = 5 };
 
     [Fact]

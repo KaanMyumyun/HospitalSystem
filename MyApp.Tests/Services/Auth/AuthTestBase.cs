@@ -9,7 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using Moq;
 
 namespace HospitalSystem.Tests;
- 
+
 public abstract class AuthTestBase
 {
     protected ApplicationDbContext CreateDbContext()
@@ -18,10 +18,10 @@ public abstract class AuthTestBase
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
- 
+
         return new ApplicationDbContext(options);
     }
- 
+
     protected IOptions<JwtSettings> CreateJwtOptions() =>
         Options.Create(new JwtSettings
         {
@@ -37,16 +37,16 @@ public abstract class AuthTestBase
             AdminUserName = "DemoAdmin",
             FrontDeskUserName = "DemoReception"
         });
- 
+
     protected ICurrentUserService CreateCurrentUser(bool isAdmin = true)
     {
         var mock = new Mock<ICurrentUserService>();
         mock.Setup(x => x.IsInRole(UserRole.Admin)).Returns(isAdmin);
         return mock.Object;
     }
- 
+
     protected const string TestPassword = "correct-password";
- 
+
     protected async Task<UserEntity> SeedUserAsync(ApplicationDbContext db, UserRole role = UserRole.Admin, string name = "Test")
     {
         var user = new UserEntity { Id = 1, Name = name, Role = role };

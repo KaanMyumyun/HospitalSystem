@@ -46,7 +46,6 @@ export type CalendarActionResult = {
 }
 
 export type CancelAppointmentDto = {
-  appointmentId: number
   reason?: string
 }
 
@@ -56,24 +55,20 @@ export type CancelAppointmentResultDto = {
 }
 
 export type ChangeAppointmentStatusDto = {
-  appointmentId: number
   status: AppointmentStatus
 }
 
 export type ChangeDepartmentStatusDto = {
-  departmentId?: number
-  isActive?: boolean
+  isActive: boolean
   cancelAffectedAppointments?: boolean
   cancellationReason?: string | null
 }
 
 export type ChangeDoctorDepartmentDto = {
-  doctorId?: number
   departmentId?: number
 }
 
 export type ChangeDoctorStatusDto = {
-  doctorId: number
   isActive: boolean
   cancelAffectedAppointments?: boolean
   cancellationReason?: string | null
@@ -106,8 +101,8 @@ export type ChangePasswordResultDto = {
 }
 
 export type ChangeRoleDto = {
-  userId?: number
   newRole?: UserRole
+  departmentId?: number | null
   cancelAffectedAppointments?: boolean
   cancellationReason?: string | null
 }
@@ -120,7 +115,6 @@ export type ChangeRoleResultDto = {
 }
 
 export type ChangeScheduleDto = {
-  scheduleId?: number
   startHour?: number
   endHour?: number
   slotDurationMin?: number
@@ -274,7 +268,6 @@ export type PatientSummaryDtoPagedResultServiceResult = {
 }
 
 export type ResetPasswordDto = {
-  userId?: number
   newPassword: string
 }
 
@@ -284,7 +277,6 @@ export type ResetPasswordResultDto = {
 }
 
 export type UpdatePatientDto = {
-  patientId?: number
   name: string
   phoneNumber: string
   dateOfBirth: string
@@ -294,6 +286,7 @@ export type UserDisplayDto = {
   userId: number
   userName: string
   role: UserRole
+  lockedUntil: string | null
 }
 
 export type UserDisplayDtoPagedResult = {

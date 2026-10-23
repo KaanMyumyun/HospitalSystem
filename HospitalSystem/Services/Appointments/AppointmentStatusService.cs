@@ -6,38 +6,30 @@ namespace HospitalSystem.Services.Appointments;
 
 // Records how an appointment went: completed, or the patient did not come.
 // The desk can mark any appointment, a doctor only their own.
-public class AppointmentStatusService : IAppointmentStatusService
+public class AppointmentStatusService(
+    ApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IAuditLogService auditLog) : IAppointmentStatusService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly ICurrentUserService _currentUser;
-    private readonly IAuditLogService _auditLog;
-
-    public AppointmentStatusService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
-    {
-        _context = context;
-        _currentUser = currentUser;
-        _auditLog = auditLog;
-    }
-
     public async Task<AppointmentStatusResultDto> ChangeStatusAsync(ChangeAppointmentStatusDto dto)
     {
-        var isDesk = _currentUser.IsInRole(UserRole.FrontDesk);
-        if (!isDesk && !_currentUser.IsInRole(UserRole.Doctor))
+        var isDesk = currentUser.IsDesk();
+        if (!isDesk && !currentUser.IsInRole(UserRole.Doctor))
             return AppointmentStatusResultDto.Forbidden("You are not allowed to change an appointment's status");
 
-        if (dto.AppointmentId is not int appointmentId || dto.Status is not AppointmentStatus status)
-            return AppointmentStatusResultDto.Fail("Appointment id and status are required");
+        if (dto.Status is not AppointmentStatus status)
+            return AppointmentStatusResultDto.Fail("Status is required");
 
         if (status is not (AppointmentStatus.Completed or AppointmentStatus.NoShow))
             return AppointmentStatusResultDto.Fail("An appointment can only be marked completed or no-show");
 
-        var appointment = await _context.Appointments
+        var appointment = await context.Appointments
             .Include(a => a.Doctor)
-            .SingleOrDefaultAsync(a => a.Id == appointmentId);
+            .SingleOrDefaultAsync(a => a.Id == dto.AppointmentId);
         if (appointment == null)
             return AppointmentStatusResultDto.NotFound("Appointment not found");
 
-        if (!isDesk && appointment.Doctor.UserId.ToString() != _currentUser.UserId)
+        if (!isDesk && appointment.Doctor.UserId.ToString() != currentUser.UserId)
             return AppointmentStatusResultDto.Forbidden("Doctors can only mark their own appointments");
 
         if (appointment.Status == AppointmentStatus.Cancelled)
@@ -51,12 +43,12 @@ public class AppointmentStatusService : IAppointmentStatusService
 
         var previous = appointment.Status;
         appointment.Status = status;
-        await _auditLog.LogAsync(
+        await auditLog.LogAsync(
             "ChangeAppointmentStatus",
             "Appointment",
             appointment.Id,
             $"Appointment {appointment.Id} marked {Describe(status)} (was {Describe(previous)})");
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
         return AppointmentStatusResultDto.Success();
     }

@@ -6,24 +6,16 @@ namespace HospitalSystem.Services.Appointments;
 
 // The front desk's view of patients: finding one, their appointments, and
 // correcting their details, such as a phone number that changed.
-public class PatientRecordService : IPatientRecordService
+public class PatientRecordService(
+    ApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IAuditLogService auditLog) : IPatientRecordService
 {
     // A patient's newest appointments, up to this many, come with them.
     private const int MaxAppointments = 200;
 
-    private readonly ApplicationDbContext _context;
-    private readonly ICurrentUserService _currentUser;
-    private readonly IAuditLogService _auditLog;
-
-    public PatientRecordService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
-    {
-        _context = context;
-        _currentUser = currentUser;
-        _auditLog = auditLog;
-    }
-
     private bool CanRead() =>
-        _currentUser.IsInRole(UserRole.FrontDesk) || _currentUser.IsInRole(UserRole.DemoFrontDesk);
+        currentUser.IsDesk() || currentUser.IsInRole(UserRole.DemoFrontDesk);
 
     public async Task<ServiceResult<PagedResult<PatientSummaryDto>>> ListPatientsAsync(PatientQueryDto query)
     {
@@ -36,7 +28,7 @@ public class PatientRecordService : IPatientRecordService
         if (query.PageSize < 1 || query.PageSize > PatientQueryDto.MaxPageSize)
             return ServiceResult<PagedResult<PatientSummaryDto>>.Fail($"Page size must be between 1 and {PatientQueryDto.MaxPageSize}");
 
-        var patients = _context.Patients.AsQueryable();
+        var patients = context.Patients.AsQueryable();
         var search = query.Search?.Trim();
         if (!string.IsNullOrEmpty(search))
         {
@@ -89,7 +81,7 @@ public class PatientRecordService : IPatientRecordService
         if (!CanRead())
             return ServiceResult<PatientDetailsDto>.Forbidden("Not allowed to view patients");
 
-        var patient = await _context.Patients
+        var patient = await context.Patients
             .AsNoTracking()
             .Where(p => p.Id == patientId)
             .Select(p => new PatientDetailsDto
@@ -122,7 +114,7 @@ public class PatientRecordService : IPatientRecordService
 
     public async Task<PatientActionResultDto> UpdatePatientAsync(UpdatePatientDto dto)
     {
-        if (!_currentUser.IsInRole(UserRole.FrontDesk))
+        if (!currentUser.IsDesk())
             return PatientActionResultDto.Forbidden("You are not allowed to change patient details");
 
         var name = dto.Name.Trim();
@@ -139,7 +131,7 @@ public class PatientRecordService : IPatientRecordService
         if (dateOfBirth > DateOnly.FromDateTime(DateTime.UtcNow))
             return PatientActionResultDto.Fail("Date of birth cannot be in the future");
 
-        var patient = await _context.Patients.FindAsync(dto.PatientId);
+        var patient = await context.Patients.FindAsync(dto.PatientId);
         if (patient is null)
             return PatientActionResultDto.NotFound("Patient not found");
 
@@ -158,8 +150,8 @@ public class PatientRecordService : IPatientRecordService
         patient.Name = name;
         patient.PhoneNumber = phoneNumber;
         patient.DateOfBirth = dateOfBirth;
-        await _auditLog.LogAsync("UpdatePatient", "Patient", patient.Id, $"Patient {patient.Id}: changed {string.Join(", ", changes)}");
-        await _context.SaveChangesAsync();
+        await auditLog.LogAsync("UpdatePatient", "Patient", patient.Id, $"Patient {patient.Id}: changed {string.Join(", ", changes)}");
+        await context.SaveChangesAsync();
 
         return PatientActionResultDto.Success();
     }
