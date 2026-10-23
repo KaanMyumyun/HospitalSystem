@@ -137,4 +137,20 @@ public class LoginRateLimitTests
                 currentPassword = "wrong-password", newPassword = "some-new-password"
             })).StatusCode);
     }
+
+    // The per-username limit alone would let one address try a password on
+    // every account; the address has its own limit across usernames.
+    [Fact]
+    public async Task OneAddress_GetsTwentySignInsAMinuteAcrossUsernames()
+    {
+        using var app = TestApp.Create(database: Guid.NewGuid().ToString());
+        using var client = app.CreateClient();
+
+        for (var attempt = 0; attempt < 20; attempt++)
+            Assert.Equal(HttpStatusCode.Unauthorized, (await LoginAsync(client, $"user{attempt}")).StatusCode);
+        using var limited = await LoginAsync(client, "user20");
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
+        Assert.NotNull(limited.Headers.RetryAfter);
+    }
 }
