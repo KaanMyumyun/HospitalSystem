@@ -74,6 +74,7 @@ public class UserQueryService(
 
         var doctors = await context.Doctors
             .Where(d => d.User.Role == UserRole.Doctor)
+            .OrderBy(d => d.User.Name)
             .Select(d => new DoctorDisplayDto
             {
                 DoctorId = d.Id,

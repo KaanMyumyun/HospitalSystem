@@ -134,6 +134,13 @@ export function getNextAvailableSlot(slots: Slot[][]) {
     .sort((left, right) => dateAtTime(left.day, left.time).getTime() - dateAtTime(right.day, right.time).getTime())[0]
 }
 
+// The doctor the reception calendar opens on: an active one with a schedule
+// when there is one, so the desk does not start on an empty week.
+export function defaultDoctor(doctors: DoctorDto[], schedules: ScheduleDto[]) {
+  const active = doctors.filter((doctor) => doctor.isActive)
+  return active.find((doctor) => schedules.some((schedule) => schedule.doctorId === doctor.doctorId)) ?? active[0] ?? null
+}
+
 export function coverageForDepartment(schedules: ScheduleDto[], doctors: DoctorDto[]) {
   const schedule = schedules.find((item) => doctors.some((doctor) => doctor.doctorId === item.doctorId))
   return schedule ? formatHourRange(schedule) : 'Unassigned'
