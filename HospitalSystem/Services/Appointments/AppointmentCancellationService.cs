@@ -3,40 +3,26 @@ using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.Appointments;
 
 namespace HospitalSystem.Services.Appointments;
- 
-public class AppointmentCancellationService : IAppointmentCancellationService
+
+public class AppointmentCancellationService(
+    ApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IAuditLogService auditLog) : IAppointmentCancellationService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly ICurrentUserService _currentUser;
-    private readonly IAuditLogService _auditLog;
- 
-    public AppointmentCancellationService(
-        ApplicationDbContext context,
-        ICurrentUserService currentUser,
-        IAuditLogService auditLog)
-    {
-        _context = context;
-        _currentUser = currentUser;
-        _auditLog = auditLog;
-    }
- 
     public async Task<CancelAppointmentResultDto> CancelAppointmentAsync(CancelAppointmentDto dto)
     {
-        if (!_currentUser.IsInRole(UserRole.FrontDesk))
+        if (!currentUser.IsDesk())
             return CancelAppointmentResultDto.Forbidden("You are not allowed to cancel appointments");
- 
-        if (dto.AppointmentId is null)
-            return CancelAppointmentResultDto.Fail("Appointment id is required");
 
         if (string.IsNullOrWhiteSpace(dto.Reason))
             return CancelAppointmentResultDto.Fail("Cancellation reason is required");
- 
-        var appointment = await _context.Appointments
+
+        var appointment = await context.Appointments
             .SingleOrDefaultAsync(a => a.Id == dto.AppointmentId);
- 
+
         if (appointment == null)
             return CancelAppointmentResultDto.NotFound("Appointment not found");
- 
+
         if (appointment.Status == AppointmentStatus.Cancelled)
             return CancelAppointmentResultDto.Fail("Appointment already canceled");
 
@@ -45,18 +31,18 @@ public class AppointmentCancellationService : IAppointmentCancellationService
 
         if (appointment.TimeOfAppointment <= DateTime.UtcNow)
             return CancelAppointmentResultDto.Fail("Past appointments cannot be cancelled");
- 
+
         appointment.Status = AppointmentStatus.Cancelled;
         appointment.CancellationReason = dto.Reason;
         appointment.CancelledAt = DateTime.UtcNow;
-        await _auditLog.LogAsync(
+        await auditLog.LogAsync(
             "CancelAppointment",
             "Appointment",
             appointment.Id,
             $"Cancelled appointment {appointment.Id}. Reason: {dto.Reason}");
- 
-        await _context.SaveChangesAsync();
- 
+
+        await context.SaveChangesAsync();
+
         return CancelAppointmentResultDto.Success();
     }
 }

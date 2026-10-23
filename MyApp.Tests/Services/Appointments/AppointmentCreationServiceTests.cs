@@ -5,25 +5,25 @@ using Npgsql;
 using Xunit;
 
 namespace HospitalSystem.Tests;
- 
+
 public class AppointmentCreationServiceTests : AppointmentTestBase
 {
-    private AppointmentCreationService CreateService(ApplicationDbContext db, bool isFrontDesk = true)
+    private AppointmentCreationService CreateService(ApplicationDbContext db, bool isFrontDesk = true, string? userId = "5")
     {
         var patientService = new PatientService(db);
-        return new AppointmentCreationService(db, CreateCurrentUser(isFrontDesk), patientService, new TestAuditLogService(db));
+        return new AppointmentCreationService(db, CreateCurrentUser(isFrontDesk, userId: userId), patientService, new TestAuditLogService(db), CreateClock());
     }
- 
+
     [Fact]
     public async Task CreateAppointmentAsync_NewPatient_Succeeds()
     {
         using var db = CreateDbContext();
         await SeedStandardDataAsync(db);
         var service = CreateService(db);
- 
+
         var time = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc);
         var dob = new DateOnly(2000, 1, 2);
- 
+
         var dto = new CreateAppointmentDto
         {
             DoctorId = 1,
@@ -32,24 +32,24 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DateOfBirth = dob,
             AppointmentTime = time
         };
- 
-        var result = await service.CreateAppointmentAsync(dto, 5);
- 
+
+        var result = await service.CreateAppointmentAsync(dto);
+
         Assert.True(result.IsSuccess);
- 
+
         // Stored without the formatting, as digits.
         var patient = await db.Patients.FirstOrDefaultAsync(p => p.PhoneNumber == "1234567");
         Assert.NotNull(patient);
         Assert.Equal("New Patient", patient!.Name);
         Assert.Equal(dob, patient.DateOfBirth);
- 
+
         var appointment = await db.Appointments.FirstOrDefaultAsync(a => a.PatientId == patient.Id);
         Assert.NotNull(appointment);
         Assert.Equal(time, appointment!.TimeOfAppointment);
         Assert.Equal(AppointmentStatus.Scheduled, appointment.Status);
         Assert.Equal(5, appointment.CreatedByTheFrontDeskId);
         Assert.Null(appointment.CancelledAt);
-        Assert.True(appointment.CreatedAt <= DateTime.UtcNow);
+        Assert.Equal(Now.UtcDateTime, appointment.CreatedAt);
         Assert.Contains(db.AuditLogs, a => a.Action == "CreateAppointment" && a.EntityId == appointment.Id);
     }
 
@@ -59,9 +59,9 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         using var db = CreateDbContext();
         await SeedStandardDataAsync(db);
         var service = CreateService(db);
- 
+
         var time = new DateTime(2026, 1, 1, 10, 30, 0, DateTimeKind.Utc);
- 
+
         var dto = new CreateAppointmentDto
         {
             DoctorId = 1,
@@ -70,22 +70,22 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-30)),
             AppointmentTime = time
         };
- 
-        var result = await service.CreateAppointmentAsync(dto, 5);
- 
+
+        var result = await service.CreateAppointmentAsync(dto);
+
         Assert.True(result.IsSuccess);
- 
+
         var patientCount = await db.Patients.CountAsync(p => p.PhoneNumber == "5550001");
         Assert.Equal(1, patientCount);
     }
- 
+
     [Fact]
     public async Task CreateAppointmentAsync_NotFrontDesk_Fails()
     {
         using var db = CreateDbContext();
         await SeedStandardDataAsync(db);
         var service = CreateService(db, isFrontDesk: false);
- 
+
         var dto = new CreateAppointmentDto
         {
             DoctorId = 1,
@@ -94,20 +94,40 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow),
             AppointmentTime = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)
         };
- 
-        var result = await service.CreateAppointmentAsync(dto, 5);
- 
+
+        var result = await service.CreateAppointmentAsync(dto);
+
         Assert.False(result.IsSuccess);
         Assert.Equal("You are not allowed to create appointments", result.Error);
         Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
- 
+
+    [Fact]
+    public async Task CreateAppointmentAsync_FrontDeskWithoutAUserId_Fails()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db, userId: null);
+
+        var result = await service.CreateAppointmentAsync(new CreateAppointmentDto
+        {
+            DoctorId = 1,
+            PatientName = "New Patient",
+            PhoneNumber = "555-0100",
+            DateOfBirth = new DateOnly(1990, 1, 1),
+            AppointmentTime = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)
+        });
+
+        Assert.Equal(FailureKind.Forbidden, result.Failure);
+        Assert.Equal(3, await db.Appointments.CountAsync());
+    }
+
     [Fact]
     public async Task CreateAppointmentAsync_DoctorNotFound_Fails()
     {
         using var db = CreateDbContext();
         var service = CreateService(db);
- 
+
         var dto = new CreateAppointmentDto
         {
             DoctorId = 9999,
@@ -116,14 +136,14 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow),
             AppointmentTime = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)
         };
- 
-        var result = await service.CreateAppointmentAsync(dto, 5);
- 
+
+        var result = await service.CreateAppointmentAsync(dto);
+
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor not found", result.Error);
         Assert.Equal(FailureKind.NotFound, result.Failure);
     }
- 
+
     [Fact]
     public async Task CreateAppointmentAsync_InactiveDoctor_Fails()
     {
@@ -131,7 +151,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await SeedStandardDataAsync(db, isDoctorActive: false);
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)), 5);
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)));
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor is not available for booking", result.Error);
@@ -147,7 +167,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)), 5);
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)));
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor is not available for booking", result.Error);
@@ -169,7 +189,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         using var db = CreateDbContext();
         await SeedStandardDataAsync(db);
         var service = CreateService(db);
- 
+
         var dto = new CreateAppointmentDto
         {
             DoctorId = 1,
@@ -178,12 +198,13 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-20)),
             AppointmentTime = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc)
         };
- 
-        var result = await service.CreateAppointmentAsync(dto, 5);
- 
+
+        var result = await service.CreateAppointmentAsync(dto);
+
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor already booked for that time slot", result.Error);
-        Assert.False(result.IsConflict, "the fast-path check is a normal validation failure (400), not a 409 - only a real DB constraint violation is");
+        // The same 409 as when a concurrent booking wins the race below.
+        Assert.True(result.IsConflict);
     }
 
     [Fact]
@@ -205,7 +226,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             AppointmentTime = new DateTime(2026, 1, 1, 11, 0, 0, DateTimeKind.Utc)
         };
 
-        var result = await service.CreateAppointmentAsync(dto, 5);
+        var result = await service.CreateAppointmentAsync(dto);
 
         Assert.False(result.IsSuccess);
         Assert.True(result.IsConflict);
@@ -232,7 +253,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             AppointmentTime = new DateTime(2026, 1, 1, 11, 0, 0, DateTimeKind.Utc)
         };
 
-        await Assert.ThrowsAsync<DbUpdateException>(() => service.CreateAppointmentAsync(dto, 5));
+        await Assert.ThrowsAsync<DbUpdateException>(() => service.CreateAppointmentAsync(dto));
     }
 
     private sealed class FailingAppointmentInsertDbContext : ApplicationDbContext
@@ -250,7 +271,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             if (AppointmentInsertException is not null &&
-                ChangeTracker.Entries<AppointmentsEntity>().Any(e => e.State == EntityState.Added))
+                ChangeTracker.Entries<AppointmentEntity>().Any(e => e.State == EntityState.Added))
                 throw AppointmentInsertException;
 
             return base.SaveChangesAsync(cancellationToken);
@@ -276,7 +297,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             AppointmentTime = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)
         };
 
-        var result = await service.CreateAppointmentAsync(dto, 5);
+        var result = await service.CreateAppointmentAsync(dto);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(expectedError, result.Error);
@@ -298,7 +319,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             AppointmentTime = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)
         };
 
-        var result = await service.CreateAppointmentAsync(dto, 5);
+        var result = await service.CreateAppointmentAsync(dto);
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Patient name is required", result.Error);
@@ -320,7 +341,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             AppointmentTime = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)
         };
 
-        var result = await service.CreateAppointmentAsync(dto, 5);
+        var result = await service.CreateAppointmentAsync(dto);
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Date of birth cannot be after the appointment date", result.Error);
@@ -348,11 +369,11 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             AppointmentTime = new DateTime(2026, 1, 1, hour, minute, 0, DateTimeKind.Utc)
         };
 
-        var result = await service.CreateAppointmentAsync(dto, 5);
+        var result = await service.CreateAppointmentAsync(dto);
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor already booked for that time slot", result.Error);
-        Assert.False(result.IsConflict);
+        Assert.True(result.IsConflict);
         Assert.False(await db.Appointments.AnyAsync(a => a.TimeOfAppointment == dto.AppointmentTime));
     }
 
@@ -374,7 +395,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
             AppointmentTime = new DateTime(2026, 1, 1, hour, minute, 0, DateTimeKind.Utc)
         };
 
-        var result = await service.CreateAppointmentAsync(dto, 5);
+        var result = await service.CreateAppointmentAsync(dto);
 
         Assert.True(result.IsSuccess);
     }
@@ -395,7 +416,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 1, hour, minute, 0, DateTimeKind.Utc)), 5);
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 1, hour, minute, 0, DateTimeKind.Utc)));
 
         Assert.True(result.IsSuccess);
     }
@@ -415,7 +436,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 1, hour, minute, 0, DateTimeKind.Utc)), 5);
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 1, hour, minute, 0, DateTimeKind.Utc)));
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor already booked for that time slot", result.Error);
@@ -430,7 +451,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         var dto = NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc));
         dto.AppointmentTime = null;
 
-        var result = await service.CreateAppointmentAsync(dto, 5);
+        var result = await service.CreateAppointmentAsync(dto);
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Appointment time is required", result.Error);
@@ -445,7 +466,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         var dto = NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc));
         dto.DateOfBirth = null;
 
-        var result = await service.CreateAppointmentAsync(dto, 5);
+        var result = await service.CreateAppointmentAsync(dto);
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Date of birth is required", result.Error);
@@ -462,7 +483,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await SeedStandardDataAsync(db);
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, hour, minute, 0, DateTimeKind.Utc)), 5);
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, hour, minute, 0, DateTimeKind.Utc)));
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Appointment time is outside the doctor's working hours", result.Error);
@@ -477,7 +498,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await SeedStandardDataAsync(db);
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, hour, minute, 0, DateTimeKind.Utc)), 5);
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, hour, minute, 0, DateTimeKind.Utc)));
 
         Assert.True(result.IsSuccess);
     }
@@ -491,7 +512,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)), 5);
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)));
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor has no schedule", result.Error);
@@ -513,7 +534,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 19, 0, 0, DateTimeKind.Utc)), 5);
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 19, 0, 0, DateTimeKind.Utc)));
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Appointment time is outside the doctor's working hours", result.Error);
@@ -528,7 +549,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)), 5);
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)));
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor's department is not active", result.Error);
@@ -545,7 +566,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 23, 45, 0, DateTimeKind.Utc)), 5);
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 23, 45, 0, DateTimeKind.Utc)));
 
         Assert.True(result.IsSuccess);
     }
@@ -559,7 +580,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         var dto = NewPatientAt(new DateTime(2026, 1, 2, 12, 0, 0, DateTimeKind.Utc));
         dto.AppointmentTime = new DateTimeOffset(2026, 1, 2, 12, 0, 0, TimeSpan.FromHours(3));
 
-        var result = await service.CreateAppointmentAsync(dto, 5);
+        var result = await service.CreateAppointmentAsync(dto);
 
         Assert.True(result.IsSuccess);
         var stored = await db.Appointments.SingleAsync(a => a.PatientId != 1 && a.PatientId != 2 && a.PatientId != 3);
@@ -577,7 +598,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         // 20:00 at the desk is 17:00 UTC, inside 08:00-18:00 only if read as UTC.
         dto.AppointmentTime = new DateTimeOffset(2026, 1, 2, 20, 0, 0, TimeSpan.FromHours(3));
 
-        var result = await service.CreateAppointmentAsync(dto, 5);
+        var result = await service.CreateAppointmentAsync(dto);
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Appointment time is outside the doctor's working hours", result.Error);
@@ -591,7 +612,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         var service = CreateService(db);
 
         // 3 January 2026 is a Saturday; the seeded schedule works Monday to Friday.
-        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 3, 10, 0, 0, DateTimeKind.Utc)), 5);
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 3, 10, 0, 0, DateTimeKind.Utc)));
 
         Assert.False(result.IsSuccess);
         Assert.Equal("The doctor does not work on Saturdays", result.Error);
@@ -606,7 +627,7 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 3, 10, 0, 0, DateTimeKind.Utc)), 5);
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 3, 10, 0, 0, DateTimeKind.Utc)));
 
         Assert.True(result.IsSuccess);
     }
@@ -625,8 +646,53 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         var dto = NewPatientAt(new DateTime(2026, 1, 2, 22, 0, 0, DateTimeKind.Utc));
         dto.AppointmentTime = new DateTimeOffset(2026, 1, 3, 1, 0, 0, TimeSpan.FromHours(3));
 
-        var result = await service.CreateAppointmentAsync(dto, 5);
+        var result = await service.CreateAppointmentAsync(dto);
 
         Assert.Equal("The doctor does not work on Saturdays", result.Error);
+    }
+
+    // The calendar greys out slots that have started; the API must refuse them
+    // too, including the one starting this very minute.
+    [Theory]
+    [InlineData(-60)]
+    [InlineData(0)]
+    public async Task CreateAppointmentAsync_TimeNotInTheFuture_Fails(int minutesFromNow)
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+
+        var result = await service.CreateAppointmentAsync(new CreateAppointmentDto
+        {
+            DoctorId = 1,
+            PatientName = "New Patient",
+            PhoneNumber = "555-0100",
+            DateOfBirth = new DateOnly(1990, 1, 1),
+            AppointmentTime = Now.AddMinutes(minutesFromNow)
+        });
+
+        Assert.Equal(FailureKind.Invalid, result.Failure);
+        Assert.Equal("Appointments cannot be booked in the past", result.Error);
+        Assert.Equal(3, await db.Appointments.CountAsync());
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_TheNextSlot_Succeeds()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var service = CreateService(db);
+
+        // Now is Monday 1 December 2025, 09:00 UTC; the schedule starts at 08:00.
+        var result = await service.CreateAppointmentAsync(new CreateAppointmentDto
+        {
+            DoctorId = 1,
+            PatientName = "New Patient",
+            PhoneNumber = "555-0100",
+            DateOfBirth = new DateOnly(1990, 1, 1),
+            AppointmentTime = Now.AddMinutes(15)
+        });
+
+        Assert.True(result.IsSuccess, result.Error);
     }
 }

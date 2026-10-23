@@ -9,7 +9,7 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
     private static readonly DateOnly PatientOneBirthDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-30));
 
     private AppointmentCreationService CreateService(ApplicationDbContext db) =>
-        new(db, CreateCurrentUser(), new PatientService(db), new TestAuditLogService(db));
+        new(db, CreateCurrentUser(), new PatientService(db), new TestAuditLogService(db), CreateClock());
 
     private static CreateAppointmentDto Booking(string name, string phoneNumber, DateOnly dateOfBirth) => new()
     {
@@ -27,7 +27,7 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
         await SeedStandardDataAsync(db);
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(Booking("  PATIENT one ", "(555) 0001", PatientOneBirthDate), 5);
+        var result = await service.CreateAppointmentAsync(Booking("  PATIENT one ", "(555) 0001", PatientOneBirthDate));
 
         Assert.True(result.IsSuccess);
         Assert.Equal(3, await db.Patients.CountAsync());
@@ -41,7 +41,7 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
         await SeedStandardDataAsync(db);
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(Booking("Child One", "555-0001", new DateOnly(2015, 3, 4)), 5);
+        var result = await service.CreateAppointmentAsync(Booking("Child One", "555-0001", new DateOnly(2015, 3, 4)));
 
         Assert.False(result.IsSuccess);
         Assert.True(result.IsConflict);
@@ -64,7 +64,7 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(Booking("Someone New", "555-9999", new DateOnly(2001, 1, 1)), 5);
+        var result = await service.CreateAppointmentAsync(Booking("Someone New", "555-9999", new DateOnly(2001, 1, 1)));
 
         Assert.False(result.IsSuccess);
         Assert.Equal(
@@ -79,7 +79,7 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
         await SeedStandardDataAsync(db);
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(Booking("patient one", "0888 123 456", PatientOneBirthDate), 5);
+        var result = await service.CreateAppointmentAsync(Booking("patient one", "0888 123 456", PatientOneBirthDate));
 
         Assert.False(result.IsSuccess);
         Assert.Equal(1, Assert.Single(result.PossibleMatches!).PatientId);
@@ -94,7 +94,7 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
         var booking = Booking("Child One", "555-0001", new DateOnly(2015, 3, 4));
         booking.CreateNewPatient = true;
 
-        var result = await service.CreateAppointmentAsync(booking, 5);
+        var result = await service.CreateAppointmentAsync(booking);
 
         Assert.True(result.IsSuccess);
         var sharing = await db.Patients.Where(p => p.PhoneNumber == "5550001").OrderBy(p => p.Id).ToListAsync();
@@ -111,7 +111,7 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
         var booking = Booking("Patient One", "5550001", PatientOneBirthDate);
         booking.CreateNewPatient = true;
 
-        var result = await service.CreateAppointmentAsync(booking, 5);
+        var result = await service.CreateAppointmentAsync(booking);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(3, await db.Patients.CountAsync());
@@ -126,7 +126,7 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
         var booking = Booking("Child One", "555-0001", new DateOnly(2015, 3, 4));
         booking.PatientId = 2;
 
-        var result = await service.CreateAppointmentAsync(booking, 5);
+        var result = await service.CreateAppointmentAsync(booking);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(3, await db.Patients.CountAsync());
@@ -142,7 +142,7 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
         var booking = Booking("Someone", "0888 123 456", new DateOnly(1990, 1, 1));
         booking.PatientId = 999;
 
-        var result = await service.CreateAppointmentAsync(booking, 5);
+        var result = await service.CreateAppointmentAsync(booking);
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Patient not found", result.Error);
@@ -159,7 +159,7 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
         booking.PatientId = 1;
         booking.CreateNewPatient = true;
 
-        var result = await service.CreateAppointmentAsync(booking, 5);
+        var result = await service.CreateAppointmentAsync(booking);
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Choose a patient on file or a new patient, not both", result.Error);
@@ -172,7 +172,7 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
         await SeedStandardDataAsync(db);
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(Booking("  Maria Ivanova ", " +359 (888) 111-222 ", new DateOnly(1980, 2, 3)), 5);
+        var result = await service.CreateAppointmentAsync(Booking("  Maria Ivanova ", " +359 (888) 111-222 ", new DateOnly(1980, 2, 3)));
 
         Assert.True(result.IsSuccess);
         var patient = await db.Patients.SingleAsync(p => p.Id > 3);

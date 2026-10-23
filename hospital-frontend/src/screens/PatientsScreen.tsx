@@ -21,7 +21,7 @@ export function PatientsScreen({
   isReadOnly: boolean
   loading: boolean
   onError: (message: string) => void
-  onUpdatePatient: (input: UpdatePatientInput) => Promise<ActionOutcome>
+  onUpdatePatient: (patientId: number, input: UpdatePatientInput) => Promise<ActionOutcome>
 }) {
   const { result: page, isLoading, setPage, reload: reloadList } = usePagedList(
     true,
@@ -33,8 +33,8 @@ export function PatientsScreen({
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null)
   const { patient, reload: reloadPatient } = usePatient(selectedPatientId, onError)
 
-  const save = async (input: UpdatePatientInput) => {
-    const outcome = await onUpdatePatient(input)
+  const save = async (patientId: number, input: UpdatePatientInput) => {
+    const outcome = await onUpdatePatient(patientId, input)
     if (outcome.ok) await Promise.all([reloadList(), reloadPatient()])
     return outcome
   }
@@ -103,7 +103,7 @@ function PatientDetails({
   patient: PatientDetailsDto
   isReadOnly: boolean
   loading: boolean
-  onSave: (input: UpdatePatientInput) => Promise<ActionOutcome>
+  onSave: (patientId: number, input: UpdatePatientInput) => Promise<ActionOutcome>
 }) {
   const [name, setName] = useState(patient.name)
   const [phoneNumber, setPhoneNumber] = useState(patient.phoneNumber)
@@ -112,7 +112,7 @@ function PatientDetails({
   const changed = name !== patient.name || phoneNumber !== patient.phoneNumber || dateOfBirth !== patient.dateOfBirth
 
   const submit = async () => {
-    const outcome = await onSave({ patientId: patient.patientId, name, phoneNumber, dateOfBirth })
+    const outcome = await onSave(patient.patientId, { name, phoneNumber, dateOfBirth })
     if (!outcome.ok && outcome.error) setError(outcome.error)
   }
 

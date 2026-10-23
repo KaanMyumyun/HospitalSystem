@@ -6,27 +6,19 @@ using System.Text.RegularExpressions;
 
 namespace HospitalSystem.Services.Auth;
 
-public class UserCreationService : IUserCreationService
+public class UserCreationService(
+    ApplicationDbContext context,
+    ICurrentUserService currentUser,
+    IAuditLogService auditLog,
+    IPasswordHasher<UserEntity> hasher) : IUserCreationService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly ICurrentUserService _currentUser;
-    private readonly IAuditLogService _auditLog;
-    private readonly PasswordHasher<UserEntity> _hasher;
     private static readonly Regex ValidUsername = new(@"^[A-Za-z][A-Za-z0-9_.-]{2,39}$", RegexOptions.Compiled);
 
-    public UserCreationService(ApplicationDbContext context, ICurrentUserService currentUser, IAuditLogService auditLog)
-    {
-        _context = context;
-        _currentUser = currentUser;
-        _auditLog = auditLog;
-        _hasher = new PasswordHasher<UserEntity>();
-    }
- 
     public async Task<CreateUserResultDto> CreateUserAsync(CreateUserDto dto)
     {
-        if (!_currentUser.IsInRole(UserRole.Admin))
-            return CreateUserResultDto.Forbidden("You are not allowed to create a user");
- 
+        if (currentUser.RequireAdmin<CreateUserResultDto>("create a user") is { } refusal)
+            return refusal;
+
         if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Password))
             return CreateUserResultDto.Fail("Name and password are required");
 
@@ -36,28 +28,28 @@ public class UserCreationService : IUserCreationService
 
         if (dto.Password.Length < 8)
             return CreateUserResultDto.Fail("Password must be at least 8 characters long");
- 
+
         // Usernames ignore case, so "Admin" and "admin" cannot both exist.
         var nameKey = name.ToLowerInvariant();
-        var exists = await _context.Users.AnyAsync(u => u.Name.ToLower() == nameKey);
+        var exists = await context.Users.AnyAsync(u => u.Name.ToLower() == nameKey);
         if (exists)
             return CreateUserResultDto.Conflict("Name already exists");
- 
+
         var user = new UserEntity
         {
             Name = name,
             Role = UserRole.Pending
         };
- 
-        user.PasswordHash = _hasher.HashPassword(user, dto.Password);
- 
-        await using var transaction = await _context.Database.BeginTransactionAsync();
 
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
+        user.PasswordHash = hasher.HashPassword(user, dto.Password);
 
-        await _auditLog.LogAsync("CreateUser", "User", user.Id, $"Created user {user.Name}");
-        await _context.SaveChangesAsync();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        await auditLog.LogAsync("CreateUser", "User", user.Id, $"Created user {user.Name}");
+        await context.SaveChangesAsync();
         await transaction.CommitAsync();
 
         return CreateUserResultDto.Success();

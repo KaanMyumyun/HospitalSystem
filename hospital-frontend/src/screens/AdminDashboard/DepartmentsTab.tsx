@@ -1,10 +1,10 @@
-import { Search } from 'lucide-react'
 import { useState } from 'react'
 import type { DepartmentDto, DoctorDto, ScheduleDto } from '../../api'
-import { EmptyState, SkeletonRows, StatusBadge } from '../../components/ui'
+import { GuardedButton, StatusBadge, TableStatus } from '../../components/ui'
 import { coverageForDepartment } from '../../lib/schedule'
 import type { ActionOutcome } from '../../types'
 
+// The top bar's search filters this table.
 export function DepartmentsTab({
   departments,
   doctors,
@@ -24,7 +24,7 @@ export function DepartmentsTab({
   searchQuery: string
   selectedDepartmentId: number | null
   isReadOnly: boolean
-  onChangeDepartmentStatus: (departmentId: number, isActive: boolean) => Promise<ActionOutcome>
+  onChangeDepartmentStatus: (department: DepartmentDto, isActive: boolean) => Promise<ActionOutcome>
   onCreateDepartment: (name: string) => Promise<ActionOutcome>
   onSelectDepartment: (departmentId: number) => void
 }) {
@@ -37,27 +37,23 @@ export function DepartmentsTab({
   return (
     <>
       <div className="toolbar">
-        <div className="search-field compact">
-          <Search size={16} />
-          <input aria-label="Search departments" placeholder="Search departments" />
-        </div>
         <div className="inline-form">
           <input
+            aria-label="New department name"
             placeholder="New department"
             value={departmentNameInput}
             onChange={(event) => setDepartmentNameInput(event.target.value)}
           />
-          <button
+          <GuardedButton
             className="secondary-button"
-            disabled={!departmentNameInput.trim() || isReadOnly || loading}
-            title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
-            type="button"
+            readOnly={isReadOnly}
+            disabled={!departmentNameInput.trim() || loading}
             onClick={async () => {
               if ((await onCreateDepartment(departmentNameInput)).ok) setDepartmentNameInput('')
             }}
           >
             Add Department
-          </button>
+          </GuardedButton>
         </div>
       </div>
 
@@ -74,14 +70,18 @@ export function DepartmentsTab({
         <tbody>
           {visibleDepartments.map((department) => {
             const departmentDoctors = doctors.filter((doctor) => doctor.departmentId === department.id)
+            const selected = department.id === selectedDepartmentId
             return (
-              <tr
-                className={department.id === selectedDepartmentId ? 'selected-row' : ''}
-                key={department.id}
-                onClick={() => onSelectDepartment(department.id)}
-              >
+              <tr className={selected ? 'selected-row' : ''} key={department.id}>
                 <td>
-                  <strong>{department.name}</strong>
+                  <button
+                    className="link-button"
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => onSelectDepartment(department.id)}
+                  >
+                    {department.name}
+                  </button>
                 </td>
                 <td>
                   <StatusBadge tone={department.isActive ? 'success' : 'muted'}>
@@ -91,26 +91,21 @@ export function DepartmentsTab({
                 <td>{departmentDoctors.length}</td>
                 <td>{coverageForDepartment(schedules, departmentDoctors)}</td>
                 <td>
-                  <button
+                  <GuardedButton
                     className="secondary-button compact-action"
-                    disabled={isReadOnly || loading}
-                    title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      void onChangeDepartmentStatus(department.id, !department.isActive)
-                    }}
+                    readOnly={isReadOnly}
+                    disabled={loading}
+                    onClick={() => void onChangeDepartmentStatus(department, !department.isActive)}
                   >
                     {department.isActive ? 'Deactivate' : 'Activate'}
-                  </button>
+                  </GuardedButton>
                 </td>
               </tr>
             )
           })}
         </tbody>
       </table>
-      {loading && <SkeletonRows count={5} />}
-      {!loading && visibleDepartments.length === 0 && <EmptyState text="No departments found." />}
+      <TableStatus loading={loading} empty={visibleDepartments.length === 0} emptyText="No departments found." />
     </>
   )
 }

@@ -1,11 +1,13 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace HospitalSystem.Dto;
 
 public class ChangeDoctorStatusDto : ICancelsAffectedBookings
 {
-    [Required]
-    public int? DoctorId { get; set; }
+    // From the route, never the body.
+    [JsonIgnore]
+    public int DoctorId { get; set; }
 
     [Required]
     public bool? IsActive { get; set; }

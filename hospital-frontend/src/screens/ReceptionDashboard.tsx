@@ -18,7 +18,7 @@ import {
   formatTime,
   formatWorkingDays,
   initials,
-  isSameDay,
+  isToday,
   slotLabel,
   statusLabel,
 } from '../lib/format'
@@ -275,42 +275,49 @@ export function ReceptionDashboard({
         </div>
 
         <div className="schedule-scroll">
-          <div className={`schedule-grid days-${days.length}`} role="grid" aria-label="Weekly appointment schedule">
-            <div className="grid-corner">Time</div>
-            {days.map((day) => (
-              <div className={`day-cell ${isSameDay(day, new Date()) ? 'today' : ''}`} key={day.toISOString()}>
-                {formatDay(day)}
-                {isSameDay(day, new Date()) ? <small>Today</small> : null}
-              </div>
-            ))}
+          {/* A group, not an ARIA grid: the slots are ordinary buttons in tab
+              order, and each one names its own day and time. */}
+          <div className={`schedule-grid days-${days.length}`} role="group" aria-label="Weekly appointment schedule">
+            <div className="grid-corner" aria-hidden="true">Time</div>
+            {days.map((day) => {
+              const today = isToday(day)
+              return (
+                <div className={`day-cell ${today ? 'today' : ''}`} aria-hidden="true" key={day.toISOString()}>
+                  {formatDay(day)}
+                  {today ? <small>Today</small> : null}
+                </div>
+              )
+            })}
             {slots.map((row, rowIndex) =>
               [
-                <div className="time-cell" key={`time-${rowIndex}`}>
+                <div className="time-cell" aria-hidden="true" key={`time-${rowIndex}`}>
                   {row.find((slot) => slot.time)?.time ?? ''}
                 </div>,
-                ...row.map((slot) => (
-                  <button
-                    className={`slot-cell ${slot.status} ${slot.appointment ? `appointment-${slot.appointment.status.toLowerCase()}` : ''}`}
-                    disabled={slot.status === 'empty' || slot.status === 'past' || slot.status === 'loading' || slot.status === 'off'}
-                    onClick={() => {
-                      if (slot.appointment) {
-                        setSelectedAppointmentId(slot.appointment.appointmentId)
-                        return
-                      }
-                      if (slot.status === 'available') setSelectedSlot(slot)
-                    }}
-                    type="button"
-                    key={`${slot.day.toISOString()}-${slot.time}`}
-                  >
-                    <span>{slot.time}</span>
-                    {/* Initials only: the grid is visible to anyone near the desk. */}
-                    <small>
-                      {slot.status === 'booked' && slot.appointment
-                        ? `${initials(slot.appointment.patientName)}${attendanceLabel(slot.appointment.status)}`
-                        : slotLabel(slot.status)}
-                    </small>
-                  </button>
-                )),
+                ...row.map((slot) => {
+                  // Initials only: the grid is visible to anyone near the desk.
+                  const text = slot.status === 'booked' && slot.appointment
+                    ? `${initials(slot.appointment.patientName)}${attendanceLabel(slot.appointment.status)}`
+                    : slotLabel(slot.status)
+                  return (
+                    <button
+                      aria-label={`${formatLongDate(slot.day)} at ${slot.time}: ${text}`}
+                      className={`slot-cell ${slot.status} ${slot.appointment ? `appointment-${slot.appointment.status.toLowerCase()}` : ''}`}
+                      disabled={slot.status === 'empty' || slot.status === 'past' || slot.status === 'loading' || slot.status === 'off'}
+                      onClick={() => {
+                        if (slot.appointment) {
+                          setSelectedAppointmentId(slot.appointment.appointmentId)
+                          return
+                        }
+                        if (slot.status === 'available') setSelectedSlot(slot)
+                      }}
+                      type="button"
+                      key={`${slot.day.toISOString()}-${slot.time}`}
+                    >
+                      <span>{slot.time}</span>
+                      <small>{text}</small>
+                    </button>
+                  )
+                }),
               ],
             )}
           </div>

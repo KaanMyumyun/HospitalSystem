@@ -1,7 +1,11 @@
+using System.Text.Json.Serialization;
+
 namespace HospitalSystem.Dto;
 
 public class ChangeScheduleDto : ICancelsAffectedBookings
 {
+    // From the route, never the body.
+    [JsonIgnore]
     public int ScheduleId { get; set; }
     public int StartHour { get; set; }
     public int EndHour { get; set; }

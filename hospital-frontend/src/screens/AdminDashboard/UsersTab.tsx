@@ -1,7 +1,10 @@
 import { useState } from 'react'
-import type { UserRole, UsersPage } from '../../api'
+import { isDemoRole } from '../../api'
+import type { UserDto, UserRole, UsersPage } from '../../api'
 import { Pager } from '../../components/Pager'
-import { EmptyState, SkeletonRows } from '../../components/ui'
+import { GuardedButton, StatusBadge, TableStatus } from '../../components/ui'
+import { guarded } from '../../lib/readOnly'
+import { formatTime } from '../../lib/format'
 import type { ActionOutcome } from '../../types'
 
 // Demo roles are never assigned from the app; accounts get them in the database.
@@ -20,10 +23,10 @@ export function UsersTab({
   usersPage: UsersPage | null
   loading: boolean
   isReadOnly: boolean
-  onChangeUserRole: (userId: number, role: UserRole) => Promise<ActionOutcome>
+  onChangeUserRole: (user: UserDto, role: UserRole) => Promise<ActionOutcome>
   onCreateUser: (name: string, password: string) => Promise<ActionOutcome>
   onPageChange: (page: number) => void
-  onResetPassword: (userId: number, password: string) => Promise<ActionOutcome>
+  onResetPassword: (user: UserDto, password: string) => Promise<ActionOutcome>
 }) {
   const [newUserName, setNewUserName] = useState('')
   const [newUserPassword, setNewUserPassword] = useState('')
@@ -35,13 +38,25 @@ export function UsersTab({
   return (
     <>
       <div className="inline-form">
-        <input placeholder="Username" value={newUserName} onChange={(event) => setNewUserName(event.target.value)} />
-        <input type="password" placeholder="Password" value={newUserPassword} onChange={(event) => setNewUserPassword(event.target.value)} />
-        <button
+        <input
+          aria-label="New username"
+          autoComplete="off"
+          placeholder="Username"
+          value={newUserName}
+          onChange={(event) => setNewUserName(event.target.value)}
+        />
+        <input
+          aria-label="New user's password"
+          autoComplete="new-password"
+          placeholder="Password"
+          type="password"
+          value={newUserPassword}
+          onChange={(event) => setNewUserPassword(event.target.value)}
+        />
+        <GuardedButton
           className="secondary-button"
-          disabled={!newUserName.trim() || newUserPassword.length < 8 || isReadOnly || loading}
-          title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
-          type="button"
+          readOnly={isReadOnly}
+          disabled={!newUserName.trim() || newUserPassword.length < 8 || loading}
           onClick={async () => {
             if (!(await onCreateUser(newUserName, newUserPassword)).ok) return
             setNewUserName('')
@@ -49,7 +64,7 @@ export function UsersTab({
           }}
         >
           Create User
-        </button>
+        </GuardedButton>
       </div>
       <table className="data-table">
         <thead>
@@ -60,75 +75,87 @@ export function UsersTab({
           </tr>
         </thead>
         <tbody>
-          {visibleUsers.map((user) => (
-            <tr key={user.userId}>
-              <td><strong>{user.userName}</strong></td>
-              <td>
-                <select
-                  className="table-select"
-                  disabled={isReadOnly || user.role.startsWith('Demo') || loading}
-                  title={isReadOnly || user.role.startsWith('Demo') ? 'Demo accounts are read-only.' : undefined}
-                  value={user.role}
-                  onChange={(event) => void onChangeUserRole(user.userId, event.target.value as UserRole)}
-                >
-                  {!assignableRoles.includes(user.role) && (
-                    <option disabled value={user.role}>
-                      {user.role}
-                    </option>
-                  )}
-                  {assignableRoles.map((role) => (
-                    <option key={role}>{role}</option>
-                  ))}
-                </select>
-              </td>
-              <td>
-                {resetUserId === user.userId ? (
+          {visibleUsers.map((user) => {
+            // Demo accounts are managed in the database, not here.
+            const locked = isReadOnly || isDemoRole(user.role)
+            return (
+              <tr key={user.userId}>
+                <td>
                   <div className="cell-stack">
-                    <div className="inline-form compact-inline">
-                      <input
-                        minLength={8}
-                        type="password"
-                        value={resetPasswordValue}
-                        onChange={(event) => setResetPasswordValue(event.target.value)}
-                      />
-                      <button
-                        className="secondary-button compact-action"
-                        disabled={resetPasswordValue.length < 8 || isReadOnly || user.role.startsWith('Demo') || loading}
-                        title={isReadOnly || user.role.startsWith('Demo') ? 'Demo accounts are read-only.' : undefined}
-                        type="button"
-                        onClick={async () => {
-                          if (!(await onResetPassword(user.userId, resetPasswordValue)).ok) return
-                          setResetUserId(null)
-                          setResetPasswordValue('')
-                        }}
-                      >
-                        Save
-                      </button>
-                    </div>
-                    {resetPasswordValue.length > 0 && resetPasswordValue.length < 8 && (
-                      <small>Password must be at least 8 characters long.</small>
+                    <strong>{user.userName}</strong>
+                    {user.lockedUntil && (
+                      <StatusBadge tone="danger">Locked until {formatTime(new Date(user.lockedUntil))}</StatusBadge>
                     )}
                   </div>
-                ) : (
-                  <button
-                    className="secondary-button compact-action"
-                    disabled={isReadOnly || user.role.startsWith('Demo')}
-                    title={isReadOnly || user.role.startsWith('Demo') ? 'Demo accounts are read-only.' : undefined}
-                    type="button"
-                    onClick={() => setResetUserId(user.userId)}
+                </td>
+                <td>
+                  <select
+                    aria-label={`Role of ${user.userName}`}
+                    className="table-select"
+                    {...guarded(locked, loading)}
+                    value={user.role}
+                    onChange={(event) => void onChangeUserRole(user, event.target.value as UserRole)}
                   >
-                    Reset
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
+                    {!assignableRoles.includes(user.role) && (
+                      <option disabled value={user.role}>
+                        {user.role}
+                      </option>
+                    )}
+                    {assignableRoles.map((role) => (
+                      <option key={role}>{role}</option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  {resetUserId === user.userId ? (
+                    <div className="cell-stack">
+                      <div className="inline-form compact-inline">
+                        <input
+                          aria-label={`New password for ${user.userName}`}
+                          autoComplete="new-password"
+                          minLength={8}
+                          type="password"
+                          value={resetPasswordValue}
+                          onChange={(event) => setResetPasswordValue(event.target.value)}
+                        />
+                        <GuardedButton
+                          className="secondary-button compact-action"
+                          readOnly={locked}
+                          disabled={resetPasswordValue.length < 8 || loading}
+                          onClick={async () => {
+                            if (!(await onResetPassword(user, resetPasswordValue)).ok) return
+                            setResetUserId(null)
+                            setResetPasswordValue('')
+                          }}
+                        >
+                          Save
+                        </GuardedButton>
+                      </div>
+                      {resetPasswordValue.length > 0 && resetPasswordValue.length < 8 && (
+                        <small>Password must be at least 8 characters long.</small>
+                      )}
+                    </div>
+                  ) : (
+                    <GuardedButton
+                      className="secondary-button compact-action"
+                      readOnly={locked}
+                      onClick={() => setResetUserId(user.userId)}
+                    >
+                      Reset
+                    </GuardedButton>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
-      {loading && <SkeletonRows count={6} />}
-      {!loading && visibleUsers.length === 0 && (
-        <EmptyState text={isReadOnly ? 'User accounts are hidden from demo accounts.' : 'No users found.'} />
-      )}
+      <TableStatus
+        loading={loading}
+        rows={6}
+        empty={visibleUsers.length === 0}
+        emptyText={isReadOnly ? 'User accounts are hidden from demo accounts.' : 'No users found.'}
+      />
       <Pager page={usersPage} loading={loading} noun="users" onPageChange={onPageChange} />
     </>
   )

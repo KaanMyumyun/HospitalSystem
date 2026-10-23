@@ -1,9 +1,12 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace HospitalSystem.Dto;
 
 public class UpdatePatientDto
 {
+    // From the route, never the body.
+    [JsonIgnore]
     public int PatientId { get; set; }
 
     // Limits match the Patients columns.

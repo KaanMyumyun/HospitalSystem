@@ -14,9 +14,9 @@ internal static class AffectedBookings
 
     // Scheduled bookings that have not started yet, soonest first, with the
     // patient and doctor needed to describe them.
-    public static Task<List<AppointmentsEntity>> LoadFutureAsync(
+    public static Task<List<AppointmentEntity>> LoadFutureAsync(
         ApplicationDbContext context,
-        Expression<Func<AppointmentsEntity, bool>> filter)
+        Expression<Func<AppointmentEntity, bool>> filter)
     {
         var now = DateTime.UtcNow;
         return context.Appointments
@@ -32,7 +32,7 @@ internal static class AffectedBookings
     // Null when the change can go ahead: nothing is stranded, or the request
     // asked to cancel what is and gave a reason. Otherwise the refusal.
     public static async Task<TResult?> ResolveAsync<TResult>(
-        IReadOnlyList<AppointmentsEntity> stranded,
+        IReadOnlyList<AppointmentEntity> stranded,
         ICancelsAffectedBookings request,
         IAuditLogService auditLog,
         string change)
@@ -69,7 +69,7 @@ internal static class AffectedBookings
         return null;
     }
 
-    private static AffectedAppointmentDto Describe(AppointmentsEntity appointment) => new()
+    private static AffectedAppointmentDto Describe(AppointmentEntity appointment) => new()
     {
         AppointmentId = appointment.Id,
         AppointmentTime = appointment.TimeOfAppointment,

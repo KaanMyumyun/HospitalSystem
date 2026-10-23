@@ -15,7 +15,7 @@ public class ApplicationDbContext : DbContext
         Database.AutoSavepointsEnabled = false;
     }
     public DbSet<UserEntity> Users { get; set; }
-    public DbSet<AppointmentsEntity> Appointments { get; set; }
+    public DbSet<AppointmentEntity> Appointments { get; set; }
     public DbSet<DepartmentEntity> Departments { get; set; }
     public DbSet<DoctorEntity> Doctors { get; set; }
     public DbSet<PatientEntity> Patients { get; set; }
@@ -53,7 +53,9 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<DepartmentEntity>(builder =>
         {
             builder.Property(s => s.Department).IsRequired();
-            builder.HasIndex(s => s.Department).IsUnique();
+            // Names are unique ignoring case, through the unique index
+            // IX_Departments_LowerDepartment on lower("Department") that
+            // migration CaseInsensitiveDepartmentNames creates in SQL.
         });
 
         modelBuilder.Entity<DoctorEntity>(builder =>
@@ -62,7 +64,7 @@ public class ApplicationDbContext : DbContext
             builder.HasOne(d => d.Department).WithMany(u => u.Doctors).HasForeignKey("DepartmentId").OnDelete(DeleteBehavior.Restrict);
         });
 
-        modelBuilder.Entity<AppointmentsEntity>(builder =>
+        modelBuilder.Entity<AppointmentEntity>(builder =>
         {
             builder.HasOne(d => d.CreatedByTheFrontDesk).WithMany(u => u.CreatedAppointments).HasForeignKey("CreatedByTheFrontDeskId").OnDelete(DeleteBehavior.Restrict);
             builder.HasOne(d => d.Patient).WithMany(u => u.Appointments).HasForeignKey("PatientId").OnDelete(DeleteBehavior.Restrict);
@@ -78,7 +80,7 @@ public class ApplicationDbContext : DbContext
             // One doctor's appointments in a time range, in every status.
             builder.HasIndex(a => new { a.DoctorId, a.TimeOfAppointment }, "IX_Appointments_DoctorId_TimeOfAppointment_AllStatuses");
         });
-        
+
         modelBuilder.Entity<CalendarEntity>(builder =>
         {
             builder.HasOne(c => c.Doctor).WithMany(d => d.Calendars).HasForeignKey(c => c.DoctorId).OnDelete(DeleteBehavior.Restrict);

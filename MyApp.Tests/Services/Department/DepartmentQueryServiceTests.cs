@@ -1,14 +1,14 @@
 using Xunit;
 using HospitalSystem.Services;
-using HospitalSystem.Services.Deparment;
+using HospitalSystem.Services.Department;
 
 namespace HospitalSystem.Tests;
- 
+
 public class DepartmentQueryServiceTests : DepartmentTestBase
 {
     private DepartmentQueryService CreateService(ApplicationDbContext db, bool isAdmin = true)
         => new(db, CreateCurrentUser(isAdmin));
- 
+
     [Fact]
     public async Task ListDepartmentsAsync_Admin_Succeeds()
     {
@@ -19,24 +19,24 @@ public class DepartmentQueryServiceTests : DepartmentTestBase
         );
         await db.SaveChangesAsync();
         var service = CreateService(db);
- 
+
         var result = await service.ListDepartmentsAsync();
- 
+
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Data);
         Assert.Equal(2, result.Data.Count);
         Assert.Contains(result.Data, d => d.Id == 1 && d.Name == "Cardiology" && d.IsActive == true);
         Assert.Contains(result.Data, d => d.Id == 2 && d.Name == "Neurology" && d.IsActive == false);
     }
- 
+
     [Fact]
     public async Task ListDepartmentsAsync_NotAdmin_Fails()
     {
         var db = CreateDbContext();
         var service = CreateService(db, isAdmin: false);
- 
+
         var result = await service.ListDepartmentsAsync();
- 
+
         Assert.False(result.IsSuccess);
         Assert.Equal("Not allowed to list departments", result.Error);
         Assert.Equal(FailureKind.Forbidden, result.Failure);

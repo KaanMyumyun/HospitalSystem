@@ -1,0 +1,361 @@
+using HospitalSystem.Interfaces;
+using HospitalSystem.Services.Appointments;
+using HospitalSystem.Services.Auth;
+using HospitalSystem.Services.User;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.Caching.Memory;
+using Moq;
+using Npgsql;
+
+namespace HospitalSystem.Tests;
+
+// The same code against real PostgreSQL, with the real migrations applied.
+public class PostgresTests : AuthTestBase
+{
+    private static readonly DateTimeOffset LockoutTime = new(2026, 10, 23, 12, 0, 0, TimeSpan.Zero);
+
+    private LoginService CreateLoginService(ApplicationDbContext db, IPasswordHasher<UserEntity> hasher) =>
+        new(db, CreateJwtOptions(), CreateDemoOptions(), new TestAuditLogService(db), hasher, new FixedClock(LockoutTime));
+
+    private static async Task<int> SeedLoginUserAsync(PostgresDatabase database, int failedCount)
+    {
+        await using var db = await database.CreateMigratedContextAsync();
+        var user = new UserEntity { Name = "lockout", Role = UserRole.Admin, FailedSignInCount = failedCount };
+        user.PasswordHash = new PasswordHasher<UserEntity>().HashPassword(user, TestPassword);
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        return user.Id;
+    }
+
+    // Pauses the first request after it has read the user. Without row locking,
+    // the second request can then save against that same old account state.
+    private sealed class PausedWrongPasswordHasher : IPasswordHasher<UserEntity>
+    {
+        private readonly TaskCompletionSource<bool> _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<bool> _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Entered => _entered.Task;
+        public void Release() => _release.TrySetResult(true);
+        public string HashPassword(UserEntity user, string password) => throw new NotSupportedException();
+
+        public PasswordVerificationResult VerifyHashedPassword(UserEntity user, string hashedPassword, string providedPassword)
+        {
+            _entered.TrySetResult(true);
+            _release.Task.GetAwaiter().GetResult();
+            return PasswordVerificationResult.Failed;
+        }
+    }
+
+    private static async Task WaitForBlockedAccountLockAsync(
+        PostgresDatabase database, Task otherRequest, PausedWrongPasswordHasher paused)
+    {
+        try
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline)
+            {
+                if (otherRequest.IsCompleted)
+                {
+                    await otherRequest;
+                    throw new InvalidOperationException("The competing account update completed without waiting for the row lock");
+                }
+
+                var waiting = await database.ScalarAsync<long>("""
+                    SELECT count(*) FROM pg_stat_activity
+                    WHERE datname = current_database()
+                      AND wait_event_type = 'Lock'
+                      AND query LIKE '%FOR UPDATE%'
+                    """);
+                if (waiting > 0)
+                    return;
+
+                await Task.Delay(25);
+            }
+
+            throw new TimeoutException("The competing account update did not reach the row lock");
+        }
+        finally
+        {
+            paused.Release();
+        }
+    }
+
+    private static PostgresException UniqueViolation(DbUpdateException exception)
+    {
+        var postgres = Assert.IsType<PostgresException>(exception.InnerException);
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, postgres.SqlState);
+        return postgres;
+    }
+
+    private static async Task<(int DoctorId, int DeskId, int PatientId)> SeedBookableDoctorAsync(ApplicationDbContext db)
+    {
+        var department = new DepartmentEntity { Department = "Cardiology", IsActive = true };
+        var doctorUser = new UserEntity { Name = "drhouse", PasswordHash = "x", Role = UserRole.Doctor };
+        var desk = new UserEntity { Name = "desk", PasswordHash = "x", Role = UserRole.FrontDesk };
+        var doctor = new DoctorEntity { User = doctorUser, Department = department, IsActive = true };
+        var patient = new PatientEntity { Name = "Maria Ivanova", PhoneNumber = "0888111222", DateOfBirth = new DateOnly(1990, 5, 17) };
+        db.AddRange(desk, doctor, patient);
+        db.Calendars.Add(new CalendarEntity
+        {
+            Doctor = doctor,
+            StartTime = new DateTime(2000, 1, 1, 8, 0, 0, DateTimeKind.Utc),
+            EndTime = new DateTime(2000, 1, 1, 18, 0, 0, DateTimeKind.Utc),
+            SlotDurationMin = 30
+        });
+        await db.SaveChangesAsync();
+        return (doctor.Id, desk.Id, patient.Id);
+    }
+
+    [PostgresFact]
+    public async Task EveryMigration_AppliesToAnEmptyDatabase_AndMatchesTheModel()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = await database.CreateMigratedContextAsync();
+
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
+        Assert.False(db.Database.HasPendingModelChanges());
+    }
+
+    [PostgresFact]
+    public async Task Usernames_AreUniqueIgnoringCase()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using (var db = await database.CreateMigratedContextAsync())
+        {
+            db.Users.Add(new UserEntity { Name = "admin", PasswordHash = "x", Role = UserRole.Admin });
+            await db.SaveChangesAsync();
+        }
+        await using var second = database.CreateContext();
+        second.Users.Add(new UserEntity { Name = "ADMIN", PasswordHash = "x", Role = UserRole.FrontDesk });
+
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => second.SaveChangesAsync());
+
+        Assert.Equal("IX_Users_LowerName", UniqueViolation(error).ConstraintName);
+    }
+
+    [PostgresFact]
+    public async Task DepartmentNames_AreUniqueIgnoringCase()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using (var db = await database.CreateMigratedContextAsync())
+        {
+            db.Departments.Add(new DepartmentEntity { Department = "Cardiology", IsActive = true });
+            await db.SaveChangesAsync();
+        }
+        await using var second = database.CreateContext();
+        second.Departments.Add(new DepartmentEntity { Department = "cardiology", IsActive = true });
+
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => second.SaveChangesAsync());
+
+        Assert.Equal("IX_Departments_LowerDepartment", UniqueViolation(error).ConstraintName);
+    }
+
+    // The migration cannot choose which of two such departments to keep, so it
+    // stops, changes nothing, and runs once they are renamed.
+    [PostgresFact]
+    public async Task CaseInsensitiveDepartmentNames_StopsWhileNamesDifferOnlyInCase()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        await db.GetService<IMigrator>().MigrateAsync("AddSignInLockout");
+        await database.ExecuteAsync("""INSERT INTO "Departments" ("Department", "IsActive") VALUES ('Cardiology', true), ('cardiology', true)""");
+
+        var error = await Assert.ThrowsAsync<PostgresException>(() => db.Database.MigrateAsync());
+
+        Assert.Equal("P0001", error.SqlState);
+        Assert.Contains("differ only in case", error.MessageText);
+        Assert.Equal(1L, await database.ScalarAsync<long>("""SELECT count(*) FROM pg_indexes WHERE indexname = 'IX_Departments_Department'"""));
+        Assert.Equal(0L, await database.ScalarAsync<long>("""SELECT count(*) FROM pg_indexes WHERE indexname = 'IX_Departments_LowerDepartment'"""));
+
+        await database.ExecuteAsync("""UPDATE "Departments" SET "Department" = 'Cardiology (old)' WHERE "Department" = 'cardiology'""");
+        await db.Database.MigrateAsync();
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
+    }
+
+    [PostgresFact]
+    public async Task ADoctor_CannotHaveTwoScheduledAppointmentsAtOnce_ButACancelledOneLeavesTheSlotFree()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = await database.CreateMigratedContextAsync();
+        var (doctorId, deskId, patientId) = await SeedBookableDoctorAsync(db);
+        var time = new DateTime(2030, 1, 7, 9, 0, 0, DateTimeKind.Utc);
+        AppointmentEntity Booking(AppointmentStatus status) => new()
+        {
+            DoctorId = doctorId, PatientId = patientId, CreatedByTheFrontDeskId = deskId,
+            TimeOfAppointment = time, CreatedAt = DateTime.UtcNow, Status = status
+        };
+
+        db.Appointments.AddRange(Booking(AppointmentStatus.Cancelled), Booking(AppointmentStatus.Scheduled));
+        await db.SaveChangesAsync();
+        db.Appointments.Add(Booking(AppointmentStatus.Scheduled));
+
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        UniqueViolation(error);
+    }
+
+    [PostgresFact]
+    public async Task BookingATakenSlotThroughTheService_IsAConflict()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = await database.CreateMigratedContextAsync();
+        var (doctorId, deskId, _) = await SeedBookableDoctorAsync(db);
+        var desk = new Mock<ICurrentUserService>();
+        desk.Setup(x => x.IsInRole(UserRole.FrontDesk)).Returns(true);
+        desk.Setup(x => x.UserId).Returns(deskId.ToString());
+        var service = new AppointmentCreationService(db, desk.Object, new PatientService(db), new TestAuditLogService(db),
+            new FixedClock(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero)));
+        var booking = new CreateAppointmentDto
+        {
+            DoctorId = doctorId,
+            PatientName = "Ivan Petrov",
+            PhoneNumber = "0899000111",
+            DateOfBirth = new DateOnly(1985, 3, 4),
+            AppointmentTime = new DateTimeOffset(2030, 1, 7, 9, 0, 0, TimeSpan.Zero)
+        };
+
+        Assert.True((await service.CreateAppointmentAsync(booking)).IsSuccess);
+        var second = await service.CreateAppointmentAsync(booking);
+
+        Assert.Equal(FailureKind.Conflict, second.Failure);
+        Assert.Equal(1, await db.Appointments.CountAsync());
+    }
+
+    [PostgresFact]
+    public async Task ColumnLengths_HoldInTheDatabaseToo()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = await database.CreateMigratedContextAsync();
+        db.Patients.Add(new PatientEntity { Name = new string('a', 51), PhoneNumber = "0888111222", DateOfBirth = new DateOnly(1990, 1, 1) });
+
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+
+        Assert.Equal(PostgresErrorCodes.StringDataRightTruncation, Assert.IsType<PostgresException>(error.InnerException).SqlState);
+    }
+
+    // During a deploy or after a rollback, an image without the newest
+    // columns still inserts rows: each new column has a default.
+    [PostgresFact]
+    public async Task AnOlderImage_CanStillInsertUsersAndSchedules()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = await database.CreateMigratedContextAsync();
+        await SeedBookableDoctorAsync(db);
+        var doctorId = await db.Doctors.Select(d => d.Id).SingleAsync();
+
+        await database.ExecuteAsync("""INSERT INTO "Users" ("Name", "PasswordHash", "Role", "SecurityStamp") VALUES ('old-image', 'x', 'Pending', 's')""");
+        await database.ExecuteAsync($"""DELETE FROM "Calendars"; INSERT INTO "Calendars" ("DoctorId", "StartTime", "EndTime", "SlotDurationMin") VALUES ({doctorId}, '2000-01-01 08:00+00', '2000-01-01 16:00+00', 30)""");
+
+        db.ChangeTracker.Clear();
+        var user = await db.Users.SingleAsync(u => u.Name == "old-image");
+        Assert.Equal(0, user.FailedSignInCount);
+        Assert.Null(user.LockedUntil);
+        Assert.Equal(CalendarEntity.Weekdays, (await db.Calendars.SingleAsync()).WorkingDays);
+    }
+
+    [PostgresFact]
+    public async Task ConcurrentWrongPasswords_UseTheLatestCountAndLockOnTheTenth()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await SeedLoginUserAsync(database, failedCount: 8);
+        await using var firstDb = database.CreateContext();
+        await using var secondDb = database.CreateContext();
+        // A tracked entity must be refreshed after the second request gets the lock.
+        await secondDb.Users.SingleAsync();
+        var paused = new PausedWrongPasswordHasher();
+        var wrong = new LoginDto { Name = "lockout", Password = "wrong-password" };
+
+        var first = Task.Run(() => CreateLoginService(firstDb, paused).LoginAsync(wrong));
+        await paused.Entered.WaitAsync(TimeSpan.FromSeconds(10));
+        var second = Task.Run(() => CreateLoginService(secondDb, new PasswordHasher<UserEntity>()).LoginAsync(wrong));
+        await WaitForBlockedAccountLockAsync(database, second, paused);
+        var firstResult = await first.WaitAsync(TimeSpan.FromSeconds(10));
+        var secondResult = await second.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal("Invalid credentials", firstResult.Error);
+        Assert.Equal("Invalid credentials", secondResult.Error);
+        await using var check = database.CreateContext();
+        var user = await check.Users.SingleAsync();
+        Assert.Equal(0, user.FailedSignInCount);
+        Assert.Equal(LockoutTime.UtcDateTime.AddMinutes(15), user.LockedUntil);
+        Assert.Equal(1, await check.AuditLogs.CountAsync(a => a.Action == "SignInLocked"));
+    }
+
+    [PostgresFact]
+    public async Task CorrectSignInAfterConcurrentWrongPassword_ClearsItsCount()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await SeedLoginUserAsync(database, failedCount: 8);
+        await using var firstDb = database.CreateContext();
+        await using var secondDb = database.CreateContext();
+        var paused = new PausedWrongPasswordHasher();
+
+        var first = Task.Run(() => CreateLoginService(firstDb, paused).LoginAsync(new LoginDto { Name = "lockout", Password = "wrong-password" }));
+        await paused.Entered.WaitAsync(TimeSpan.FromSeconds(10));
+        var second = Task.Run(() => CreateLoginService(secondDb, new PasswordHasher<UserEntity>())
+            .LoginAsync(new LoginDto { Name = "lockout", Password = TestPassword }));
+        await WaitForBlockedAccountLockAsync(database, second, paused);
+        await first.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True((await second.WaitAsync(TimeSpan.FromSeconds(10))).IsSuccess);
+
+        await using var check = database.CreateContext();
+        var user = await check.Users.SingleAsync();
+        Assert.Equal(0, user.FailedSignInCount);
+        Assert.Null(user.LockedUntil);
+    }
+
+    [PostgresFact]
+    public async Task AdminResetAfterConcurrentWrongPassword_LiftsItsLock()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        var userId = await SeedLoginUserAsync(database, failedCount: 9);
+        await using var firstDb = database.CreateContext();
+        await using var resetDb = database.CreateContext();
+        var paused = new PausedWrongPasswordHasher();
+        var admin = new Mock<ICurrentUserService>();
+        admin.Setup(x => x.IsInRole(UserRole.Admin)).Returns(true);
+        var reset = new ResetPasswordService(resetDb, admin.Object, new TestAuditLogService(resetDb),
+            new SecurityStampCache(new MemoryCache(new MemoryCacheOptions())), new PasswordHasher<UserEntity>());
+
+        var first = Task.Run(() => CreateLoginService(firstDb, paused).LoginAsync(new LoginDto { Name = "lockout", Password = "wrong-password" }));
+        await paused.Entered.WaitAsync(TimeSpan.FromSeconds(10));
+        var second = Task.Run(() => reset.ResetPasswordAsync(new ResetPasswordDto { UserId = userId, NewPassword = "replacement-password" }));
+        await WaitForBlockedAccountLockAsync(database, second, paused);
+        Assert.Equal("Invalid credentials", (await first.WaitAsync(TimeSpan.FromSeconds(10))).Error);
+        Assert.True((await second.WaitAsync(TimeSpan.FromSeconds(10))).IsSuccess);
+
+        await using var check = database.CreateContext();
+        var user = await check.Users.SingleAsync();
+        Assert.Equal(0, user.FailedSignInCount);
+        Assert.Null(user.LockedUntil);
+        Assert.Equal(PasswordVerificationResult.Success,
+            new PasswordHasher<UserEntity>().VerifyHashedPassword(user, user.PasswordHash, "replacement-password"));
+    }
+
+    // With real foreign keys: a role change no longer files a new doctor under
+    // a department that may not exist.
+    [PostgresFact]
+    public async Task MakingADoctor_NeedsADepartmentThatExists()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = await database.CreateMigratedContextAsync();
+        var user = new UserEntity { Name = "newdoc", PasswordHash = "x", Role = UserRole.Pending };
+        var department = new DepartmentEntity { Department = "Neurology", IsActive = true };
+        db.AddRange(user, department);
+        await db.SaveChangesAsync();
+        var admin = new Mock<ICurrentUserService>();
+        admin.Setup(x => x.IsInRole(UserRole.Admin)).Returns(true);
+        admin.Setup(x => x.UserId).Returns("0");
+        var service = new ChangeRoleService(db, admin.Object, new TestAuditLogService(db),
+            new SecurityStampCache(new MemoryCache(new MemoryCacheOptions())));
+
+        var missing = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = user.Id, NewRole = UserRole.Doctor, DepartmentId = department.Id + 100 });
+        var made = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = user.Id, NewRole = UserRole.Doctor, DepartmentId = department.Id });
+
+        Assert.Equal(FailureKind.NotFound, missing.Failure);
+        Assert.True(made.IsSuccess, made.Error);
+        Assert.Equal(department.Id, (await db.Doctors.SingleAsync()).DepartmentId);
+    }
+}

@@ -7,32 +7,25 @@ namespace HospitalSystem.Services.Auth;
 // user's stamp for a short while instead of reading it on every request. The
 // instance that rotates a stamp forgets it at once; another instance keeps
 // accepting the old stamp for at most Lifetime.
-public sealed class SecurityStampCache
+public sealed class SecurityStampCache(IMemoryCache cache)
 {
     public static readonly TimeSpan Lifetime = TimeSpan.FromSeconds(30);
-
-    private readonly IMemoryCache _cache;
-
-    public SecurityStampCache(IMemoryCache cache)
-    {
-        _cache = cache;
-    }
 
     // The stamp a user's tokens must carry, or null if the user is gone.
     public async Task<string?> GetAsync(ApplicationDbContext db, int userId)
     {
-        if (_cache.TryGetValue(new StampKey(userId), out string? stamp))
+        if (cache.TryGetValue(new StampKey(userId), out string? stamp))
             return stamp;
 
         stamp = await SecurityStampClaims.CurrentStampAsync(db, userId);
         if (stamp != null)
-            _cache.Set(new StampKey(userId), stamp, Lifetime);
+            cache.Set(new StampKey(userId), stamp, Lifetime);
 
         return stamp;
     }
 
     // Call after a new stamp is saved, so this instance stops accepting the old one.
-    public void Forget(int userId) => _cache.Remove(new StampKey(userId));
+    public void Forget(int userId) => cache.Remove(new StampKey(userId));
 
     // Its own key type, so no other user of the shared cache can collide with it.
     private readonly record struct StampKey(int UserId);

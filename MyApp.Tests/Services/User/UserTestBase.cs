@@ -5,7 +5,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Moq;
 
 namespace HospitalSystem.Tests;
- 
+
 public abstract class UserTestBase
 {
     protected ApplicationDbContext CreateDbContext()
@@ -14,12 +14,12 @@ public abstract class UserTestBase
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
- 
+
         return new ApplicationDbContext(options);
     }
- 
+
     protected static SecurityStampCache CreateStampCache() => new(new MemoryCache(new MemoryCacheOptions()));
- 
+
     protected ICurrentUserService CreateCurrentUser(bool isAdmin = true, bool isFrontDesk = false)
     {
         var mock = new Mock<ICurrentUserService>();
@@ -27,13 +27,13 @@ public abstract class UserTestBase
         mock.Setup(x => x.IsInRole(UserRole.FrontDesk)).Returns(isFrontDesk);
         return mock.Object;
     }
- 
+
     protected async Task SeedDoctorAsync(ApplicationDbContext db, bool isDoctorActive = false, UserRole userRole = UserRole.Doctor)
     {
         var department = new DepartmentEntity { Id = 1, Department = "Cardiology" };
         var user = new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = userRole };
         var doctor = new DoctorEntity { Id = 1, UserId = 1, User = user, DepartmentId = 1, Department = department, IsActive = isDoctorActive };
- 
+
         db.Departments.Add(department);
         db.Users.Add(user);
         db.Doctors.Add(doctor);

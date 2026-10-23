@@ -16,21 +16,27 @@ import {
   createSchedule,
   createUser,
   getStoredSession,
+  isDemoRole,
   loadHospitalData,
   PossiblePatientMatchError,
   resetPassword,
   sessionExpiredEvent,
   updatePatient,
 } from './api'
-import type { CancelAffected, UserRole } from './api'
+import type { CancelAffected } from './api'
 import './App.css'
 import { AffectedBookingsDialog } from './components/AffectedBookingsDialog'
 import { ChangePasswordDialog } from './components/ChangePasswordDialog'
 import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
+import { useDialogs } from './hooks/useDialogs'
+import { useHash } from './hooks/useHash'
 import { useUsersPage } from './hooks/useUsersPage'
 import { useWeekAppointments } from './hooks/useWeekAppointments'
-import { adminTitle, confirmAction } from './lib/format'
+import { adminTitle } from './lib/format'
+import { newId } from './lib/id'
+import { canUseAdmin, canUseDoctor, canUseReception, hashFor, screenFor, usesHospitalData } from './lib/routes'
+import { sessionAfterTokenRotation } from './lib/session'
 import { AdminDashboard } from './screens/AdminDashboard'
 import { DoctorDashboard } from './screens/DoctorDashboard'
 import { LoginScreen } from './screens/LoginScreen'
@@ -46,29 +52,6 @@ const emptyData: HospitalData = {
   schedules: [],
 }
 const activityStorageKey = 'hospital-frontend-activity'
-
-function canUseAdmin(role: UserRole) {
-  return role === 'Admin' || role === 'DemoAdmin'
-}
-
-function canUseReception(role: UserRole) {
-  return role === 'FrontDesk' || role === 'DemoFrontDesk'
-}
-
-function canUseDoctor(role: UserRole) {
-  return role === 'Doctor'
-}
-
-// Admin and reception screens share the departments, doctors and schedules.
-function usesHospitalData(role: UserRole) {
-  return canUseAdmin(role) || canUseReception(role)
-}
-
-function initialScreen(role: UserRole): Screen {
-  if (canUseAdmin(role)) return 'departments'
-  if (canUseDoctor(role)) return 'doctor'
-  return 'reception'
-}
 
 function screenTitle(screen: Screen) {
   if (screen === 'reception') return 'Reception'
@@ -87,10 +70,8 @@ type PendingChange = {
 
 function App() {
   const [session, setSession] = useState<Session | null>(() => getStoredSession())
-  const [screen, setScreen] = useState<Screen>(() => {
-    const stored = getStoredSession()
-    return stored ? initialScreen(stored.role) : 'reception'
-  })
+  const [hash, navigate] = useHash()
+  const screen: Screen = session ? screenFor(session.role, hash) : 'reception'
   const [data, setData] = useState<HospitalData>(emptyData)
   const [selectedDoctorId, setSelectedDoctorId] = useState<number | null>(null)
   const [weekOffset, setWeekOffset] = useState(0)
@@ -101,6 +82,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [pendingChange, setPendingChange] = useState<PendingChange | null>(null)
   const [changingPassword, setChangingPassword] = useState(false)
+  const { dialog, confirm, chooseDepartment, dismiss: dismissDialog } = useDialogs()
   const [activity, setActivity] = useState<ActivityEntry[]>(() => {
     const raw = localStorage.getItem(activityStorageKey)
     if (!raw) return []
@@ -127,19 +109,39 @@ function App() {
     reload: reloadUsers,
   } = useUsersPage(session !== null && canListUsers(session.role) && screen === 'users', searchQuery, setError)
 
+  const setScreen = useCallback((next: Screen) => navigate(hashFor(next)), [navigate])
+
+  // The address names no screen this user can see: show the one they get
+  // instead, without adding a step to the browser history.
+  useEffect(() => {
+    if (session && hash !== hashFor(screen)) navigate(hashFor(screen), true)
+  }, [session, hash, screen, navigate])
+
+  // A newer refresh replaces an older one still on its way, so a slow
+  // answer can never overwrite a fresher one.
+  const refreshRequest = useRef<AbortController | null>(null)
+
   const refresh = useCallback(() => {
     if (!session || !usesHospitalData(session.role)) return
 
-    return loadHospitalData()
+    refreshRequest.current?.abort()
+    const request = new AbortController()
+    refreshRequest.current = request
+
+    return loadHospitalData(request.signal)
       .then((nextData) => {
+        if (request.signal.aborted) return
         setData(nextData)
         setSelectedDoctorId((current) => current ?? nextData.doctors.find((doctor) => doctor.isActive)?.doctorId ?? null)
         setSelectedDepartmentId((current) => current ?? nextData.departments[0]?.id ?? null)
       })
       .catch((refreshError) => {
+        if (request.signal.aborted) return
         setError(refreshError instanceof Error ? refreshError.message : 'Failed to load backend data')
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (refreshRequest.current === request) setLoading(false)
+      })
   }, [session])
 
   // Everything on screen: the shared lists, plus the visible week or users page.
@@ -151,10 +153,17 @@ function App() {
     await Promise.all([refresh(), reloadAppointments(), reloadUsers()])
   }, [session, refresh, reloadAppointments, reloadUsers])
 
-  const actionInFlight = useRef(false)
+  const actionInFlight = useRef<symbol | null>(null)
+  const pendingChangeCancel = useRef<(() => void) | null>(null)
+  const sessionEpoch = useRef(0)
 
-  const runAction = async (action: () => Promise<unknown>, successMessage: string): Promise<ActionOutcome> => {
-    if (session?.role.startsWith('Demo')) {
+  const runAction = async <Result,>(
+    action: () => Promise<Result>,
+    successMessage: string,
+    rotatedToken?: (result: Result) => string | null | undefined,
+  ): Promise<ActionOutcome> => {
+    if (!session || getStoredSession()?.token !== session.token) return { ok: false }
+    if (isDemoRole(session?.role)) {
       const message = 'Not allowed to do that. Demo accounts are read-only.'
       setError(message)
       setNotice(null)
@@ -162,20 +171,39 @@ function App() {
     }
 
     if (actionInFlight.current) return { ok: false }
-    actionInFlight.current = true
+    const request = Symbol()
+    const epoch = sessionEpoch.current
+    actionInFlight.current = request
+    let expectedToken = session.token
+    const isCurrent = () =>
+      actionInFlight.current === request && sessionEpoch.current === epoch && getStoredSession()?.token === expectedToken
 
     setLoading(true)
     setError(null)
     setNotice(null)
     try {
-      await action()
+      const result = await action()
+      if (rotatedToken) {
+        // A password change replaces this session's token before the action
+        // returns. Accept it only for the request and account that started it.
+        const nextSession = sessionAfterTokenRotation(
+          session,
+          getStoredSession(),
+          rotatedToken(result),
+          actionInFlight.current === request && sessionEpoch.current === epoch,
+        )
+        if (!nextSession) return { ok: false }
+        expectedToken = nextSession.token
+        setSession(nextSession)
+      }
+      if (!isCurrent()) return { ok: false }
       await reloadAll()
+      if (!isCurrent()) return { ok: false }
       setNotice(successMessage)
-      setActivity((current) =>
-        [{ id: crypto.randomUUID(), message: successMessage, at: new Date().toISOString() }, ...current].slice(0, 8),
-      )
+      setActivity((current) => [{ id: newId(), message: successMessage, at: new Date().toISOString() }, ...current].slice(0, 8))
       return { ok: true }
     } catch (actionError) {
+      if (!isCurrent()) return { ok: false }
       const message = actionError instanceof Error ? actionError.message : 'Operation failed'
       // These open a dialog of their own instead.
       if (!(actionError instanceof PossiblePatientMatchError || actionError instanceof AffectedBookingsError)) {
@@ -183,8 +211,10 @@ function App() {
       }
       return { ok: false, error: message, cause: actionError }
     } finally {
-      actionInFlight.current = false
-      setLoading(false)
+      if (actionInFlight.current === request) {
+        actionInFlight.current = null
+        if (getStoredSession()?.token === expectedToken) setLoading(false)
+      }
     }
   }
 
@@ -194,15 +224,26 @@ function App() {
     change: (cancel?: CancelAffected) => Promise<unknown>,
     successMessage: string,
   ): Promise<ActionOutcome> => {
+    const epoch = sessionEpoch.current
     const outcome = await runAction(() => change(), successMessage)
     if (outcome.ok || !(outcome.cause instanceof AffectedBookingsError)) return outcome
+    if (!session || sessionEpoch.current !== epoch || getStoredSession()?.token !== session.token) return { ok: false }
 
     const affected = outcome.cause
     return new Promise<ActionOutcome>((resolve) => {
+      let settled = false
       const finish = (result: ActionOutcome) => {
-        setPendingChange(null)
+        if (settled) return
+        settled = true
+        if (pendingChangeCancel.current === dismiss) {
+          pendingChangeCancel.current = null
+          setPendingChange(null)
+        }
         resolve(result)
       }
+      const dismiss = () => finish({ ok: false })
+      pendingChangeCancel.current?.()
+      pendingChangeCancel.current = dismiss
       setPendingChange({
         affected,
         confirm: async (reason) => {
@@ -211,14 +252,14 @@ function App() {
             successMessage,
           )
           if (retried.ok) finish(retried)
-          else if (retried.cause instanceof AffectedBookingsError) {
+          else if (!settled && retried.cause instanceof AffectedBookingsError) {
             // More bookings were made meanwhile; show the new list.
             const latest = retried.cause
             setPendingChange((current) => current && { ...current, affected: latest })
           }
           return retried
         },
-        dismiss: () => finish({ ok: false }),
+        dismiss,
       })
     })
   }
@@ -240,42 +281,42 @@ function App() {
     return () => window.removeEventListener('focus', handleFocus)
   }, [reloadAll])
 
-  useEffect(() => {
-    const handleSessionExpired = () => {
-      setSession(null)
-      setLoading(false)
-      setActivity([])
-      setData(emptyData)
-      setSelectedDoctorId(null)
-      setWeekOffset(0)
-      setSelectedDepartmentId(null)
-      setPendingChange(null)
-      setChangingPassword(false)
-    }
-
-    window.addEventListener(sessionExpiredEvent, handleSessionExpired)
-    return () => window.removeEventListener(sessionExpiredEvent, handleSessionExpired)
-  }, [])
-
-  const handleLogin = (nextSession: Session) => {
-    setSession(nextSession)
-    setLoading(usesHospitalData(nextSession.role))
-    setError(null)
-    setActivity([])
-    setScreen(initialScreen(nextSession.role))
-  }
-
-  const handleLogout = () => {
-    clearSession()
+  const resetSessionState = useCallback(() => {
+    sessionEpoch.current++
+    refreshRequest.current?.abort()
+    actionInFlight.current = null
+    pendingChangeCancel.current?.()
     setSession(null)
     setLoading(false)
+    setError(null)
+    setNotice(null)
     setActivity([])
     setData(emptyData)
     setSelectedDoctorId(null)
     setWeekOffset(0)
     setSelectedDepartmentId(null)
+    setSearchQuery('')
     setPendingChange(null)
     setChangingPassword(false)
+    dismissDialog()
+  }, [dismissDialog])
+
+  useEffect(() => {
+    window.addEventListener(sessionExpiredEvent, resetSessionState)
+    return () => window.removeEventListener(sessionExpiredEvent, resetSessionState)
+  }, [resetSessionState])
+
+  const handleLogin = (nextSession: Session) => {
+    sessionEpoch.current++
+    setSession(nextSession)
+    setLoading(usesHospitalData(nextSession.role))
+    setError(null)
+    setActivity([])
+  }
+
+  const handleLogout = () => {
+    clearSession()
+    resetSessionState()
   }
 
   const pathname = window.location.pathname
@@ -291,7 +332,7 @@ function App() {
     return <NoAccessScreen role={session.role} onLogout={handleLogout} />
   }
 
-  const isReadOnly = session.role.startsWith('Demo')
+  const isReadOnly = isDemoRole(session.role)
   const selectedDepartment =
     data.departments.find((department) => department.id === selectedDepartmentId) ?? data.departments[0] ?? null
   const markAppointment = (appointmentId: number, status: 'Completed' | 'NoShow') =>
@@ -351,10 +392,7 @@ function App() {
             onSelectDoctor={setSelectedDoctorId}
             onWeekOffsetChange={setWeekOffset}
             onCancelAppointment={(appointmentId, reason) =>
-              runAction(
-                () => cancelAppointment({ appointmentId, reason }),
-                'Appointment cancelled',
-              )
+              runAction(() => cancelAppointment(appointmentId, reason), 'Appointment cancelled')
             }
             onChangeAppointmentStatus={markAppointment}
             onCreateAppointment={(input) => runAction(() => createAppointment(input), 'Appointment booked')}
@@ -367,7 +405,7 @@ function App() {
             isReadOnly={isReadOnly}
             loading={loading}
             onError={setError}
-            onUpdatePatient={(input) => runAction(() => updatePatient(input), 'Patient details saved')}
+            onUpdatePatient={(patientId, input) => runAction(() => updatePatient(patientId, input), 'Patient details saved')}
           />
         )}
 
@@ -394,32 +432,77 @@ function App() {
             onNavigate={setScreen}
             onUsersPageChange={setUsersPage}
             onSelectDepartment={setSelectedDepartmentId}
-            onAssignDoctor={async (doctorId, departmentId) => {
-              if (!confirmAction('Assign doctor to this department?')) return { ok: false }
-              return runAction(() => changeDoctorDepartment(doctorId, departmentId), 'Doctor department updated')
+            onAssignDoctor={async (doctor, departmentId) => {
+              const department = data.departments.find((candidate) => candidate.id === departmentId)
+              const confirmed = await confirm({
+                title: 'Move doctor',
+                message: `Move ${doctor.name} to ${department?.name ?? 'this department'}?`,
+                confirmLabel: 'Move doctor',
+              })
+              if (!confirmed) return { ok: false }
+              return runAction(() => changeDoctorDepartment(doctor.doctorId, departmentId), 'Doctor department updated')
             }}
-            onChangeDepartmentStatus={async (departmentId, isActive) => {
-              if (!confirmAction(`${isActive ? 'Activate' : 'Deactivate'} this department?`)) return { ok: false }
+            onChangeDepartmentStatus={async (department, isActive) => {
+              const confirmed = await confirm({
+                title: isActive ? 'Activate department' : 'Deactivate department',
+                message: isActive
+                  ? `Activate ${department.name}? Its doctors can be booked again.`
+                  : `Deactivate ${department.name}? Its doctors can no longer be booked.`,
+                confirmLabel: isActive ? 'Activate' : 'Deactivate',
+                tone: isActive ? undefined : 'danger',
+              })
+              if (!confirmed) return { ok: false }
               return runBookingChange(
-                (cancel) => changeDepartmentStatus(departmentId, isActive, cancel),
+                (cancel) => changeDepartmentStatus(department.id, isActive, cancel),
                 'Department status updated',
               )
             }}
             onChangeDoctorStatus={async (doctor, isActive) => {
-              if (!confirmAction(`${isActive ? 'Activate' : 'Deactivate'} ${doctor.name}?`)) return { ok: false }
+              const confirmed = await confirm({
+                title: isActive ? 'Activate doctor' : 'Deactivate doctor',
+                message: isActive
+                  ? `Activate ${doctor.name}? They can be booked again.`
+                  : `Deactivate ${doctor.name}? They can no longer be booked or sign in.`,
+                confirmLabel: isActive ? 'Activate' : 'Deactivate',
+                tone: isActive ? undefined : 'danger',
+              })
+              if (!confirmed) return { ok: false }
               return runBookingChange((cancel) => changeDoctorStatus(doctor, isActive, cancel), 'Doctor status updated')
             }}
-            onChangeSchedule={(input) => runBookingChange((cancel) => changeSchedule(input, cancel), 'Schedule updated')}
-            onChangeUserRole={async (userId, role) => {
-              if (!confirmAction(`Change this user role to ${role}?`)) return { ok: false }
-              return runBookingChange((cancel) => changeUserRole(userId, role, cancel), 'User role updated')
+            onChangeSchedule={(scheduleId, input) =>
+              runBookingChange((cancel) => changeSchedule(scheduleId, input, cancel), 'Schedule updated')
+            }
+            onChangeUserRole={async (user, role) => {
+              // A new doctor needs a department; choosing one is the confirmation.
+              let departmentId: number | undefined
+              if (role === 'Doctor') {
+                const chosen = await chooseDepartment(user.userName, data.departments)
+                if (chosen === null) return { ok: false }
+                departmentId = chosen
+              } else {
+                const confirmed = await confirm({
+                  title: 'Change role',
+                  message: `Change ${user.userName}'s role from ${user.role} to ${role}? They are signed out everywhere.`,
+                  confirmLabel: 'Change role',
+                })
+                if (!confirmed) return { ok: false }
+              }
+              return runBookingChange(
+                (cancel) => changeUserRole(user.userId, role, departmentId, cancel),
+                'User role updated',
+              )
             }}
             onCreateDepartment={(name) => runAction(() => createDepartment(name), 'Department created')}
             onCreateSchedule={(input) => runAction(() => createSchedule(input), 'Schedule created')}
             onCreateUser={(name, password) => runAction(() => createUser(name, password), 'User created')}
-            onResetPassword={async (userId, password) => {
-              if (!confirmAction('Reset password for this user?')) return { ok: false }
-              return runAction(() => resetPassword(userId, password), 'Password reset')
+            onResetPassword={async (user, password) => {
+              const confirmed = await confirm({
+                title: 'Reset password',
+                message: `Set a new password for ${user.userName}? They are signed out everywhere, and a sign-in lock is lifted.`,
+                confirmLabel: 'Reset password',
+              })
+              if (!confirmed) return { ok: false }
+              return runAction(() => resetPassword(user.userId, password), 'Password reset')
             }}
           />
         )}
@@ -438,13 +521,17 @@ function App() {
         <ChangePasswordDialog
           loading={loading}
           onChangePassword={async (currentPassword, newPassword) => {
-            const outcome = await runAction(() => changeOwnPassword(currentPassword, newPassword), 'Password changed')
-            if (outcome.ok) setSession(getStoredSession())
-            return outcome
+            return runAction(
+              () => changeOwnPassword(currentPassword, newPassword),
+              'Password changed',
+              (result) => result.token,
+            )
           }}
           onClose={() => setChangingPassword(false)}
         />
       )}
+
+      {dialog}
     </div>
   )
 }

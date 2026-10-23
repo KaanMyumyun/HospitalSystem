@@ -7,7 +7,7 @@ import type {
   DoctorDto,
   ScheduleDto,
 } from '../../api'
-import { EmptyState, SkeletonRows } from '../../components/ui'
+import { GuardedButton, TableStatus } from '../../components/ui'
 import { formatWorkingDays } from '../../lib/format'
 import { clockLabel, scheduleWindow } from '../../lib/time'
 import type { ActionOutcome } from '../../types'
@@ -31,7 +31,7 @@ export function SchedulesTab({
   loading: boolean
   searchQuery: string
   isReadOnly: boolean
-  onChangeSchedule: (input: ChangeScheduleInput) => Promise<ActionOutcome>
+  onChangeSchedule: (scheduleId: number, input: ChangeScheduleInput) => Promise<ActionOutcome>
   onCreateSchedule: (input: CreateScheduleInput) => Promise<ActionOutcome>
 }) {
   const [scheduleDoctorId, setScheduleDoctorId] = useState<number | ''>('')
@@ -99,23 +99,18 @@ export function SchedulesTab({
           <input aria-label="Slot duration" type="number" min="5" step="5" value={scheduleSlotDuration} onChange={(event) => setScheduleSlotDuration(event.target.value)} />
         </label>
         <DayPicker label="Working days" days={scheduleDays} onChange={setScheduleDays} />
-        <button
+        <GuardedButton
           className="secondary-button"
+          readOnly={isReadOnly}
           disabled={
-            !scheduleDoctorId ||
-            Number(scheduleStartHour) >= Number(scheduleEndHour) ||
-            scheduleDays.length === 0 ||
-            isReadOnly ||
-            loading
+            !scheduleDoctorId || Number(scheduleStartHour) >= Number(scheduleEndHour) || scheduleDays.length === 0 || loading
           }
-          title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
-          type="button"
           onClick={async () => {
             if ((await onCreateSchedule(scheduleInput())).ok) setScheduleDoctorId('')
           }}
         >
           Create Schedule
-        </button>
+        </GuardedButton>
       </div>
       <table className="data-table">
         <thead>
@@ -131,33 +126,34 @@ export function SchedulesTab({
         <tbody>
           {visibleSchedules.map((schedule) => {
             const doctor = doctors.find((item) => item.doctorId === schedule.doctorId)
+            const doctorName = doctor?.name ?? `Doctor ${schedule.doctorId}`
             return (
               <tr key={schedule.scheduleId}>
-                <td><strong>{doctor?.name ?? `Doctor ${schedule.doctorId}`}</strong></td>
+                <td><strong>{doctorName}</strong></td>
                 <td>
                   {editingScheduleId === schedule.scheduleId ? (
-                    <input className="table-input" type="number" min="0" max="23" value={editStartHour} onChange={(event) => setEditStartHour(event.target.value)} />
+                    <input aria-label={`Start hour for ${doctorName}`} className="table-input" type="number" min="0" max="23" value={editStartHour} onChange={(event) => setEditStartHour(event.target.value)} />
                   ) : (
                     clockLabel(scheduleWindow(schedule).startMinutes)
                   )}
                 </td>
                 <td>
                   {editingScheduleId === schedule.scheduleId ? (
-                    <input className="table-input" type="number" min="1" max="24" value={editEndHour} onChange={(event) => setEditEndHour(event.target.value)} />
+                    <input aria-label={`End hour for ${doctorName}`} className="table-input" type="number" min="1" max="24" value={editEndHour} onChange={(event) => setEditEndHour(event.target.value)} />
                   ) : (
                     clockLabel(scheduleWindow(schedule).endMinutes)
                   )}
                 </td>
                 <td>
                   {editingScheduleId === schedule.scheduleId ? (
-                    <input className="table-input" type="number" min="5" step="5" value={editSlotDuration} onChange={(event) => setEditSlotDuration(event.target.value)} />
+                    <input aria-label={`Slot minutes for ${doctorName}`} className="table-input" type="number" min="5" step="5" value={editSlotDuration} onChange={(event) => setEditSlotDuration(event.target.value)} />
                   ) : (
                     `${schedule.slotDurationMin} min`
                   )}
                 </td>
                 <td>
                   {editingScheduleId === schedule.scheduleId ? (
-                    <DayPicker label={`Working days for ${doctor?.name ?? 'this doctor'}`} days={editDays} onChange={setEditDays} />
+                    <DayPicker label={`Working days for ${doctorName}`} days={editDays} onChange={setEditDays} />
                   ) : (
                     formatWorkingDays(schedule.workingDays)
                   )}
@@ -165,14 +161,12 @@ export function SchedulesTab({
                 <td>
                   {editingScheduleId === schedule.scheduleId ? (
                     <div className="table-actions">
-                      <button
+                      <GuardedButton
                         className="secondary-button compact-action"
-                        disabled={Number(editStartHour) >= Number(editEndHour) || editDays.length === 0 || isReadOnly || loading}
-                        title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
-                        type="button"
+                        readOnly={isReadOnly}
+                        disabled={Number(editStartHour) >= Number(editEndHour) || editDays.length === 0 || loading}
                         onClick={async () => {
-                          const outcome = await onChangeSchedule({
-                            scheduleId: schedule.scheduleId,
+                          const outcome = await onChangeSchedule(schedule.scheduleId, {
                             startHour: Number(editStartHour),
                             endHour: Number(editEndHour),
                             slotDurationMin: Number(editSlotDuration),
@@ -182,21 +176,19 @@ export function SchedulesTab({
                         }}
                       >
                         Save
-                      </button>
+                      </GuardedButton>
                       <button className="secondary-button compact-action" type="button" onClick={() => setEditingScheduleId(null)}>
                         Cancel
                       </button>
                     </div>
                   ) : (
-                    <button
+                    <GuardedButton
                       className="secondary-button compact-action"
-                      disabled={isReadOnly}
-                      title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
-                      type="button"
+                      readOnly={isReadOnly}
                       onClick={() => startScheduleEdit(schedule)}
                     >
                       Edit
-                    </button>
+                    </GuardedButton>
                   )}
                 </td>
               </tr>
@@ -204,8 +196,7 @@ export function SchedulesTab({
           })}
         </tbody>
       </table>
-      {loading && <SkeletonRows count={5} />}
-      {!loading && visibleSchedules.length === 0 && <EmptyState text="No schedules found." />}
+      <TableStatus loading={loading} empty={visibleSchedules.length === 0} emptyText="No schedules found." />
     </>
   )
 }

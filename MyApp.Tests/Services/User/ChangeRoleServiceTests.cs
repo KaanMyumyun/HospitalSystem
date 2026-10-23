@@ -20,57 +20,57 @@ public class ChangeRoleServiceTests : UserTestBase
         mock.Setup(x => x.UserId).Returns(userId);
         return mock.Object;
     }
- 
+
     [Fact]
     public async Task ChangeRoleAsync_Admin_Succeeds()
     {
         var db = CreateDbContext();
         await SeedDoctorAsync(db, isDoctorActive: false);
         var service = CreateService(db);
- 
+
         var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.FrontDesk });
- 
+
         Assert.True(result.IsSuccess);
         Assert.Equal(UserRole.FrontDesk, (await db.Users.FindAsync(1))!.Role);
     }
- 
+
     [Fact]
     public async Task ChangeRoleAsync_NotAdmin_Fails()
     {
         var db = CreateDbContext();
         var service = CreateService(db, isAdmin: false);
- 
+
         var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.FrontDesk });
- 
+
         Assert.False(result.IsSuccess);
     }
- 
+
     [Fact]
     public async Task ChangeRoleAsync_UserNotFound_Fails()
     {
         var db = CreateDbContext();
         var service = CreateService(db);
- 
+
         var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1000, NewRole = UserRole.Doctor });
- 
+
         Assert.False(result.IsSuccess);
         Assert.Equal("User not found", result.Error);
         Assert.Equal(FailureKind.NotFound, result.Failure);
     }
- 
+
     [Fact]
     public async Task ChangeRoleAsync_SameRole_Fails()
     {
         var db = CreateDbContext();
         await SeedDoctorAsync(db);
         var service = CreateService(db);
- 
+
         var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.Doctor });
- 
+
         Assert.False(result.IsSuccess);
         Assert.Equal("User already has this role", result.Error);
     }
- 
+
     [Fact]
     public async Task ChangeRoleAsync_InvalidEnum_Fails()
     {
@@ -78,13 +78,13 @@ public class ChangeRoleServiceTests : UserTestBase
         db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.Doctor });
         await db.SaveChangesAsync();
         var service = CreateService(db);
- 
+
         var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = (UserRole)999 });
- 
+
         Assert.False(result.IsSuccess);
         Assert.Equal("Invalid role", result.Error);
     }
- 
+
     [Fact]
     public async Task ChangeRoleAsync_PendingRole_Fails()
     {
@@ -92,39 +92,108 @@ public class ChangeRoleServiceTests : UserTestBase
         db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.Doctor });
         await db.SaveChangesAsync();
         var service = CreateService(db);
- 
+
         var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.Pending });
- 
+
         Assert.False(result.IsSuccess);
         Assert.Equal("Invalid role", result.Error);
     }
- 
+
     [Fact]
-    public async Task ChangeRoleAsync_ToDoctor_CreatesDoctorEntity()
+    public async Task ChangeRoleAsync_ToDoctor_CreatesActiveDoctorInTheChosenDepartment()
     {
         var db = CreateDbContext();
         db.Users.Add(new UserEntity { Id = 1, Name = "Regular User", Role = UserRole.FrontDesk, PasswordHash = "hash" });
+        db.Departments.Add(new DepartmentEntity { Id = 7, Department = "Neurology", IsActive = true });
         await db.SaveChangesAsync();
         var service = CreateService(db);
- 
-        var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.Doctor });
- 
+
+        var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.Doctor, DepartmentId = 7 });
+
         Assert.True(result.IsSuccess);
-        var doctor = await db.Doctors.FirstOrDefaultAsync(d => d.UserId == 1);
-        Assert.NotNull(doctor);
-        Assert.False(doctor!.IsActive);
+        var doctor = await db.Doctors.SingleAsync(d => d.UserId == 1);
+        Assert.True(doctor.IsActive);
+        Assert.Equal(7, doctor.DepartmentId);
+        var audit = await db.AuditLogs.SingleAsync(a => a.Action == "ChangeUserRole");
+        Assert.Equal("User Regular User role changed from FrontDesk to Doctor, in department 7", audit.Details);
+    }
+
+    [Fact]
+    public async Task ChangeRoleAsync_ToDoctorWithoutADepartment_FailsAndChangesNothing()
+    {
+        var db = CreateDbContext();
+        db.Users.Add(new UserEntity { Id = 1, Name = "Regular User", Role = UserRole.FrontDesk, PasswordHash = "hash" });
+        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.Doctor });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(FailureKind.Invalid, result.Failure);
+        Assert.Equal("Choose a department for the new doctor", result.Error);
+        Assert.Empty(db.Doctors);
+        Assert.Equal(UserRole.FrontDesk, (await db.Users.SingleAsync()).Role);
+    }
+
+    [Theory]
+    [InlineData(99, FailureKind.NotFound, "Department not found")]
+    [InlineData(2, FailureKind.Invalid, "This department is not active")]
+    public async Task ChangeRoleAsync_ToDoctorInAMissingOrInactiveDepartment_Fails(int departmentId, FailureKind failure, string error)
+    {
+        var db = CreateDbContext();
+        db.Users.Add(new UserEntity { Id = 1, Name = "Regular User", Role = UserRole.Pending, PasswordHash = "hash" });
+        db.Departments.Add(new DepartmentEntity { Id = 2, Department = "Closed Ward", IsActive = false });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.Doctor, DepartmentId = departmentId });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(failure, result.Failure);
+        Assert.Equal(error, result.Error);
+        Assert.Empty(db.Doctors);
+    }
+
+    [Fact]
+    public async Task ChangeRoleAsync_FormerDoctorBackToDoctor_ReturnsToTheirDepartment()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db, isDoctorActive: false, userRole: UserRole.FrontDesk);
+        var service = CreateService(db);
+
+        var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.Doctor });
+
+        Assert.True(result.IsSuccess);
+        var doctor = await db.Doctors.SingleAsync();
+        Assert.True(doctor.IsActive);
         Assert.Equal(1, doctor.DepartmentId);
     }
- 
+
+    [Fact]
+    public async Task ChangeRoleAsync_FormerDoctorWithADepartment_MovesThemThere()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db, isDoctorActive: false, userRole: UserRole.FrontDesk);
+        db.Departments.Add(new DepartmentEntity { Id = 2, Department = "Neurology", IsActive = true });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.Doctor, DepartmentId = 2 });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, (await db.Doctors.SingleAsync()).DepartmentId);
+    }
+
     [Fact]
     public async Task ChangeRoleAsync_AwayFromDoctor_DeactivatesDoctor()
     {
         var db = CreateDbContext();
         await SeedDoctorAsync(db, isDoctorActive: true, userRole: UserRole.Doctor);
         var service = CreateService(db);
- 
+
         var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.FrontDesk });
- 
+
         Assert.True(result.IsSuccess);
         var doctor = await db.Doctors.FirstOrDefaultAsync(d => d.UserId == 1);
         Assert.NotNull(doctor);

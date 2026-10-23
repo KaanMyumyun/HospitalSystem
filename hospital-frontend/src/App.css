@@ -883,6 +883,11 @@ textarea {
   color: var(--blue-700);
 }
 
+.status-badge.danger {
+  background: var(--red-50);
+  color: var(--red-700);
+}
+
 .patient-card {
   margin-bottom: 18px;
 }
@@ -1137,23 +1142,21 @@ textarea {
   font-size: 12px;
 }
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(15, 23, 42, 0.42);
-  padding: 20px;
-}
-
+/* A native <dialog> opened with showModal(), centred by the browser. */
 .modal {
-  width: min(100%, 460px);
+  width: min(calc(100% - 40px), 460px);
+  max-height: calc(100% - 40px);
+  overflow: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
+  padding: 0;
   background: var(--surface);
+  color: inherit;
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+}
+
+.modal::backdrop {
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .modal.danger {

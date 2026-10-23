@@ -9,13 +9,14 @@ namespace HospitalSystem.Tests;
 
 public class ChangePasswordServiceTests : AuthTestBase
 {
-    private ChangePasswordService CreateService(ApplicationDbContext db, UserRole role = UserRole.FrontDesk, string userId = "1")
+    private ChangePasswordService CreateService(ApplicationDbContext db, UserRole role = UserRole.FrontDesk, string userId = "1", TimeProvider? clock = null)
     {
         var mock = new Mock<ICurrentUserService>();
         mock.Setup(x => x.IsInRole(It.IsAny<UserRole>())).Returns<UserRole>(r => r == role);
         mock.Setup(x => x.UserId).Returns(userId);
         return new ChangePasswordService(
-            db, mock.Object, new TestAuditLogService(db), new SecurityStampCache(new MemoryCache(new MemoryCacheOptions())), CreateJwtOptions());
+            db, mock.Object, new TestAuditLogService(db), new SecurityStampCache(new MemoryCache(new MemoryCacheOptions())), CreateJwtOptions(),
+            new PasswordHasher<UserEntity>(), clock ?? TimeProvider.System);
     }
 
     private static ChangePasswordDto Change(string current = TestPassword, string next = "a-new-password") =>
@@ -76,5 +77,24 @@ public class ChangePasswordServiceTests : AuthTestBase
         var result = await CreateService(db, UserRole.DemoAdmin).ChangeOwnPasswordAsync(Change());
 
         Assert.Equal(FailureKind.Forbidden, result.Failure);
+    }
+
+    [Fact]
+    public async Task WrongCurrentPasswords_CountTowardsTheSignInLock()
+    {
+        using var db = CreateDbContext();
+        await SeedUserAsync(db, UserRole.FrontDesk);
+        var now = new DateTimeOffset(2026, 3, 2, 12, 0, 0, TimeSpan.Zero);
+        var service = CreateService(db, clock: new FixedClock(now));
+
+        for (var attempt = 0; attempt < 9; attempt++)
+            Assert.Equal("The current password is not correct", (await service.ChangeOwnPasswordAsync(Change(current: "wrong-password"))).Error);
+        var tenth = await service.ChangeOwnPasswordAsync(Change(current: "wrong-password"));
+        var rightPassword = await service.ChangeOwnPasswordAsync(Change());
+
+        Assert.StartsWith("Too many wrong passwords", tenth.Error);
+        Assert.False(rightPassword.IsSuccess);
+        Assert.StartsWith("Too many wrong passwords", rightPassword.Error);
+        Assert.Equal(now.UtcDateTime.AddMinutes(15), (await db.Users.SingleAsync()).LockedUntil);
     }
 }

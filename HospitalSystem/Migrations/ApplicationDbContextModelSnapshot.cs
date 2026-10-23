@@ -17,12 +17,12 @@ namespace HospitalSystem.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("HospitalSystem.Entities.AppointmentsEntity", b =>
+            modelBuilder.Entity("HospitalSystem.Entities.AppointmentEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -160,9 +160,6 @@ namespace HospitalSystem.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Department")
-                        .IsUnique();
-
                     b.ToTable("Departments");
                 });
 
@@ -229,6 +226,12 @@ namespace HospitalSystem.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("FailedSignInCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -253,7 +256,7 @@ namespace HospitalSystem.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("HospitalSystem.Entities.AppointmentsEntity", b =>
+            modelBuilder.Entity("HospitalSystem.Entities.AppointmentEntity", b =>
                 {
                     b.HasOne("HospitalSystem.Entities.UserEntity", "CreatedByTheFrontDesk")
                         .WithMany("CreatedAppointments")

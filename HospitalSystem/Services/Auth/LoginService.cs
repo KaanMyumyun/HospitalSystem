@@ -10,49 +10,73 @@ using HospitalSystem.Interfaces.Auth;
 
 namespace HospitalSystem.Services.Auth;
 
-public class LoginService : ILoginService
+public class LoginService(
+    ApplicationDbContext context,
+    IOptions<JwtSettings> jwtOptions,
+    IOptions<DemoSettings> demoOptions,
+    IAuditLogService auditLog,
+    IPasswordHasher<UserEntity> hasher,
+    TimeProvider clock) : ILoginService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly JwtSettings _jwtSettings;
-    private readonly DemoSettings _demoSettings;
-    private readonly IAuditLogService _auditLog;
-    private readonly PasswordHasher<UserEntity> _hasher;
+    private readonly JwtSettings _jwtSettings = jwtOptions.Value;
+    private readonly DemoSettings _demoSettings = demoOptions.Value;
 
-    private static readonly string DummyPasswordHash =
-        new PasswordHasher<UserEntity>().HashPassword(new UserEntity(), Guid.NewGuid().ToString());
-
-    public LoginService(
-        ApplicationDbContext context,
-        IOptions<JwtSettings> jwtOptions,
-        IOptions<DemoSettings> demoOptions,
-        IAuditLogService auditLog)
-    {
-        _context = context;
-        _jwtSettings = jwtOptions.Value;
-        _demoSettings = demoOptions.Value;
-        _auditLog = auditLog;
-        _hasher = new PasswordHasher<UserEntity>();
-    }
+    // Checked for an unknown username, so a failed sign-in takes the same time
+    // whether or not the account exists. Made by the same hasher as real ones.
+    private static string? _dummyPasswordHash;
+    private string DummyPasswordHash =>
+        _dummyPasswordHash ??= hasher.HashPassword(new UserEntity(), Guid.NewGuid().ToString());
 
     public async Task<LoginResultDto> LoginAsync(LoginDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Password))
             return LoginResultDto.Fail("Invalid credentials");
 
+        await using var transaction = context.Database.IsNpgsql()
+            ? await context.Database.BeginTransactionAsync()
+            : null;
+        var result = await LoginWithLockedUserAsync(dto);
+        if (transaction is not null)
+            await transaction.CommitAsync();
+        return result;
+    }
+
+    private async Task<LoginResultDto> LoginWithLockedUserAsync(LoginDto dto)
+    {
         // Usernames ignore case: "Admin" and "admin" are the same account.
         var nameKey = dto.Name.Trim().ToLowerInvariant();
-        var user = await _context.Users.SingleOrDefaultAsync(u => u.Name.ToLower() == nameKey);
+        var user = await SignInLockout.FindByNameForUpdateAsync(context, nameKey);
 
         if (user == null)
         {
-            _hasher.VerifyHashedPassword(new UserEntity(), DummyPasswordHash, dto.Password);
+            hasher.VerifyHashedPassword(new UserEntity(), DummyPasswordHash, dto.Password);
             return await RefuseAsync(null, "Failed sign-in with an unknown username");
         }
 
-        var result = _hasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password);
- 
+        var now = clock.GetUtcNow().UtcDateTime;
+        if (SignInLockout.IsLocked(user, now))
+        {
+            // A locked account must look like any other failed sign-in to an
+            // anonymous caller, including the password-verification cost.
+            hasher.VerifyHashedPassword(new UserEntity(), DummyPasswordHash, dto.Password);
+            return await RefuseAsync(user, $"Sign-in refused for user {user.Name}: account locked");
+        }
+
+        var result = hasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password);
+
         if (result == PasswordVerificationResult.Failed)
+        {
+            if (!SignInLockout.RecordFailure(user, now))
+                return await RefuseAsync(user, $"Failed sign-in for user {user.Name}: wrong password");
+
+            await auditLog.LogAsync("SignInLocked", "User", user.Id, SignInLockout.LockedAuditDetails(user));
             return await RefuseAsync(user, $"Failed sign-in for user {user.Name}: wrong password");
+        }
+
+        // The password was right, so earlier wrong ones no longer count, even
+        // if the role checks below refuse the sign-in.
+        if (SignInLockout.Clear(user))
+            await context.SaveChangesAsync();
 
         if (user.Role is UserRole.DemoAdmin or UserRole.DemoFrontDesk)
             return await RefuseAsync(user, $"Failed sign-in for user {user.Name}: demo accounts have no password sign-in");
@@ -82,7 +106,7 @@ public class LoginService : ILoginService
             return LoginResultDto.Fail("Invalid credentials");
 
         var nameKey = userName.ToLowerInvariant();
-        var user = await _context.Users.SingleOrDefaultAsync(u => u.Name.ToLower() == nameKey && u.Role == role);
+        var user = await context.Users.SingleOrDefaultAsync(u => u.Name.ToLower() == nameKey && u.Role == role);
 
         if (user == null)
             return LoginResultDto.Fail("Invalid credentials");
@@ -94,10 +118,11 @@ public class LoginService : ILoginService
 
     // Every refused password sign-in is audited. The typed username is kept
     // only when it names an account: people sometimes type a password there.
+    // The save also keeps the user's failed-sign-in count.
     private async Task<LoginResultDto> RefuseAsync(UserEntity? user, string details, string error = "Invalid credentials")
     {
-        await _auditLog.LogAsync("SignInFailed", "User", user?.Id ?? 0, details);
-        await _context.SaveChangesAsync();
+        await auditLog.LogAsync("SignInFailed", "User", user?.Id ?? 0, details);
+        await context.SaveChangesAsync();
         return LoginResultDto.Fail(error);
     }
 
@@ -121,7 +146,7 @@ public class LoginService : ILoginService
             expires: DateTime.UtcNow.AddHours(1),
             signingCredentials: creds
         );
- 
+
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }

@@ -5,130 +5,10 @@
     "version": "v1"
   },
   "paths": {
-    "/api/Appointments/CancelAppointment": {
-      "post": {
-        "tags": [
-          "AppointmentCancellation"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CancelAppointmentDto"
-                  }
-                ]
-              }
-            },
-            "text/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CancelAppointmentDto"
-                  }
-                ]
-              }
-            },
-            "application/*\u002Bjson": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CancelAppointmentDto"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancelAppointmentResultDto"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancelAppointmentResultDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancelAppointmentResultDto"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/Appointments/CreateAppointment": {
-      "post": {
-        "tags": [
-          "AppointmentCreation"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CreateAppointmentDto"
-                  }
-                ]
-              }
-            },
-            "text/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CreateAppointmentDto"
-                  }
-                ]
-              }
-            },
-            "application/*\u002Bjson": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CreateAppointmentDto"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateAppointmentResultDto"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateAppointmentResultDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateAppointmentResultDto"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/Appointments/ListAppointments": {
+    "/api/appointments": {
       "get": {
         "tags": [
-          "AppointmentQuery"
+          "Appointments"
         ],
         "parameters": [
           {
@@ -181,12 +61,70 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "Appointments"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateAppointmentDto"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateAppointmentDto"
+                  }
+                ]
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateAppointmentDto"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAppointmentResultDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAppointmentResultDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAppointmentResultDto"
+                }
+              }
+            }
+          }
+        }
       }
     },
-    "/api/Appointments/MyAppointments": {
+    "/api/appointments/mine": {
       "get": {
         "tags": [
-          "AppointmentQuery"
+          "Appointments"
         ],
         "parameters": [
           {
@@ -232,10 +170,92 @@
         }
       }
     },
-    "/api/Appointments/ChangeAppointmentStatus": {
+    "/api/appointments/{appointmentId}/cancel": {
       "post": {
         "tags": [
-          "AppointmentStatus"
+          "Appointments"
+        ],
+        "parameters": [
+          {
+            "name": "appointmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CancelAppointmentDto"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CancelAppointmentDto"
+                  }
+                ]
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CancelAppointmentDto"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelAppointmentResultDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelAppointmentResultDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelAppointmentResultDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/appointments/{appointmentId}/status": {
+      "patch": {
+        "tags": [
+          "Appointments"
+        ],
+        "parameters": [
+          {
+            "name": "appointmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
         ],
         "requestBody": {
           "content": {
@@ -292,10 +312,10 @@
         }
       }
     },
-    "/api/AuditLogs/ListAuditLogs": {
+    "/api/audit-logs": {
       "get": {
         "tags": [
-          "AuditLog"
+          "AuditLogs"
         ],
         "parameters": [
           {
@@ -351,10 +371,130 @@
         }
       }
     },
-    "/api/Auth/change-password": {
+    "/api/auth/login": {
       "post": {
         "tags": [
-          "ChangePassword"
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/LoginDto"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/LoginDto"
+                  }
+                ]
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/LoginDto"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResultDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResultDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResultDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/demo-login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/DemoLoginDto"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/DemoLoginDto"
+                  }
+                ]
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/DemoLoginDto"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResultDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResultDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResultDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/change-password": {
+      "post": {
+        "tags": [
+          "Auth"
         ],
         "requestBody": {
           "content": {
@@ -411,190 +551,10 @@
         }
       }
     },
-    "/api/Users/change-role": {
-      "post": {
-        "tags": [
-          "ChangeRole"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ChangeRoleDto"
-                  }
-                ]
-              }
-            },
-            "text/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ChangeRoleDto"
-                  }
-                ]
-              }
-            },
-            "application/*\u002Bjson": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ChangeRoleDto"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChangeRoleResultDto"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChangeRoleResultDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChangeRoleResultDto"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/Users/create-doctor": {
-      "post": {
-        "tags": [
-          "CreateDoctor"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CreateDoctorDto"
-                  }
-                ]
-              }
-            },
-            "text/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CreateDoctorDto"
-                  }
-                ]
-              }
-            },
-            "application/*\u002Bjson": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CreateDoctorDto"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateDoctorResultDto"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateDoctorResultDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateDoctorResultDto"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/Department/CreateDepartment": {
-      "post": {
-        "tags": [
-          "DepartmentCreation"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CreateDepartmentDto"
-                  }
-                ]
-              }
-            },
-            "text/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CreateDepartmentDto"
-                  }
-                ]
-              }
-            },
-            "application/*\u002Bjson": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CreateDepartmentDto"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/DepartmentActionResultDto"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DepartmentActionResultDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DepartmentActionResultDto"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/Department/ViewDepartment": {
+    "/api/departments": {
       "get": {
         "tags": [
-          "DepartmentQuery"
+          "Departments"
         ],
         "responses": {
           "200": {
@@ -618,12 +578,81 @@
             }
           }
         }
-      }
-    },
-    "/api/Department/ChangeDepartmentStatus": {
+      },
       "post": {
         "tags": [
-          "DepartmentStatus"
+          "Departments"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateDepartmentDto"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateDepartmentDto"
+                  }
+                ]
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateDepartmentDto"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentActionResultDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentActionResultDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentActionResultDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/departments/{departmentId}/status": {
+      "patch": {
+        "tags": [
+          "Departments"
+        ],
+        "parameters": [
+          {
+            "name": "departmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
         ],
         "requestBody": {
           "content": {
@@ -680,250 +709,239 @@
         }
       }
     },
-    "/api/Department/ChangeDoctorDepartment": {
-      "post": {
-        "tags": [
-          "DoctorDepartment"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ChangeDoctorDepartmentDto"
-                  }
-                ]
-              }
-            },
-            "text/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ChangeDoctorDepartmentDto"
-                  }
-                ]
-              }
-            },
-            "application/*\u002Bjson": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ChangeDoctorDepartmentDto"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/DepartmentActionResultDto"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DepartmentActionResultDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DepartmentActionResultDto"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/Users/change-doctor-status": {
-      "post": {
-        "tags": [
-          "DoctorStatus"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ChangeDoctorStatusDto"
-                  }
-                ]
-              }
-            },
-            "text/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ChangeDoctorStatusDto"
-                  }
-                ]
-              }
-            },
-            "application/*\u002Bjson": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ChangeDoctorStatusDto"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChangeDoctorsStatusResult"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChangeDoctorsStatusResult"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChangeDoctorsStatusResult"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/Auth/login": {
-      "post": {
-        "tags": [
-          "Login"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/LoginDto"
-                  }
-                ]
-              }
-            },
-            "text/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/LoginDto"
-                  }
-                ]
-              }
-            },
-            "application/*\u002Bjson": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/LoginDto"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoginResultDto"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoginResultDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoginResultDto"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/Auth/demo-login": {
-      "post": {
-        "tags": [
-          "Login"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/DemoLoginDto"
-                  }
-                ]
-              }
-            },
-            "text/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/DemoLoginDto"
-                  }
-                ]
-              }
-            },
-            "application/*\u002Bjson": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/DemoLoginDto"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoginResultDto"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoginResultDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoginResultDto"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/Patients/ListPatients": {
+    "/api/doctors": {
       "get": {
         "tags": [
-          "Patient"
+          "Doctors"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoctorDisplayDtoListServiceResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoctorDisplayDtoListServiceResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoctorDisplayDtoListServiceResult"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Doctors"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateDoctorDto"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateDoctorDto"
+                  }
+                ]
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateDoctorDto"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateDoctorResultDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateDoctorResultDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateDoctorResultDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/doctors/{doctorId}/status": {
+      "patch": {
+        "tags": [
+          "Doctors"
+        ],
+        "parameters": [
+          {
+            "name": "doctorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ChangeDoctorStatusDto"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ChangeDoctorStatusDto"
+                  }
+                ]
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ChangeDoctorStatusDto"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeDoctorsStatusResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeDoctorsStatusResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeDoctorsStatusResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/doctors/{doctorId}/department": {
+      "patch": {
+        "tags": [
+          "Doctors"
+        ],
+        "parameters": [
+          {
+            "name": "doctorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ChangeDoctorDepartmentDto"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ChangeDoctorDepartmentDto"
+                  }
+                ]
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ChangeDoctorDepartmentDto"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentActionResultDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentActionResultDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentActionResultDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/patients": {
+      "get": {
+        "tags": [
+          "Patients"
         ],
         "parameters": [
           {
@@ -979,10 +997,10 @@
         }
       }
     },
-    "/api/Patients/{patientId}": {
+    "/api/patients/{patientId}": {
       "get": {
         "tags": [
-          "Patient"
+          "Patients"
         ],
         "parameters": [
           {
@@ -1017,12 +1035,21 @@
             }
           }
         }
-      }
-    },
-    "/api/Patients/UpdatePatient": {
-      "post": {
+      },
+      "put": {
         "tags": [
-          "Patient"
+          "Patients"
+        ],
+        "parameters": [
+          {
+            "name": "patientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
         ],
         "requestBody": {
           "content": {
@@ -1079,190 +1106,10 @@
         }
       }
     },
-    "/api/Users/reset-password": {
-      "post": {
-        "tags": [
-          "ResetPassword"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ResetPasswordDto"
-                  }
-                ]
-              }
-            },
-            "text/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ResetPasswordDto"
-                  }
-                ]
-              }
-            },
-            "application/*\u002Bjson": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ResetPasswordDto"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResetPasswordResultDto"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResetPasswordResultDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResetPasswordResultDto"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/schedule/create-schedule": {
-      "post": {
-        "tags": [
-          "ScheduleCreation"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CreateSchedule"
-                  }
-                ]
-              }
-            },
-            "text/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CreateSchedule"
-                  }
-                ]
-              }
-            },
-            "application/*\u002Bjson": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/CreateSchedule"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/CalendarActionResult"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CalendarActionResult"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CalendarActionResult"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/schedule/change-schedule": {
-      "post": {
-        "tags": [
-          "ScheduleModification"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ChangeScheduleDto"
-                  }
-                ]
-              }
-            },
-            "text/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ChangeScheduleDto"
-                  }
-                ]
-              }
-            },
-            "application/*\u002Bjson": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/ChangeScheduleDto"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/CalendarActionResult"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CalendarActionResult"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CalendarActionResult"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/schedule/list-schedule": {
+    "/api/schedules": {
       "get": {
         "tags": [
-          "ScheduleQuery"
+          "Schedules"
         ],
         "responses": {
           "200": {
@@ -1286,12 +1133,10 @@
             }
           }
         }
-      }
-    },
-    "/api/Auth/CreateUser": {
+      },
       "post": {
         "tags": [
-          "UserCreation"
+          "Schedules"
         ],
         "requestBody": {
           "content": {
@@ -1299,7 +1144,7 @@
               "schema": {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/CreateUserDto"
+                    "$ref": "#/components/schemas/CreateSchedule"
                   }
                 ]
               }
@@ -1308,7 +1153,7 @@
               "schema": {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/CreateUserDto"
+                    "$ref": "#/components/schemas/CreateSchedule"
                   }
                 ]
               }
@@ -1317,7 +1162,7 @@
               "schema": {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/CreateUserDto"
+                    "$ref": "#/components/schemas/CreateSchedule"
                   }
                 ]
               }
@@ -1330,17 +1175,17 @@
             "content": {
               "text/plain": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreateUserResultDto"
+                  "$ref": "#/components/schemas/CalendarActionResult"
                 }
               },
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreateUserResultDto"
+                  "$ref": "#/components/schemas/CalendarActionResult"
                 }
               },
               "text/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreateUserResultDto"
+                  "$ref": "#/components/schemas/CalendarActionResult"
                 }
               }
             }
@@ -1348,10 +1193,81 @@
         }
       }
     },
-    "/api/Users/ListUsers": {
+    "/api/schedules/{scheduleId}": {
+      "put": {
+        "tags": [
+          "Schedules"
+        ],
+        "parameters": [
+          {
+            "name": "scheduleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ChangeScheduleDto"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ChangeScheduleDto"
+                  }
+                ]
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ChangeScheduleDto"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarActionResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarActionResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarActionResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users": {
       "get": {
         "tags": [
-          "UserQuery"
+          "Users"
         ],
         "parameters": [
           {
@@ -1405,30 +1321,201 @@
             }
           }
         }
-      }
-    },
-    "/api/Users/ListDoctors": {
-      "get": {
+      },
+      "post": {
         "tags": [
-          "UserQuery"
+          "Users"
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateUserDto"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateUserDto"
+                  }
+                ]
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateUserDto"
+                  }
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "OK",
             "content": {
               "text/plain": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoctorDisplayDtoListServiceResult"
+                  "$ref": "#/components/schemas/CreateUserResultDto"
                 }
               },
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoctorDisplayDtoListServiceResult"
+                  "$ref": "#/components/schemas/CreateUserResultDto"
                 }
               },
               "text/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoctorDisplayDtoListServiceResult"
+                  "$ref": "#/components/schemas/CreateUserResultDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{userId}/role": {
+      "patch": {
+        "tags": [
+          "Users"
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ChangeRoleDto"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ChangeRoleDto"
+                  }
+                ]
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ChangeRoleDto"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRoleResultDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRoleResultDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeRoleResultDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{userId}/password": {
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ResetPasswordDto"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ResetPasswordDto"
+                  }
+                ]
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ResetPasswordDto"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetPasswordResultDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetPasswordResultDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetPasswordResultDto"
                 }
               }
             }
@@ -1581,15 +1668,8 @@
         "additionalProperties": false
       },
       "CancelAppointmentDto": {
-        "required": [
-          "appointmentId"
-        ],
         "type": "object",
         "properties": {
-          "appointmentId": {
-            "type": "integer",
-            "format": "int32"
-          },
           "reason": {
             "maxLength": 500,
             "type": "string"
@@ -1612,15 +1692,10 @@
       },
       "ChangeAppointmentStatusDto": {
         "required": [
-          "appointmentId",
           "status"
         ],
         "type": "object",
         "properties": {
-          "appointmentId": {
-            "type": "integer",
-            "format": "int32"
-          },
           "status": {
             "allOf": [
               {
@@ -1632,12 +1707,11 @@
         "additionalProperties": false
       },
       "ChangeDepartmentStatusDto": {
+        "required": [
+          "isActive"
+        ],
         "type": "object",
         "properties": {
-          "departmentId": {
-            "type": "integer",
-            "format": "int32"
-          },
           "isActive": {
             "type": "boolean"
           },
@@ -1654,10 +1728,6 @@
       "ChangeDoctorDepartmentDto": {
         "type": "object",
         "properties": {
-          "doctorId": {
-            "type": "integer",
-            "format": "int32"
-          },
           "departmentId": {
             "type": "integer",
             "format": "int32"
@@ -1667,15 +1737,10 @@
       },
       "ChangeDoctorStatusDto": {
         "required": [
-          "doctorId",
           "isActive"
         ],
         "type": "object",
         "properties": {
-          "doctorId": {
-            "type": "integer",
-            "format": "int32"
-          },
           "isActive": {
             "type": "boolean"
           },
@@ -1779,16 +1844,17 @@
       "ChangeRoleDto": {
         "type": "object",
         "properties": {
-          "userId": {
-            "type": "integer",
-            "format": "int32"
-          },
           "newRole": {
             "allOf": [
               {
                 "$ref": "#/components/schemas/UserRole"
               }
             ]
+          },
+          "departmentId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
           },
           "cancelAffectedAppointments": {
             "type": "boolean"
@@ -1827,10 +1893,6 @@
       "ChangeScheduleDto": {
         "type": "object",
         "properties": {
-          "scheduleId": {
-            "type": "integer",
-            "format": "int32"
-          },
           "startHour": {
             "type": "integer",
             "format": "int32"
@@ -2350,10 +2412,6 @@
         ],
         "type": "object",
         "properties": {
-          "userId": {
-            "type": "integer",
-            "format": "int32"
-          },
           "newPassword": {
             "minLength": 8,
             "type": "string"
@@ -2382,10 +2440,6 @@
         ],
         "type": "object",
         "properties": {
-          "patientId": {
-            "type": "integer",
-            "format": "int32"
-          },
           "name": {
             "maxLength": 50,
             "minLength": 1,
@@ -2419,6 +2473,11 @@
                 "$ref": "#/components/schemas/UserRole"
               }
             ]
+          },
+          "lockedUntil": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -2642,67 +2701,28 @@
   ],
   "tags": [
     {
-      "name": "AppointmentCancellation"
+      "name": "Appointments"
     },
     {
-      "name": "AppointmentCreation"
+      "name": "AuditLogs"
     },
     {
-      "name": "AppointmentQuery"
+      "name": "Auth"
     },
     {
-      "name": "AppointmentStatus"
+      "name": "Departments"
     },
     {
-      "name": "AuditLog"
+      "name": "Doctors"
     },
     {
-      "name": "ChangePassword"
+      "name": "Patients"
     },
     {
-      "name": "ChangeRole"
+      "name": "Schedules"
     },
     {
-      "name": "CreateDoctor"
-    },
-    {
-      "name": "DepartmentCreation"
-    },
-    {
-      "name": "DepartmentQuery"
-    },
-    {
-      "name": "DepartmentStatus"
-    },
-    {
-      "name": "DoctorDepartment"
-    },
-    {
-      "name": "DoctorStatus"
-    },
-    {
-      "name": "Login"
-    },
-    {
-      "name": "Patient"
-    },
-    {
-      "name": "ResetPassword"
-    },
-    {
-      "name": "ScheduleCreation"
-    },
-    {
-      "name": "ScheduleModification"
-    },
-    {
-      "name": "ScheduleQuery"
-    },
-    {
-      "name": "UserCreation"
-    },
-    {
-      "name": "UserQuery"
+      "name": "Users"
     }
   ]
 }

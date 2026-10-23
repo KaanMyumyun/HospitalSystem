@@ -6,6 +6,7 @@
     using Microsoft.AspNetCore.Authentication.JwtBearer;
     using Microsoft.AspNetCore.Authorization;
     using Microsoft.AspNetCore.HttpOverrides;
+    using Microsoft.AspNetCore.Identity;
     using HospitalSystem.Interfaces;
     using HospitalSystem.Services;
     using Microsoft.AspNetCore.Diagnostics;
@@ -18,7 +19,7 @@
     using HospitalSystem.Services.Appointments;
     using HospitalSystem.Services.Auth;
     using HospitalSystem.Services.Calendar;
-    using HospitalSystem.Services.Deparment;
+    using HospitalSystem.Services.Department;
     using HospitalSystem.Services.User;
     using HospitalSystem.Interfaces.Appointments;
 using HospitalSystem.Interfaces.Auth;
@@ -92,6 +93,8 @@ var builder = WebApplication.CreateBuilder(args);
     });
 
     builder.Services.AddHttpContextAccessor();
+    builder.Services.AddSingleton(TimeProvider.System);
+    builder.Services.AddSingleton<IPasswordHasher<UserEntity>, PasswordHasher<UserEntity>>();
 
     builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
     builder.Services.AddScoped<IAuditLogService, AuditLogService>();
@@ -105,6 +108,8 @@ var builder = WebApplication.CreateBuilder(args);
     builder.Services.AddScoped<IPatientRecordService, PatientRecordService>();
 
     builder.Services.AddScoped<ILoginService, LoginService>();
+    builder.Services.AddSingleton<LoginAttemptLimiter>();
+    builder.Services.AddScoped<LoginRateLimitFilter>();
     builder.Services.AddHostedService<SignInWarmup>();
     builder.Services.AddMemoryCache();
     builder.Services.AddSingleton<SecurityStampCache>();
@@ -138,6 +143,15 @@ var builder = WebApplication.CreateBuilder(args);
     // key would start fine and then fail every sign-in.
     if (Encoding.UTF8.GetByteCount(jwtSecret) < 32)
         throw new InvalidOperationException("JWT SecretKey must be at least 32 bytes (256 bits) long");
+    // Keys anyone can read: the placeholder once committed to appsettings.json
+    // and the templates' example value.
+    string[] publishedJwtKeys =
+    [
+        "THIS_SHOULD_BE_LONG_AND_SECRET_123456789",
+        "replace-with-a-random-string-of-at-least-32-characters"
+    ];
+    if (publishedJwtKeys.Contains(jwtSecret.Trim()))
+        throw new InvalidOperationException("JWT SecretKey is a published example value; generate a random key of your own");
 
     builder.Services.AddAuthentication("Bearer")
         .AddJwtBearer(options =>
@@ -148,6 +162,10 @@ var builder = WebApplication.CreateBuilder(args);
                 ValidateAudience = true,
                 ValidateLifetime = true,
                 ValidateIssuerSigningKey = true,
+                // Not the default five minutes: an expired token stops working
+                // within 30 seconds, which still covers small clock differences
+                // between API instances.
+                ClockSkew = TimeSpan.FromSeconds(30),
                 ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
                 ValidAudience = builder.Configuration["JwtSettings:Audience"],
                 IssuerSigningKey = new SymmetricSecurityKey(
@@ -190,21 +208,12 @@ var builder = WebApplication.CreateBuilder(args);
         ));
         builder.Services.AddRateLimiter(options =>
     {
-    
-        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    
-    options.OnRejected = async (context, token) =>
-    {
-        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
-        {
-            var seconds = Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds));
-            context.HttpContext.Response.Headers.RetryAfter = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        }
 
-        await context.HttpContext.Response.WriteAsJsonAsync(
-            new { error = "Too many requests. Please wait a moment and try again." }, token);
-    };
-        
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.OnRejected = async (context, token) =>
+        await RateLimitResponse.WriteAsync(context.HttpContext, context.Lease, token);
+
         options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
         {
         var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -231,21 +240,56 @@ var builder = WebApplication.CreateBuilder(args);
 
     var app = builder.Build();
 
+    // Behind a proxy every request comes from the proxy's address, and the
+    // per-address rate limits would put all users in one bucket. The client's
+    // address is read from X-Forwarded-For when the request comes from a proxy
+    // listed in KnownProxies or KnownNetworks, or from any proxy when
+    // TrustAllProxies is set. That is safe only where the API cannot be reached
+    // except through the platform's proxy, as on Render or behind a Kubernetes
+    // ingress. ForwardLimit is how many proxies add an entry; with more, a
+    // client could choose its own address. LogClientAddress logs the result of
+    // every request, to check the setting once after a deploy.
+    var forwardedHeaders = app.Configuration.GetSection("ForwardedHeaders");
+    var forwardLimit = forwardedHeaders.GetValue("ForwardLimit", 1);
+    if (forwardLimit < 1)
+        throw new InvalidOperationException("ForwardedHeaders:ForwardLimit must be at least 1");
     var forwardedHeadersOptions = new ForwardedHeadersOptions
     {
-        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+        ForwardLimit = forwardLimit
     };
-    foreach (var proxy in app.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+    if (forwardedHeaders.GetValue<bool>("TrustAllProxies"))
     {
-        if (IPAddress.TryParse(proxy, out var proxyIp))
-            forwardedHeadersOptions.KnownProxies.Add(proxyIp);
+        // Empty lists mean any proxy; a listed one would narrow it again.
+        forwardedHeadersOptions.KnownProxies.Clear();
+        forwardedHeadersOptions.KnownIPNetworks.Clear();
+        app.Logger.LogInformation("Reading client addresses from X-Forwarded-For through {ForwardLimit} proxies", forwardLimit);
     }
-    foreach (var network in app.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [])
+    else
     {
-        if (System.Net.IPNetwork.TryParse(network, out var ipNetwork))
-            forwardedHeadersOptions.KnownIPNetworks.Add(ipNetwork);
+        foreach (var proxy in forwardedHeaders.GetSection("KnownProxies").Get<string[]>() ?? [])
+        {
+            if (IPAddress.TryParse(proxy, out var proxyIp))
+                forwardedHeadersOptions.KnownProxies.Add(proxyIp);
+        }
+        foreach (var network in forwardedHeaders.GetSection("KnownNetworks").Get<string[]>() ?? [])
+        {
+            if (System.Net.IPNetwork.TryParse(network, out var ipNetwork))
+                forwardedHeadersOptions.KnownIPNetworks.Add(ipNetwork);
+        }
     }
     app.UseForwardedHeaders(forwardedHeadersOptions);
+    if (forwardedHeaders.GetValue<bool>("LogClientAddress"))
+    {
+        app.Use(async (context, next) =>
+        {
+            app.Logger.LogInformation(
+                "Client address {ClientAddress} for {Method} {Path}; X-Forwarded-For entries not used: {Unused}",
+                context.Connection.RemoteIpAddress, context.Request.Method, context.Request.Path,
+                context.Request.Headers["X-Forwarded-For"].ToString());
+            await next();
+        });
+    }
 
     if (app.Configuration.GetValue<bool>("Database:RunMigrationsOnStartup"))
     {

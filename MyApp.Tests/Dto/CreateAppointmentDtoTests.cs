@@ -68,15 +68,15 @@ public class CreateAppointmentDtoTests
     }
 
     [Fact]
-    public void CancelWithoutAppointmentId_IsRejected()
+    public void ChangeDepartmentStatusWithoutIsActive_IsRejected()
     {
-        var dto = new CancelAppointmentDto { Reason = "Patient requested" };
+        var dto = new ChangeDepartmentStatusDto { DepartmentId = 1 };
         var results = new List<ValidationResult>();
 
         Validator.TryValidateObject(dto, new ValidationContext(dto), results, validateAllProperties: true);
 
         var error = Assert.Single(results);
-        Assert.Contains(nameof(CancelAppointmentDto.AppointmentId), error.MemberNames);
+        Assert.Contains(nameof(ChangeDepartmentStatusDto.IsActive), error.MemberNames);
     }
 
     [Fact]

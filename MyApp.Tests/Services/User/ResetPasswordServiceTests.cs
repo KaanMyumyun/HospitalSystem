@@ -1,24 +1,26 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 using Xunit;
 using HospitalSystem.Services;
 using HospitalSystem.Services.Auth;
 using HospitalSystem.Services.User;
 
 namespace HospitalSystem.Tests;
- 
+
 public class ResetPasswordServiceTests : UserTestBase
 {
     private ResetPasswordService CreateService(ApplicationDbContext db, bool isAdmin = true, SecurityStampCache? stamps = null)
-        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db), stamps ?? CreateStampCache());
- 
+        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db), stamps ?? CreateStampCache(), new PasswordHasher<UserEntity>());
+
     [Fact]
     public async Task ResetPasswordAsync_Admin_Succeeds()
     {
         var db = CreateDbContext();
         await SeedDoctorAsync(db);
         var service = CreateService(db);
- 
+
         var result = await service.ResetPasswordAsync(new ResetPasswordDto { UserId = 1, NewPassword = "newpassword" });
- 
+
         Assert.True(result.IsSuccess);
         Assert.NotEqual("hashed", (await db.Users.FindAsync(1))!.PasswordHash);
     }
@@ -57,20 +59,20 @@ public class ResetPasswordServiceTests : UserTestBase
     {
         var db = CreateDbContext();
         var service = CreateService(db, isAdmin: false);
- 
+
         var result = await service.ResetPasswordAsync(new ResetPasswordDto { UserId = 1, NewPassword = "newpassword" });
- 
+
         Assert.False(result.IsSuccess);
     }
- 
+
     [Fact]
     public async Task ResetPasswordAsync_EmptyPassword_Fails()
     {
         var db = CreateDbContext();
         var service = CreateService(db);
- 
+
         var result = await service.ResetPasswordAsync(new ResetPasswordDto { UserId = 1, NewPassword = "" });
- 
+
         Assert.False(result.IsSuccess);
         Assert.Equal("No password entered", result.Error);
     }
@@ -86,17 +88,36 @@ public class ResetPasswordServiceTests : UserTestBase
         Assert.False(result.IsSuccess);
         Assert.Equal("Password must be at least 8 characters long", result.Error);
     }
- 
+
     [Fact]
     public async Task ResetPasswordAsync_UserNotFound_Fails()
     {
         var db = CreateDbContext();
         var service = CreateService(db);
- 
+
         var result = await service.ResetPasswordAsync(new ResetPasswordDto { UserId = 1000, NewPassword = "newpassword" });
- 
+
         Assert.False(result.IsSuccess);
         Assert.Equal("User not found", result.Error);
         Assert.Equal(FailureKind.NotFound, result.Failure);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_LiftsASignInLock()
+    {
+        var db = CreateDbContext();
+        await SeedDoctorAsync(db);
+        var user = await db.Users.SingleAsync();
+        user.FailedSignInCount = 3;
+        user.LockedUntil = DateTime.UtcNow.AddMinutes(10);
+        await db.SaveChangesAsync();
+
+        var result = await CreateService(db).ResetPasswordAsync(new ResetPasswordDto { UserId = user.Id, NewPassword = "a-new-password" });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(0, user.FailedSignInCount);
+        Assert.Null(user.LockedUntil);
+        Assert.Equal("Password reset for user Dr Test, which lifted the sign-in lock",
+            Assert.Single(db.AuditLogs, a => a.Action == "ResetPassword").Details);
     }
 }

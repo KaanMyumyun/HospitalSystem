@@ -30,7 +30,8 @@ The application uses a three-stage GitHub Actions pipeline:
 1. `CI` workflow
    - Runs on pull requests, pushes to `main`, and weekly (Mondays 03:00 UTC)
      so published images pick up base image security fixes
-   - Restores, builds and tests the backend
+   - Restores, builds and tests the backend against a temporary PostgreSQL
+     service, including migration and constraint checks
    - Lints, tests and builds the frontend (the build type-checks it), and
      checks that its generated API types match `openapi.json` (see
      [API contract](#api-contract))
@@ -418,7 +419,7 @@ longer needed. Rolling back an image never undoes a migration; this command only
 applies forward migrations. Recovery from a destructive change requires the
 separately tested restore procedure.
 
-Two migrations need attention on a database that already has data:
+Three migrations need attention on a database that already has data:
 
 * `CaseInsensitiveUserNames` makes usernames unique regardless of case. If
   existing usernames differ only in case, it stops with PostgreSQL error
@@ -427,6 +428,17 @@ Two migrations need attention on a database that already has data:
 
   ```sql
   SELECT string_agg("Name", ', ') FROM "Users" GROUP BY lower("Name") HAVING count(*) > 1;
+  ```
+
+* `CaseInsensitiveDepartmentNames` also enforces uniqueness regardless of
+  case. It stops if existing department names differ only by case. Find and
+  rename duplicates before running it:
+
+  ```sql
+  SELECT string_agg("Department", ', ')
+  FROM "Departments"
+  GROUP BY lower("Department")
+  HAVING count(*) > 1;
   ```
 
 * `AddScheduleWorkingDays` gives every existing schedule Monday to Friday,
@@ -476,7 +488,7 @@ Log in as `admin` with that password. New users created from the app start as
 ### 6. Demo accounts (optional)
 
 The **Demo Admin** and **Demo Reception** buttons on the sign-in page call
-`POST /api/Auth/demo-login`, which signs in a read-only demo account without a
+`POST /api/auth/demo-login`, which signs in a read-only demo account without a
 password. Demo login is off by default. Turn it on only for a deployment whose
 data is fake:
 
@@ -542,50 +554,63 @@ It calls the API at `http://localhost:5272/api` unless `VITE_API_URL` is set.
 
 ## API Endpoints
 
+These resource routes replace the former action-named routes. The old paths
+remain as temporary aliases for one release while the backend and frontend
+deploy separately; deploy the compatible backend first, then update clients
+to these routes. The old role-change request cannot promote a first-time
+doctor unless it supplies a department ID.
+
 ### Authentication
 
 | Method | Endpoint             | Description                      |
 | -----: | -------------------- | -------------------------------- |
-|   POST | /api/Auth/CreateUser | Create a user (Admin only)       |
-|   POST | /api/Auth/login      | Authenticate and return JWT      |
-|   POST | /api/Auth/demo-login | Sign in a demo account, if enabled |
-|   POST | /api/Auth/change-password | Change your own password    |
+|   POST | /api/auth/login      | Authenticate and return JWT      |
+|   POST | /api/auth/demo-login | Sign in a demo account, if enabled |
+|   POST | /api/auth/change-password | Change your own password    |
 
 `change-password` takes `currentPassword` and `newPassword` (at least 8
 characters, and not the current one) and returns a new `token`. Tokens issued
 before the change stop working, so the user's other sessions are signed out.
-It shares the sign-in rate limit, and demo accounts cannot use it. Failed
+It shares the per-IP authentication limit with demo sign-in, and demo accounts
+cannot use it. Failed
 sign-ins and failed password changes are recorded in the audit log.
 
 ### Users
 
-| Method | Endpoint                         | Description                    |
-| -----: | -------------------------------- | ------------------------------ |
-|   POST | /api/Users/change-role           | Change user role               |
-|   POST | /api/Users/create-doctor         | Create doctor                  |
-|   POST | /api/Users/change-doctor-status  | Activate or deactivate doctor  |
-|   POST | /api/Users/reset-password        | Reset password                 |
-|    GET | /api/Users/ListUsers             | One page of users (Admin only) |
-|    GET | /api/Users/ListDoctors           | List all doctors               |
+| Method | Endpoint                       | Description                    |
+| -----: | ------------------------------ | ------------------------------ |
+|    GET | /api/users                     | One page of users (Admin only) |
+|   POST | /api/users                     | Create a user (Admin only)     |
+|  PATCH | /api/users/{userId}/role       | Change user role               |
+|    PUT | /api/users/{userId}/password   | Reset password                 |
 
-`ListUsers` returns users sorted by name, one page at a time:
+All user endpoints require Admin. `GET /api/users` returns users sorted by
+name, one page at a time:
 `?page=1&pageSize=50&search=desk`. `pageSize` is 1 to 100 (default 50), and
 `search` matches part of a username or role name, ignoring case. The response
 data holds `items`, `totalCount`, `page` and `pageSize`.
 
-Taking the Doctor role away (`change-role`) or deactivating a doctor
-(`change-doctor-status`) can be refused with `409` when the doctor has future
+### Doctors
+
+| Method | Endpoint                            | Description                   |
+| -----: | ----------------------------------- | ----------------------------- |
+|    GET | /api/doctors                        | List all doctors              |
+|   POST | /api/doctors                        | Make an eligible user a doctor |
+|  PATCH | /api/doctors/{doctorId}/status      | Activate or deactivate doctor |
+|  PATCH | /api/doctors/{doctorId}/department  | Assign doctor to department   |
+
+Taking the Doctor role away or deactivating a doctor can be refused with `409`
+when the doctor has future
 bookings; see
 [Changes that affect future bookings](#changes-that-affect-future-bookings).
 
 ### Departments
 
-| Method | Endpoint                               | Description                  |
-| -----: | -------------------------------------- | ---------------------------- |
-|    GET | /api/Department/ViewDepartment         | View departments             |
-|   POST | /api/Department/CreateDepartment       | Create department            |
-|   POST | /api/Department/ChangeDoctorDepartment | Assign doctor to department  |
-|   POST | /api/Department/ChangeDepartmentStatus | Enable or disable department |
+| Method | Endpoint                                | Description                  |
+| -----: | --------------------------------------- | ---------------------------- |
+|    GET | /api/departments                        | View departments             |
+|   POST | /api/departments                        | Create department            |
+|  PATCH | /api/departments/{departmentId}/status  | Enable or disable department |
 
 Disabling a department can be refused with `409` when its doctors have future
 bookings; see
@@ -593,13 +618,13 @@ bookings; see
 
 ### Appointments
 
-| Method | Endpoint                            | Description                                 |
-| -----: | ----------------------------------- | ------------------------------------------- |
-|   POST | /api/Appointments/CreateAppointment | Create appointment                          |
-|    GET | /api/Appointments/ListAppointments  | One doctor's appointments in a time window  |
-|   POST | /api/Appointments/CancelAppointment | Cancel appointment                          |
-|   POST | /api/Appointments/ChangeAppointmentStatus | Mark an appointment completed or no-show |
-|    GET | /api/Appointments/MyAppointments    | The signed-in doctor's appointments in a time window |
+| Method | Endpoint                                    | Description                                 |
+| -----: | ------------------------------------------- | ------------------------------------------- |
+|   POST | /api/appointments                           | Create appointment                          |
+|    GET | /api/appointments                           | One doctor's appointments in a time window  |
+|   POST | /api/appointments/{appointmentId}/cancel    | Cancel appointment                          |
+|  PATCH | /api/appointments/{appointmentId}/status    | Mark an appointment completed or no-show    |
+|    GET | /api/appointments/mine                      | The signed-in doctor's appointments in a time window |
 
 `CreateAppointment` takes `appointmentTime` as the front desk's local time with
 its UTC offset, for example `2026-09-22T09:00:00+03:00`. That clock time must
@@ -626,38 +651,38 @@ most 42 days. URL-encode the `+` of an offset as `%2B`.
 `MyAppointments` takes the same `from` and `to` and returns the signed-in
 doctor's own appointments. Only the Doctor role can call it.
 
-`ChangeAppointmentStatus` takes `appointmentId` and `status`, `Completed` or
-`NoShow`, once the appointment has started. A cancelled appointment cannot be
+Changing appointment status takes `status`, `Completed` or `NoShow`, once the
+appointment has started. A cancelled appointment cannot be
 marked, and a mark can be corrected later. The front desk can mark any
 appointment and a doctor only their own. Each change is recorded in the audit
 log.
 
 ### Patients
 
-| Method | Endpoint                    | Description                                       |
-| -----: | --------------------------- | ------------------------------------------------- |
-|    GET | /api/Patients/ListPatients  | One page of patients, sorted by name              |
-|    GET | /api/Patients/{patientId}   | A patient's details and appointments              |
-|   POST | /api/Patients/UpdatePatient | Correct a patient's name, phone or date of birth  |
+| Method | Endpoint                     | Description                                       |
+| -----: | ---------------------------- | ------------------------------------------------- |
+|    GET | /api/patients                | One page of patients, sorted by name              |
+|    GET | /api/patients/{patientId}    | A patient's details and appointments              |
+|    PUT | /api/patients/{patientId}    | Correct a patient's name, phone or date of birth  |
 
-`ListPatients` pages like `ListUsers` (`page`, `pageSize`, `search`). `search`
+The patient list pages like the user list (`page`, `pageSize`, `search`). `search`
 matches part of a name, ignoring case, or part of a phone number once it has
 at least 3 digits. A patient's details include their 200 most recent
 appointments. The front desk and Demo Reception can search and view patients;
-only the front desk can update them. `UpdatePatient` takes `patientId`, `name`,
+only the front desk can update them. The update body takes `name`,
 `phoneNumber` and `dateOfBirth`, stores the phone number the same way bookings
 do, and records what changed in the audit log.
 
 ### Schedules
 
-| Method | Endpoint                      | Description                 |
-| -----: | ----------------------------- | --------------------------- |
-|   POST | /api/schedule/create-schedule | Create a new schedule       |
-|   POST | /api/schedule/change-schedule | Modify an existing schedule |
-|    GET | /api/schedule/list-schedule   | View all schedules          |
+| Method | Endpoint                     | Description                 |
+| -----: | ---------------------------- | --------------------------- |
+|   POST | /api/schedules               | Create a new schedule       |
+|    PUT | /api/schedules/{scheduleId}  | Modify an existing schedule |
+|    GET | /api/schedules               | View all schedules          |
 
 Schedules have `workingDays`, a list of day names such as `"Monday"`.
-`create-schedule` uses Monday to Friday when it is left out. `change-schedule`
+Creation uses Monday to Friday when it is left out. Changing a schedule
 also requires `timeZone`, the IANA time zone of whoever makes the change, such
 as `Europe/Sofia`, because it checks the doctor's future bookings against the
 new hours and days in that time zone. The frontend sends the browser's time
@@ -665,11 +690,11 @@ zone.
 
 ### Audit log
 
-| Method | Endpoint                     | Description                                          |
-| -----: | ---------------------------- | ---------------------------------------------------- |
-|    GET | /api/AuditLogs/ListAuditLogs | One page of the audit log, newest first (Admin only) |
+| Method | Endpoint       | Description                                          |
+| -----: | -------------- | ---------------------------------------------------- |
+|    GET | /api/audit-logs | One page of the audit log, newest first (Admin only) |
 
-`ListAuditLogs` pages like `ListUsers`, and `search` matches part of the action
+The audit log pages like the user list, and `search` matches part of the action
 or its details. Each entry has `createdAt`, `action`, `entityType`, `entityId`,
 `details` and `actor`, the username of whoever made the change, or `Unknown`
 when nobody was signed in, as for a failed sign-in.
@@ -750,18 +775,35 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 A global rate limiter is implemented using ASP.NET Core's built-in rate-limiting middleware:
 
-* **Strategy:** Fixed Window Limiter (partitioned by client IP)
-* **Limit:** 60 requests per minute per IP, and 5 per minute per IP for
-  sign-in and password changes
+* **Strategy:** Fixed Window Limiter
+* **Limit:** 60 requests per minute per client IP globally; 5 password
+  sign-ins per minute per client IP and normalized username; 5 per minute per
+  client IP for demo sign-in and password changes
 * **Queue:** Disabled — exceeding requests are immediately rejected
-* **Response:** `429 Too Many Requests` with a custom message
+* **Response:** `429 Too Many Requests` with a JSON error and `Retry-After`
+
+Ten consecutive wrong passwords also lock that account for 15 minutes;
+successful sign-in and an admin password reset clear its failure count.
+
+Behind a reverse proxy, configure `ForwardedHeaders:KnownProxies` or
+`ForwardedHeaders:KnownNetworks` so rate limits use the client's address. If
+the API can be reached **only** through a proxy that controls
+`X-Forwarded-For`, set `ForwardedHeaders__TrustAllProxies=true` in that
+deployment and set `ForwardedHeaders__ForwardLimit` to the number of proxy hops
+that append an address (normally `1`). Do not enable that option on an API
+reachable directly from clients: they could then choose their own rate-limit
+bucket. Temporarily set `ForwardedHeaders__LogClientAddress=true` and inspect
+the resulting client addresses after deployment. Without a trusted proxy
+configuration, clients behind the same proxy share its 60-per-minute global
+bucket and the 5-per-minute demo/password-change bucket.
 
 ---
 
 ## Testing
 
-The backend tests in `MyApp.Tests` are written with xUnit, Moq and EF Core
-InMemory. Most of them test one service each:
+The backend tests in `MyApp.Tests` use xUnit, Moq and EF Core InMemory for
+service tests. They also exercise the HTTP pipeline through
+`WebApplicationFactory` and have an optional PostgreSQL suite:
 
 | Area | Under test |
 | --- | --- |
@@ -770,9 +812,16 @@ InMemory. Most of them test one service each:
 | Calendar | `ScheduleCreationService`, `ScheduleModificationService`, `ScheduleQueryService`, working days |
 | Department | `DepartmentCreationService`, `DepartmentQueryService`, `DepartmentStatusService`, `DoctorDepartmentService` |
 | User | `ChangeRoleService`, `CreateDoctorService`, `DoctorStatusService`, `ResetPasswordService`, `UserQueryService` |
-| Audit log | `AuditLogQueryService` |
+| Audit log | `AuditLogQueryService`, `AuditLogService` |
 | Data | The `--migrate` command |
-| API | The status code for each kind of refusal; with the real app started by `WebApplicationFactory`, the signing key check at startup and the [API contract](#api-contract) |
+| API | Endpoint authorization and responses, sign-in rate limiting, forwarded headers, the signing key check at startup and the [API contract](#api-contract) |
+
+The service suite also covers `PatientService`, `ScheduleValidation` and
+`CurrentUserService`. The twelve PostgreSQL tests check actual migrations,
+indexes, constraints and concurrent account lockout updates. CI runs them
+against its temporary PostgreSQL service; locally they are skipped unless
+`HOSPITALSYSTEM_TEST_POSTGRES` contains a connection string to a PostgreSQL
+server where the tests can create temporary databases.
 
 The Appointments, Auth, Department and User tests share seed data through
 `*TestBase` classes.
@@ -783,9 +832,7 @@ cover schedule slots and working days, formatting, form validation, time
 handling, HTTP error messages, the API client's booking errors and the API
 type generator.
 
-Not covered yet: `PatientService`, `ScheduleValidation` on its own,
-`AuditLogService`, `CurrentUserService`, the controllers themselves, and the
-frontend components and screens.
+Frontend components and screens still have no direct component tests.
 
 ### API contract
 

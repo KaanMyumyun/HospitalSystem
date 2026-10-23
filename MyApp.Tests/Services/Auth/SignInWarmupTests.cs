@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity;
 using HospitalSystem.Interfaces.Auth;
 using HospitalSystem.Services.Auth;
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +24,8 @@ public class SignInWarmupTests : AuthTestBase
             .AddScoped(_ => new ApplicationDbContext(options))
             .AddScoped<ILoginService>(provider => new LoginService(
                 provider.GetRequiredService<ApplicationDbContext>(), CreateJwtOptions(), CreateDemoOptions(),
-                new TestAuditLogService(provider.GetRequiredService<ApplicationDbContext>()))), logger);
+                new TestAuditLogService(provider.GetRequiredService<ApplicationDbContext>()),
+                new PasswordHasher<UserEntity>(), TimeProvider.System)), logger);
 
         await warmup.StartAsync(CancellationToken.None);
 
