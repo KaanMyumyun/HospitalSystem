@@ -1,6 +1,6 @@
 import { Activity } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { demoLogin, login, wakeApi } from '../api'
+import { demoLogin, getStoredSession, login, wakeApi } from '../api'
 import type { LoginResult } from '../api'
 import { StatusBadge } from '../components/ui'
 import type { Session } from '../types'
@@ -32,12 +32,14 @@ export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }
     setSlow(false)
     setPending(null)
 
-    if (!result.isSuccess || !result.token || !result.role) {
+    // A successful sign-in has stored the session.
+    const session = result.isSuccess ? getStoredSession() : null
+    if (!session) {
       setError(result.error ?? 'Invalid credentials')
       return
     }
 
-    onLogin({ token: result.token, role: result.role })
+    onLogin(session)
   }
 
   const submit = () => signIn('password', () => login(name, password))

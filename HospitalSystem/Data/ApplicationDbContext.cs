@@ -20,6 +20,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<DoctorEntity> Doctors { get; set; }
     public DbSet<PatientEntity> Patients { get; set; }
     public DbSet<CalendarEntity> Calendars { get; set; }
+    public DbSet<TimeOffEntity> TimeOff { get; set; }
     public DbSet<AuditLogEntity> AuditLogs { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -88,6 +89,14 @@ public class ApplicationDbContext : DbContext
             builder.HasOne(c => c.Doctor).WithMany(d => d.Calendars).HasForeignKey(c => c.DoctorId).OnDelete(DeleteBehavior.Restrict);
             // One schedule per doctor. Booking reads the doctor's schedule from it.
             builder.HasIndex(c => c.DoctorId).IsUnique();
+        });
+
+        modelBuilder.Entity<TimeOffEntity>(builder =>
+        {
+            builder.HasOne(t => t.Calendar).WithMany(c => c.TimeOff).HasForeignKey(t => t.CalendarId).OnDelete(DeleteBehavior.Restrict);
+            builder.Property(t => t.Reason).HasMaxLength(200);
+            // Booking and the schedule list read time off that has not ended yet.
+            builder.HasIndex(t => new { t.CalendarId, t.LastDay });
         });
 
         modelBuilder.Entity<AuditLogEntity>(builder =>

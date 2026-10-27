@@ -42,6 +42,25 @@ public class AppointmentsController : ControllerBase
         return this.ToActionResult(await service.CancelAppointmentAsync(dto, cancellationToken));
     }
 
+    // To another time, or another doctor, in one step, so nobody can take the
+    // new slot in between. The appointment keeps its id and history.
+    [Authorize(Roles = "FrontDesk")]
+    [HttpPost("{appointmentId:int}/move")]
+    public async Task<ActionResult<MoveAppointmentResultDto>> MoveAppointment(
+        int appointmentId, [FromBody] MoveAppointmentDto dto, [FromServices] IAppointmentMoveService service,
+        CancellationToken cancellationToken)
+    {
+        dto.AppointmentId = appointmentId;
+        return this.ToActionResult(await service.MoveAsync(dto, cancellationToken));
+    }
+
+    // Who booked, moved, cancelled or marked it, oldest first.
+    [Authorize(Roles = "FrontDesk")]
+    [HttpGet("{appointmentId:int}/history")]
+    public async Task<ActionResult<ServiceResult<List<AppointmentHistoryEntryDto>>>> AppointmentHistory(
+        int appointmentId, [FromServices] IAppointmentQueryService service, CancellationToken cancellationToken)
+        => this.ToActionResult(await service.GetHistoryAsync(appointmentId, cancellationToken));
+
     // Completed or NoShow, once the appointment has started.
     [Authorize(Roles = "FrontDesk,Doctor")]
     [HttpPatch("{appointmentId:int}/status")]

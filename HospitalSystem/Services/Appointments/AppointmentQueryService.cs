@@ -47,6 +47,42 @@ public class AppointmentQueryService(
             await ListAsync(a => a.Doctor.UserId == userId, from, to, cancellationToken));
     }
 
+    // Who booked, moved, cancelled or marked an appointment, oldest first, from
+    // the audit log. The entries name staff, so demo accounts cannot read them.
+    public async Task<ServiceResult<List<AppointmentHistoryEntryDto>>> GetHistoryAsync(
+        int appointmentId, CancellationToken cancellationToken = default)
+    {
+        if (!currentUser.IsDesk())
+            return ServiceResult<List<AppointmentHistoryEntryDto>>.Forbidden("Not allowed to read an appointment's history");
+
+        // One query, which also tells a missing appointment from one with no
+        // entries; IX_AuditLogs_EntityType_EntityId_CreatedAt serves it.
+        var history = await context.Appointments
+            .AsNoTracking()
+            .Where(a => a.Id == appointmentId)
+            .Select(a => context.AuditLogs
+                .Where(l => l.EntityType == "Appointment" && l.EntityId == a.Id)
+                .OrderBy(l => l.CreatedAt)
+                .ThenBy(l => l.Id)
+                .Select(l => new AppointmentHistoryEntryDto
+                {
+                    CreatedAt = l.CreatedAt,
+                    Action = l.Action,
+                    Details = l.Details,
+                    // As in the audit log: an entry an older release wrote
+                    // holds the actor's id in ActorName.
+                    Actor = l.ActorUserId != null
+                        ? l.ActorName
+                        : context.Users.Where(u => u.Id.ToString() == l.ActorName).Select(u => u.Name).FirstOrDefault() ?? l.ActorName
+                })
+                .ToList())
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return history == null
+            ? ServiceResult<List<AppointmentHistoryEntryDto>>.NotFound("Appointment not found")
+            : ServiceResult<List<AppointmentHistoryEntryDto>>.Success(history);
+    }
+
     private static string? CheckWindow(DateTimeOffset from, DateTimeOffset to)
     {
         if (to <= from)

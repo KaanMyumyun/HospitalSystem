@@ -8,16 +8,14 @@ namespace HospitalSystem.Services.Calendar;
 public class ScheduleModificationService(
     ApplicationDbContext context,
     ICurrentUserService currentUser,
-    IAuditLogService auditLog) : IScheduleModificationService
+    IAuditLogService auditLog,
+    ClinicClock clinic) : IScheduleModificationService
 {
     public async Task<CalendarActionResult> ChangeScheduleAsync(
         ChangeScheduleDto dto, CancellationToken cancellationToken = default)
     {
         if (currentUser.RequireAdmin<CalendarActionResult>("change a schedule") is { } refusal)
             return refusal;
-
-        if (string.IsNullOrWhiteSpace(dto.TimeZone) || !TimeZoneInfo.TryFindSystemTimeZoneById(dto.TimeZone, out var timeZone))
-            return CalendarActionResult.Fail("A valid time zone is required, such as Europe/Sofia");
 
         // The doctor comes with the schedule: one query instead of two. A
         // doctor has no other schedule to overlap (IX_Calendars_DoctorId).
@@ -37,7 +35,9 @@ public class ScheduleModificationService(
             dto.StartHour,
             dto.EndHour,
             dto.SlotDurationMin,
-            dto.WorkingDays);
+            dto.WorkingDays,
+            dto.BreakStartMinute,
+            dto.BreakEndMinute);
 
         if (validationError is not null)
             return validationError;
@@ -45,11 +45,19 @@ public class ScheduleModificationService(
         var calendar = found.Calendar;
         var workingDays = ScheduleDays.Normalize(dto.WorkingDays ?? calendar.WorkingDays);
 
-        // Bookings already made must still fall on a working day, inside the
-        // hours and on the slot grid, read as wall-clock times where the admin is.
+        // Bookings already made must still be bookable under the new hours: on
+        // a working day, inside the hours, on the slot grid and clear of the
+        // break, as clinic times.
+        var newHours = new BookingRules.WorkingHours(
+            CalendarEntity.HoursDate.AddHours(dto.StartHour),
+            CalendarEntity.HoursDate.AddHours(dto.EndHour),
+            dto.SlotDurationMin,
+            workingDays,
+            dto.BreakStartMinute,
+            dto.BreakEndMinute);
         var future = await AffectedBookings.LoadFutureAsync(context, a => a.DoctorId == calendar.DoctorId, cancellationToken);
         var stranded = future
-            .Where(a => !FitsSchedule(TimeZoneInfo.ConvertTimeFromUtc(a.TimeOfAppointment, timeZone), dto, workingDays))
+            .Where(a => BookingRules.CheckWorkingHours(newHours, clinic.WallClock(a.TimeOfAppointment)) is not null)
             .ToList();
         var bookingRefusal = await AffectedBookings.ResolveAsync<CalendarActionResult>(
             stranded, dto, auditLog, $"schedule change for doctor {calendar.DoctorId}", cancellationToken);
@@ -59,6 +67,8 @@ public class ScheduleModificationService(
         calendar.SetHours(dto.StartHour, dto.EndHour);
         calendar.SlotDurationMin = dto.SlotDurationMin;
         calendar.WorkingDays = workingDays;
+        calendar.BreakStartMinute = dto.BreakStartMinute;
+        calendar.BreakEndMinute = dto.BreakEndMinute;
         await auditLog.LogAsync(
             "ChangeSchedule",
             "Calendar",
@@ -67,15 +77,5 @@ public class ScheduleModificationService(
             cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
         return CalendarActionResult.Success();
-    }
-
-    private static bool FitsSchedule(DateTime wallClock, ChangeScheduleDto dto, List<DayOfWeek> workingDays)
-    {
-        var minutes = wallClock.TimeOfDay.TotalMinutes;
-        var startMinutes = dto.StartHour * 60;
-        return workingDays.Contains(wallClock.DayOfWeek)
-            && minutes >= startMinutes
-            && minutes + dto.SlotDurationMin <= dto.EndHour * 60
-            && (minutes - startMinutes) % dto.SlotDurationMin == 0;
     }
 }

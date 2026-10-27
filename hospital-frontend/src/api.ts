@@ -1,6 +1,8 @@
 import type * as Api from './api-schema'
+import { setClinicTimeZone, toClinicIsoString } from './lib/clinicTime'
 import { parseBody, tooManyRequestsMessage, unreadableResponseMessage } from './lib/http'
-import { toLocalIsoString } from './lib/time'
+import { newId } from './lib/id'
+import { tokenExpiry } from './lib/session'
 
 // Requests and responses are typed by src/api-schema.ts, which is generated
 // from the API's OpenAPI document (npm run generate:api).
@@ -18,8 +20,9 @@ export type AppointmentDto = Api.ViewAppointmentDto
 export type CreateAppointmentInput = Api.CreateAppointmentDto
 export type PatientMatchDto = Api.PatientMatchDto
 export type CreateScheduleInput = Api.CreateSchedule
-// The time zone is added by changeSchedule.
-export type ChangeScheduleInput = Omit<Api.ChangeScheduleDto, 'timeZone'>
+export type ChangeScheduleInput = Api.ChangeScheduleDto
+export type TimeOffDto = Api.TimeOffDto
+export type AddTimeOffInput = Pick<Api.AddTimeOffDto, 'firstDay' | 'lastDay' | 'reason'>
 export type DayOfWeek = Api.DayOfWeek
 export type AffectedAppointmentDto = Api.AffectedAppointmentDto
 export type PatientSummaryDto = Api.PatientSummaryDto
@@ -28,6 +31,7 @@ export type PatientDetailsDto = Api.PatientDetailsDto
 export type UpdatePatientInput = Api.UpdatePatientDto
 export type AuditLogEntryDto = Api.AuditLogEntryDto
 export type AuditLogPage = Api.AuditLogEntryDtoPagedResult
+export type AppointmentHistoryEntryDto = Api.AppointmentHistoryEntryDto
 
 // Sent with a change the API refused because it strands future bookings.
 export type CancelAffected = { cancelAffectedAppointments: true; cancellationReason: string }
@@ -81,15 +85,28 @@ function apiUrl(path: string) {
 
 const tokenStorageKey = 'hospital-frontend-token'
 const roleStorageKey = 'hospital-frontend-role'
-// A second login can receive the same JWT within one clock second. The local
-// revision still distinguishes its requests from the previous session's.
-let sessionRevision = 0
+// Names the sign-in. It stays when the token is renewed, and a second sign-in
+// gets a new one even when the server issues it the same token.
+const sessionIdStorageKey = 'hospital-frontend-session'
+const timeZoneStorageKey = 'hospital-frontend-time-zone'
 
 // The session lives in sessionStorage: it ends when the tab closes, so the
 // next person at a shared desk computer does not find someone else signed in.
 // Builds before this kept it in localStorage; main.tsx removes those copies.
 export function removeLegacySession() {
   for (const key of [tokenStorageKey, roleStorageKey]) localStorage.removeItem(key)
+}
+
+// The clinic's time zone arrives with each token and stays with the session,
+// so a reload shows the same times (main.tsx).
+export function restoreClinicTimeZone() {
+  setClinicTimeZone(sessionStorage.getItem(timeZoneStorageKey))
+}
+
+function storeClinicTimeZone(timeZone: string | null | undefined) {
+  if (!timeZone) return
+  sessionStorage.setItem(timeZoneStorageKey, timeZone)
+  setClinicTimeZone(timeZone)
 }
 const requestTimeoutMs = 15000
 // A free-tier host stops an idle API and can take about a minute to start it
@@ -98,22 +115,35 @@ const signInTimeoutMs = 90_000
 
 export const sessionExpiredEvent = 'hospital-frontend:session-expired'
 
-export function getStoredSession() {
+export type StoredSession = { id: string; token: string; role: UserRole }
+
+export function getStoredSession(): StoredSession | null {
   const token = sessionStorage.getItem(tokenStorageKey)
   const role = sessionStorage.getItem(roleStorageKey) as UserRole | null
-  return token && role ? { token, role } : null
+  if (!token || !role) return null
+  // A session stored by a build without ids is named by its token.
+  return { id: sessionStorage.getItem(sessionIdStorageKey) ?? token, token, role }
 }
 
-export function storeSession(token: string, role: UserRole) {
-  sessionRevision++
+export function storeSession(token: string, role: UserRole, timeZone?: string | null) {
+  sessionStorage.setItem(sessionIdStorageKey, newId())
   sessionStorage.setItem(tokenStorageKey, token)
   sessionStorage.setItem(roleStorageKey, role)
+  storeClinicTimeZone(timeZone)
+}
+
+// A new token for the same sign-in, from a renewal or a password change.
+// Nothing changes once that sign-in has ended.
+function replaceToken(session: StoredSession, token: string) {
+  if (getStoredSession()?.id !== session.id) return
+  sessionStorage.setItem(sessionIdStorageKey, session.id)
+  sessionStorage.setItem(tokenStorageKey, token)
 }
 
 export function clearSession() {
-  sessionRevision++
-  sessionStorage.removeItem(tokenStorageKey)
-  sessionStorage.removeItem(roleStorageKey)
+  for (const key of [sessionIdStorageKey, tokenStorageKey, roleStorageKey, timeZoneStorageKey]) {
+    sessionStorage.removeItem(key)
+  }
 }
 
 export function isDemoRole(role: UserRole | null | undefined) {
@@ -140,12 +170,65 @@ async function signIn(path: string, body: Api.LoginDto | Api.DemoLoginDto): Prom
     const result = await request<LoginResult>(path, { method: 'POST', body: JSON.stringify(body) }, signInTimeoutMs)
 
     if (result.isSuccess && result.token && result.role) {
-      storeSession(result.token, result.role)
+      storeSession(result.token, result.role, result.timeZone)
     }
 
     return result
   } catch (error) {
-    return { isSuccess: false, token: null, role: null, error: getErrorMessage(error) }
+    return { isSuccess: false, token: null, role: null, error: getErrorMessage(error), timeZone: null }
+  }
+}
+
+// A token lasts an hour. Once one is ten minutes old, the next request or
+// click swaps it for a new one, so a session in use carries on (for up to 12
+// hours after signing in, the API's limit) and one left alone for about an
+// hour runs out. Demo sessions are not renewed; they end after the hour.
+const renewWhenLeftMs = 50 * 60_000
+// After a renewal that failed for a reason other than a refusal, such as a
+// network error, the next try waits this long.
+const renewRetryMs = 60_000
+let renewal: Promise<void> | null = null
+let renewRetryAt = 0
+// Tokens the API would not renew, because their session has reached its 12
+// hours or began before renewal existed. They are used until they run out.
+const refusedTokens = new Set<string>()
+
+export function renewSessionIfDue(): Promise<void> {
+  const session = getStoredSession()
+  const now = Date.now()
+  if (!session || renewal || isDemoRole(session.role) || refusedTokens.has(session.token) || now < renewRetryAt) {
+    return renewal ?? Promise.resolve()
+  }
+  const expires = tokenExpiry(session.token)
+  if (expires === null || expires - now > renewWhenLeftMs) return Promise.resolve()
+
+  renewal = renew(session).finally(() => {
+    renewal = null
+  })
+  return renewal
+}
+
+async function renew(session: StoredSession) {
+  try {
+    const response = await fetch(apiUrl('/api/auth/refresh'), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.token}` },
+      signal: AbortSignal.timeout(requestTimeoutMs),
+    })
+    // A 401 means the token no longer works; the next request signs out.
+    if (response.status === 403) refusedTokens.add(session.token)
+    if (!response.ok) {
+      if (response.status !== 403 && response.status !== 401) renewRetryAt = Date.now() + renewRetryMs
+      return
+    }
+    const result = parseBody(await response.text()).payload as LoginResult | null
+    // A password change may have replaced the token meanwhile; its token wins.
+    if (result?.token && getStoredSession()?.token === session.token) {
+      replaceToken(session, result.token)
+      storeClinicTimeZone(result.timeZone)
+    }
+  } catch {
+    renewRetryAt = Date.now() + renewRetryMs
   }
 }
 
@@ -165,10 +248,15 @@ export async function loadHospitalData(signal?: AbortSignal) {
 export async function loadAppointments(doctorId: number, from: Date, to: Date) {
   const query = new URLSearchParams({
     doctorId: String(doctorId),
-    from: toLocalIsoString(from),
-    to: toLocalIsoString(to),
+    from: toClinicIsoString(from),
+    to: toClinicIsoString(to),
   })
   return getData<Api.ViewAppointmentDtoListServiceResult>(`/api/appointments?${query}`)
+}
+
+// Who booked, moved, cancelled or marked the booking, and when, oldest first.
+export async function loadAppointmentHistory(appointmentId: number) {
+  return getData<Api.AppointmentHistoryEntryDtoListServiceResult>(`/api/appointments/${appointmentId}/history`)
 }
 
 // search matches part of a username or role; the API caps it at 50 characters.
@@ -181,6 +269,16 @@ export async function loadUsers(search: string, page: number): Promise<UsersPage
 
 export async function createAppointment(input: CreateAppointmentInput) {
   return send<Api.CreateAppointmentResultDto>('POST', '/api/appointments', input)
+}
+
+// To another time, and to another doctor when doctorId is given; the
+// patient and the booking's history stay.
+export async function moveAppointment(appointmentId: number, appointmentTime: Date, doctorId?: number) {
+  return send<Api.MoveAppointmentResultDto>(
+    'POST',
+    `/api/appointments/${appointmentId}/move`,
+    { appointmentTime: toClinicIsoString(appointmentTime), doctorId } satisfies Api.MoveAppointmentDto,
+  )
 }
 
 export async function cancelAppointment(appointmentId: number, reason: string) {
@@ -244,14 +342,25 @@ export async function createSchedule(input: CreateScheduleInput) {
   return send<Api.CalendarActionResult>('POST', '/api/schedules', input)
 }
 
-// The API checks future bookings against the new hours as wall-clock times
-// in this browser's time zone.
 export async function changeSchedule(scheduleId: number, input: ChangeScheduleInput, cancel?: CancelAffected) {
   return send<Api.CalendarActionResult>(
     'PUT',
     `/api/schedules/${scheduleId}`,
-    { ...input, ...cancel, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } satisfies Api.ChangeScheduleDto,
+    { ...input, ...cancel } satisfies Api.ChangeScheduleDto,
   )
+}
+
+// Days the doctor is away, clinic dates with both ends included.
+export async function addTimeOff(scheduleId: number, input: AddTimeOffInput, cancel?: CancelAffected) {
+  return send<Api.CalendarActionResult>(
+    'POST',
+    `/api/schedules/${scheduleId}/time-off`,
+    { ...input, ...cancel } satisfies Api.AddTimeOffDto,
+  )
+}
+
+export async function removeTimeOff(scheduleId: number, timeOffId: number) {
+  return send<Api.CalendarActionResult>('DELETE', `/api/schedules/${scheduleId}/time-off/${timeOffId}`)
 }
 
 export async function changeAppointmentStatus(appointmentId: number, status: 'Completed' | 'NoShow') {
@@ -264,7 +373,7 @@ export async function changeAppointmentStatus(appointmentId: number, status: 'Co
 
 // The signed-in doctor's appointments that start at or after `from` and before `to`.
 export async function loadMyAppointments(from: Date, to: Date) {
-  const query = new URLSearchParams({ from: toLocalIsoString(from), to: toLocalIsoString(to) })
+  const query = new URLSearchParams({ from: toClinicIsoString(from), to: toClinicIsoString(to) })
   return getData<Api.ViewAppointmentDtoListServiceResult>(`/api/appointments/mine?${query}`)
 }
 
@@ -290,15 +399,12 @@ export async function loadAuditLogs(search: string, page: number): Promise<Audit
 // with the token that comes back.
 export async function changeOwnPassword(currentPassword: string, newPassword: string) {
   const session = getStoredSession()
-  const revision = sessionRevision
   const result = await send<Api.ChangePasswordResultDto>(
     'POST',
     '/api/auth/change-password',
     { currentPassword, newPassword } satisfies Api.ChangePasswordDto,
   )
-  if (result.token && session && sessionRevision === revision && getStoredSession()?.token === session.token) {
-    storeSession(result.token, session.role)
-  }
+  if (result.token && session) replaceToken(session, result.token)
   return result
 }
 
@@ -324,10 +430,10 @@ async function getData<R extends DataOutcome>(path: string, signal?: AbortSignal
   return result.data
 }
 
-async function send<R extends Outcome>(method: 'POST' | 'PUT' | 'PATCH', path: string, body: unknown): Promise<R> {
+async function send<R extends Outcome>(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<R> {
   const result = await request<R>(path, {
     method,
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
   })
 
   if (!result.isSuccess) {
@@ -342,7 +448,8 @@ async function send<R extends Outcome>(method: 'POST' | 'PUT' | 'PATCH', path: s
 async function request<T>(path: string, init: RequestInit = {}, timeoutMs = requestTimeoutMs): Promise<T> {
   const session = getStoredSession()
   const token = session?.token
-  const revision = sessionRevision
+  // Using the app keeps the session going; nothing waits for the renewal.
+  void renewSessionIfDue()
 
   let response: Response
   try {
@@ -376,10 +483,13 @@ async function request<T>(path: string, init: RequestInit = {}, timeoutMs = requ
       payload?.title ??
       payload?.Title ??
       getModelStateMessage(payload?.errors ?? payload?.Errors)
-    if (response.status === 401 && token) {
-      // A response from a previous account can arrive after a new sign-in.
-      // Only that request's own session may be expired by its 401.
-      if (sessionRevision === revision && getStoredSession()?.token === token) {
+    if (response.status === 401 && session) {
+      // A response from a previous account can arrive after a new sign-in,
+      // and one sent with a token that has since been replaced (renewed, or
+      // by a password change, which revokes the old one) after the new one
+      // is in use. Only the sign-in and token the request used may expire.
+      const current = getStoredSession()
+      if (current?.id === session.id && current.token === session.token) {
         clearSession()
         window.dispatchEvent(new Event(sessionExpiredEvent))
       }

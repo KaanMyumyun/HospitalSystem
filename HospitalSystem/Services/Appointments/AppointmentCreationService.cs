@@ -10,7 +10,8 @@ public class AppointmentCreationService(
     ICurrentUserService currentUser,
     IPatientService patientService,
     IAuditLogService auditLog,
-    TimeProvider clock) : IAppointmentCreationService
+    TimeProvider clock,
+    ClinicClock clinic) : IAppointmentCreationService
 {
     private const int MaxPossibleMatches = 10;
 
@@ -33,6 +34,9 @@ public class AppointmentCreationService(
             return CreateAppointmentResultDto.Fail("Appointments cannot be booked in the past");
 
         var appointmentTime = requestedTime.UtcDateTime;
+        // Working days and hours, breaks and time off are clinic times.
+        var wallClock = clinic.WallClock(requestedTime);
+        var requestedDay = DateOnly.FromDateTime(wallClock);
         var patientName = dto.PatientName?.Trim() ?? "";
         var patientNameKey = patientName.ToLowerInvariant();
         var phoneNumber = PatientDetails.NormalizePhoneNumber(dto.PhoneNumber);
@@ -61,7 +65,11 @@ public class AppointmentCreationService(
                 d.IsActive,
                 d.User.Role,
                 DepartmentIsActive = d.Department.IsActive,
-                Schedule = c == null ? null : new WorkingHours(c.StartTime, c.EndTime, c.SlotDurationMin, c.WorkingDays),
+                Schedule = c == null
+                    ? null
+                    : new BookingRules.WorkingHours(
+                        c.StartTime, c.EndTime, c.SlotDurationMin, c.WorkingDays, c.BreakStartMinute, c.BreakEndMinute),
+                IsAway = c != null && c.TimeOff.Any(t => t.FirstDay <= requestedDay && t.LastDay >= requestedDay),
                 // The nearest bookings on either side. Whether they overlap
                 // depends on the slot length, known once the schedule is loaded.
                 PreviousStart = d.Appointments
@@ -101,21 +109,21 @@ public class AppointmentCreationService(
         if (!doctor.DepartmentIsActive)
             return CreateAppointmentResultDto.Fail("Doctor's department is not active");
 
-        var validationError = ValidateAppointment(dto, requestedTime);
+        var validationError = ValidateAppointment(dto, requestedDay);
         if (validationError is not null)
             return CreateAppointmentResultDto.Fail(validationError);
 
         if (doctor.Schedule is not { } schedule)
             return CreateAppointmentResultDto.Fail("Doctor has no schedule");
 
-        var scheduleError = CheckWorkingHours(schedule, requestedTime);
+        if (doctor.IsAway)
+            return CreateAppointmentResultDto.Fail($"The doctor is away on {requestedDay:yyyy-MM-dd}");
+
+        var scheduleError = BookingRules.CheckWorkingHours(schedule, wallClock);
         if (scheduleError is not null)
             return CreateAppointmentResultDto.Fail(scheduleError);
 
-        // Every booking lasts one slot, so another booking overlaps this one
-        // when it starts less than a slot before or after it.
-        var slotLength = TimeSpan.FromMinutes(schedule.SlotDurationMin);
-        if (doctor.PreviousStart > appointmentTime - slotLength || doctor.NextStart < appointmentTime + slotLength)
+        if (BookingRules.Overlaps(appointmentTime, schedule.SlotDurationMin, doctor.PreviousStart, doctor.NextStart))
             return CreateAppointmentResultDto.Conflict("Doctor already booked for that time slot");
 
         if (chosenPatientId is not null && !doctor.ChosenPatientExists)
@@ -172,7 +180,7 @@ public class AppointmentCreationService(
         return CreateAppointmentResultDto.Success();
     }
 
-    private static string? ValidateAppointment(CreateAppointmentDto dto, DateTimeOffset requestedTime)
+    private static string? ValidateAppointment(CreateAppointmentDto dto, DateOnly requestedDay)
     {
         if (string.IsNullOrWhiteSpace(dto.PatientName))
             return "Patient name is required";
@@ -184,7 +192,7 @@ public class AppointmentCreationService(
         if (dto.DateOfBirth is null)
             return "Date of birth is required";
 
-        if (dto.DateOfBirth > DateOnly.FromDateTime(requestedTime.DateTime))
+        if (dto.DateOfBirth > requestedDay)
             return "Date of birth cannot be after the appointment date";
 
         if (dto.PatientId is not null && dto.CreateNewPatient)
@@ -192,32 +200,4 @@ public class AppointmentCreationService(
 
         return null;
     }
-
-    // Working days and hours are wall-clock ones, compared with the time as the
-    // desk sent it, not with its UTC equivalent.
-    private static string? CheckWorkingHours(WorkingHours schedule, DateTimeOffset requestedTime)
-    {
-        if (!schedule.WorkingDays.Contains(requestedTime.DayOfWeek))
-            return $"The doctor does not work on {requestedTime.DayOfWeek}s";
-
-        // Stored on a placeholder date; an end hour of 24 is midnight of the next day.
-        var startMinutes = (schedule.StartTime - schedule.StartTime.Date).TotalMinutes;
-        var endMinutes = (schedule.EndTime - schedule.StartTime.Date).TotalMinutes;
-        var requestedMinutes = requestedTime.TimeOfDay.TotalMinutes;
-
-        if (requestedMinutes < startMinutes || requestedMinutes + schedule.SlotDurationMin > endMinutes)
-            return "Appointment time is outside the doctor's working hours";
-
-        // A booking starts on one of the doctor's slots, on the minute, so two
-        // bookings for one slot have the same time and the unique index on
-        // doctor and time refuses the second even when they race.
-        var slot = TimeSpan.FromMinutes(schedule.SlotDurationMin);
-        var intoSchedule = requestedTime.TimeOfDay - TimeSpan.FromMinutes(startMinutes);
-        if (slot <= TimeSpan.Zero || intoSchedule.Ticks % slot.Ticks != 0)
-            return $"Appointment time must be the start of one of the doctor's {schedule.SlotDurationMin}-minute slots";
-
-        return null;
-    }
-
-    private sealed record WorkingHours(DateTime StartTime, DateTime EndTime, int SlotDurationMin, List<DayOfWeek> WorkingDays);
 }

@@ -8,7 +8,8 @@ public class AppointmentQueryDto
     [Required]
     public int? DoctorId { get; set; }
 
-    // The desk's wall-clock time with its UTC offset, e.g. 2026-09-21T00:00:00+03:00.
+    // Instants with their UTC offset; the frontend sends the clinic's midnight,
+    // e.g. 2026-09-21T00:00:00+03:00.
     [Required]
     public DateTimeOffset? From { get; set; }
 

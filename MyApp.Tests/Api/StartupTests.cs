@@ -14,6 +14,20 @@ public class StartupTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    // Bookings are checked against the clinic's wall clock, so a zone that is
+    // missing or wrong must not start the API.
+    [Theory]
+    [InlineData("")]
+    [InlineData("Mars/Olympus_Mons")]
+    public void RefusesToStartWithoutAKnownClinicTimeZone(string timeZone)
+    {
+        var app = TestApp.Create(settings: new Dictionary<string, string?> { ["Clinic:TimeZone"] = timeZone });
+
+        var error = Assert.Throws<InvalidOperationException>(() => app.CreateClient());
+
+        Assert.Contains("Clinic:TimeZone", error.Message);
+    }
+
     // HS256 needs a 256-bit key. A shorter one used to pass startup and fail
     // every sign-in with a 500.
     [Fact]

@@ -20,7 +20,7 @@ public class PostgresTests : AuthTestBase
     private static readonly DateTimeOffset LockoutTime = new(2026, 10, 23, 12, 0, 0, TimeSpan.Zero);
 
     private LoginService CreateLoginService(ApplicationDbContext db, IPasswordHasher<UserEntity> hasher) =>
-        new(db, CreateJwtOptions(), CreateDemoOptions(), new AuditLogService(db, Nobody()), hasher, new FixedClock(LockoutTime));
+        new(db, CreateJwtOptions(), CreateDemoOptions(), new AuditLogService(db, Nobody()), hasher, new FixedClock(LockoutTime), TestClinic.Utc());
 
     private static async Task<int> SeedLoginUserAsync(PostgresDatabase database, int failedCount)
     {
@@ -227,7 +227,7 @@ public class PostgresTests : AuthTestBase
         desk.Setup(x => x.IsInRole(UserRole.FrontDesk)).Returns(true);
         desk.Setup(x => x.UserId).Returns(deskId.ToString());
         var service = new AppointmentCreationService(db, desk.Object, new PatientService(db), new AuditLogService(db, desk.Object),
-            new FixedClock(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero)));
+            new FixedClock(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero)), TestClinic.Utc());
         var booking = new CreateAppointmentDto
         {
             DoctorId = doctorId,
@@ -366,6 +366,56 @@ public class PostgresTests : AuthTestBase
         Assert.Equal(CalendarEntity.HoursDate.AddHours(8), schedules[1].StartTime);
         Assert.Equal(CalendarEntity.HoursDate.AddHours(16), schedules[1].EndTime);
         Assert.Equal(30, schedules[1].SlotDurationMin);
+    }
+
+    // The queries behind time off, breaks, moves and history, as PostgreSQL
+    // runs them: the in-memory provider would accept queries it cannot.
+    [PostgresFact]
+    public async Task TimeOffBreaksMovesAndHistory_WorkInTheDatabase()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = await database.CreateMigratedContextAsync();
+        var (doctorId, deskId, _) = await SeedBookableDoctorAsync(db);
+        var desk = new Mock<ICurrentUserService>();
+        desk.Setup(x => x.IsInRole(UserRole.FrontDesk)).Returns(true);
+        desk.Setup(x => x.UserId).Returns(deskId.ToString());
+        var admin = new Mock<ICurrentUserService>();
+        admin.Setup(x => x.IsInRole(UserRole.Admin)).Returns(true);
+        var clock = new FixedClock(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var clinic = TestClinic.In("Europe/Sofia", clock);
+        var calendar = await db.Calendars.SingleAsync();
+        calendar.BreakStartMinute = 12 * 60;
+        calendar.BreakEndMinute = 13 * 60;
+        await db.SaveChangesAsync();
+        var timeOff = new TimeOffService(db, admin.Object, new AuditLogService(db, admin.Object), clinic);
+        var booking = new AppointmentCreationService(db, desk.Object, new PatientService(db), new AuditLogService(db, desk.Object), clock, clinic);
+        var move = new AppointmentMoveService(db, desk.Object, new AuditLogService(db, desk.Object), clock, clinic);
+        CreateAppointmentDto At(int day, int hour) => new()
+        {
+            DoctorId = doctorId, PatientName = "Ivan Petrov", PhoneNumber = "0899000111", DateOfBirth = new DateOnly(1985, 3, 4),
+            AppointmentTime = new DateTimeOffset(2030, 1, day, hour, 0, 0, TimeSpan.FromHours(2))
+        };
+
+        var added = await timeOff.AddTimeOffAsync(new AddTimeOffDto { ScheduleId = calendar.Id, FirstDay = new DateOnly(2030, 1, 8), LastDay = new DateOnly(2030, 1, 8) });
+        var overlapping = await timeOff.AddTimeOffAsync(new AddTimeOffDto { ScheduleId = calendar.Id, FirstDay = new DateOnly(2030, 1, 8), LastDay = new DateOnly(2030, 1, 9) });
+        var onTheDayOff = await booking.CreateAppointmentAsync(At(8, 9));
+        var inTheBreak = await booking.CreateAppointmentAsync(At(7, 12));
+        var booked = await booking.CreateAppointmentAsync(At(7, 9));
+        var appointmentId = await db.Appointments.Select(a => a.Id).SingleAsync();
+        var moved = await move.MoveAsync(new MoveAppointmentDto { AppointmentId = appointmentId, AppointmentTime = new DateTimeOffset(2030, 1, 7, 10, 0, 0, TimeSpan.FromHours(2)) });
+        var history = await new AppointmentQueryService(db, desk.Object).GetHistoryAsync(appointmentId);
+        var schedules = await new ScheduleQueryService(db, admin.Object, clinic).ViewScheduleAsync();
+
+        Assert.True(added.IsSuccess, added.Error);
+        Assert.Equal(FailureKind.Conflict, overlapping.Failure);
+        Assert.Equal("The doctor is away on 2030-01-08", onTheDayOff.Error);
+        Assert.Equal("Appointment time falls in the doctor's break, 12:00-13:00", inTheBreak.Error);
+        Assert.True(booked.IsSuccess, booked.Error);
+        Assert.True(moved.IsSuccess, moved.Error);
+        Assert.Equal(new DateTime(2030, 1, 7, 8, 0, 0, DateTimeKind.Utc), (await db.Appointments.AsNoTracking().SingleAsync()).TimeOfAppointment);
+        Assert.Equal(["CreateAppointment", "MoveAppointment"], history.Data!.Select(e => e.Action));
+        Assert.Equal("Moved appointment " + appointmentId + " from 2030-01-07 09:00 to 2030-01-07 10:00", history.Data![1].Details);
+        Assert.Equal(new DateOnly(2030, 1, 8), Assert.Single(Assert.Single(schedules.Data!).TimeOff).FirstDay);
     }
 
     [PostgresFact]

@@ -85,7 +85,8 @@ public class ChangePasswordService(
         await context.SaveChangesAsync(cancellationToken);
 
         var result = ChangePasswordResultDto.Success();
-        result.Token = LoginService.GenerateToken(user, _jwtSettings);
+        // The password was just checked, so the session counts from now.
+        result.Token = SessionTokens.Issue(user, _jwtSettings, clock.GetUtcNow());
         return result;
     }
 }

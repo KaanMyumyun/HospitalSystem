@@ -70,7 +70,12 @@ export function AdminDashboard({
         )}
 
         {section === 'schedules' && (
-          <SchedulesTab onChangeSchedule={actions.changeSchedule} onCreateSchedule={actions.createSchedule} />
+          <SchedulesTab
+            onAddTimeOff={actions.addTimeOff}
+            onChangeSchedule={actions.changeSchedule}
+            onCreateSchedule={actions.createSchedule}
+            onRemoveTimeOff={actions.removeTimeOff}
+          />
         )}
 
         {section === 'audit' && <AuditLogTab enabled={canReadAuditLog} />}

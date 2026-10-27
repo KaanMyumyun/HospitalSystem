@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { AppointmentDto, DoctorDto, ScheduleDto } from '../api'
+import { clinicDate } from './clinicTime'
 import {
   buildWeekSlots,
-  canCancelAppointment,
   canMarkAppointment,
+  dateAtTime,
   dayStart,
   defaultDoctor,
+  getNextAvailableSlot,
+  isAway,
   isInWeek,
+  isUpcoming,
   shownDays,
   weekDays,
   weekRange,
@@ -19,6 +23,9 @@ const oneHourSchedule: ScheduleDto = {
   endTime: '2026-01-01T10:00:00Z',
   slotDurationMin: 60,
   workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+  breakStartMinute: null,
+  breakEndMinute: null,
+  timeOff: [],
 }
 
 function appointmentAt(time: Date, overrides: Partial<AppointmentDto> = {}): AppointmentDto {
@@ -78,6 +85,9 @@ describe('buildWeekSlots', () => {
       endTime: '2026-01-01T11:00:00Z',
       slotDurationMin: 60,
       workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      breakStartMinute: null,
+      breakEndMinute: null,
+      timeOff: [],
     }
 
     const appointmentTime = new Date(targetDay)
@@ -212,6 +222,9 @@ describe('buildWeekSlots', () => {
       endTime: '2020-01-01T11:00:00Z',
       slotDurationMin: 60,
       workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      breakStartMinute: null,
+      breakEndMinute: null,
+      timeOff: [],
     }
 
     const grid = buildWeekSlots(schedule, 42, [], farPastWeekOffset)
@@ -220,21 +233,76 @@ describe('buildWeekSlots', () => {
   })
 })
 
-describe('canCancelAppointment', () => {
+describe('breaks and time off', () => {
+  const morning: ScheduleDto = {
+    ...oneHourSchedule,
+    endTime: '2026-01-01T12:00:00Z',
+    breakStartMinute: 10 * 60,
+    breakEndMinute: 11 * 60,
+  }
+
+  it('marks the slots in the break, and only those', () => {
+    const grid = buildWeekSlots(morning, 42, [], 520)
+
+    expect(grid.map((row) => row[0]!.status)).toEqual(['available', 'break', 'available'])
+  })
+
+  it('marks every slot the break overlaps, even part of', () => {
+    const grid = buildWeekSlots({ ...morning, slotDurationMin: 30, breakStartMinute: 10 * 60 + 15, breakEndMinute: 10 * 60 + 45 }, 42, [], 520)
+
+    expect(grid.map((row) => `${row[0]!.time} ${row[0]!.status}`)).toEqual([
+      '09:00 available',
+      '09:30 available',
+      '10:00 break',
+      '10:30 break',
+      '11:00 available',
+      '11:30 available',
+    ])
+  })
+
+  it('marks the days of time off as away, and still shows their bookings', () => {
+    const [wednesday, thursday] = weekDays(520, ['Wednesday', 'Thursday'])
+    const away = { ...morning, timeOff: [{ timeOffId: 1, firstDay: clinicDate(wednesday!), lastDay: clinicDate(thursday!), reason: null }] }
+    const booked = appointmentAt(dateAtTime(thursday!, '09:00'))
+
+    const grid = buildWeekSlots(away, 42, [booked], 520)
+    const column = (day: number) => grid.map((row) => row.find((slot) => slot.day.getDay() === day)!.status)
+
+    expect(column(2)).toEqual(['available', 'break', 'available'])
+    expect(column(3)).toEqual(['away', 'away', 'away'])
+    expect(column(4)).toEqual(['booked', 'away', 'away'])
+  })
+
+  it('offers the next open slot, not one in the break or time off', () => {
+    const [monday] = weekDays(520, ['Monday'])
+    const away = { ...morning, timeOff: [{ timeOffId: 1, firstDay: clinicDate(monday!), lastDay: clinicDate(monday!), reason: null }] }
+    const grid = buildWeekSlots(away, 42, [appointmentAt(dateAtTime(weekDays(520)[1]!, '09:00'))], 520)
+
+    expect(getNextAvailableSlot(grid)).toMatchObject({ time: '11:00', status: 'available' })
+    expect(getNextAvailableSlot(grid)!.day.getDay()).toBe(2)
+  })
+
+  it('reads a schedule from an API that sends no time off', () => {
+    const { timeOff: _, ...older } = morning
+    expect(isAway(older as ScheduleDto, '2030-01-01')).toBe(false)
+  })
+})
+
+describe('isUpcoming', () => {
   const now = new Date('2030-01-01T12:00:00Z').getTime()
 
   it('allows a scheduled appointment in the future', () => {
-    expect(canCancelAppointment(appointmentAt(new Date('2030-01-02T09:00:00Z')), now)).toBe(true)
+    expect(isUpcoming(appointmentAt(new Date('2030-01-02T09:00:00Z')), now)).toBe(true)
   })
 
   it('refuses a scheduled appointment in the past', () => {
-    expect(canCancelAppointment(appointmentAt(new Date('2029-12-31T09:00:00Z')), now)).toBe(false)
+    expect(isUpcoming(appointmentAt(new Date('2029-12-31T09:00:00Z')), now)).toBe(false)
   })
 
   it('refuses appointments that are not scheduled', () => {
     const future = new Date('2030-01-02T09:00:00Z')
-    expect(canCancelAppointment(appointmentAt(future, { status: 'Cancelled' }), now)).toBe(false)
-    expect(canCancelAppointment(appointmentAt(future, { status: 'Completed' }), now)).toBe(false)
+    expect(isUpcoming(appointmentAt(future, { status: 'Cancelled' }), now)).toBe(false)
+    expect(isUpcoming(appointmentAt(future, { status: 'Completed' }), now)).toBe(false)
   })
 })
 
@@ -330,6 +398,9 @@ describe('defaultDoctor', () => {
     endTime: '2000-01-01T16:00:00Z',
     slotDurationMin: 30,
     workingDays: ['Monday'],
+    breakStartMinute: null,
+    breakEndMinute: null,
+    timeOff: [],
   })
 
   it('opens on an active doctor who has a schedule, not the first one listed', () => {

@@ -125,6 +125,12 @@ namespace HospitalSystem.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("BreakEndMinute")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("BreakStartMinute")
+                        .HasColumnType("integer");
+
                     b.Property<int>("DoctorId")
                         .HasColumnType("integer");
 
@@ -226,6 +232,34 @@ namespace HospitalSystem.Migrations
                     b.ToTable("Patients");
                 });
 
+            modelBuilder.Entity("HospitalSystem.Entities.TimeOffEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CalendarId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("FirstDay")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("LastDay")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CalendarId", "LastDay");
+
+                    b.ToTable("TimeOff");
+                });
+
             modelBuilder.Entity("HospitalSystem.Entities.UserEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -319,6 +353,22 @@ namespace HospitalSystem.Migrations
                     b.Navigation("Department");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("HospitalSystem.Entities.TimeOffEntity", b =>
+                {
+                    b.HasOne("HospitalSystem.Entities.CalendarEntity", "Calendar")
+                        .WithMany("TimeOff")
+                        .HasForeignKey("CalendarId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Calendar");
+                });
+
+            modelBuilder.Entity("HospitalSystem.Entities.CalendarEntity", b =>
+                {
+                    b.Navigation("TimeOff");
                 });
 
             modelBuilder.Entity("HospitalSystem.Entities.DepartmentEntity", b =>

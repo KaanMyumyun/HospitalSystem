@@ -18,12 +18,16 @@ public static class ScheduleValidation
         int endHour,
         int slotDurationMin,
         IReadOnlyCollection<DayOfWeek>? workingDays,
+        int? breakStartMinute = null,
+        int? breakEndMinute = null,
         CancellationToken cancellationToken = default)
     {
         if (doctorId <= 0)
             return CalendarActionResult.Fail("Doctor is required");
 
-        var hoursError = ValidateHours(startHour, endHour, slotDurationMin) ?? ScheduleDays.Validate(workingDays);
+        var hoursError = ValidateHours(startHour, endHour, slotDurationMin)
+            ?? ValidateBreak(startHour, endHour, breakStartMinute, breakEndMinute)
+            ?? ScheduleDays.Validate(workingDays);
         if (hoursError is not null)
             return CalendarActionResult.Fail(hoursError);
 
@@ -52,9 +56,13 @@ public static class ScheduleValidation
         int startHour,
         int endHour,
         int slotDurationMin,
-        IReadOnlyCollection<DayOfWeek>? workingDays)
+        IReadOnlyCollection<DayOfWeek>? workingDays,
+        int? breakStartMinute = null,
+        int? breakEndMinute = null)
     {
-        var hoursError = ValidateHours(startHour, endHour, slotDurationMin) ?? ScheduleDays.Validate(workingDays);
+        var hoursError = ValidateHours(startHour, endHour, slotDurationMin)
+            ?? ValidateBreak(startHour, endHour, breakStartMinute, breakEndMinute)
+            ?? ScheduleDays.Validate(workingDays);
         return hoursError is not null ? CalendarActionResult.Fail(hoursError) : ValidateDoctor(doctor);
     }
 
@@ -75,6 +83,27 @@ public static class ScheduleValidation
         var windowMinutes = (endHour - startHour) * 60;
         if (windowMinutes % slotDurationMin != 0)
             return "Slot duration must fit evenly inside the schedule window";
+
+        return null;
+    }
+
+    // Both ends or neither, inside the working hours.
+    private static string? ValidateBreak(int startHour, int endHour, int? breakStartMinute, int? breakEndMinute)
+    {
+        if (breakStartMinute is null && breakEndMinute is null)
+            return null;
+
+        if (breakStartMinute is not int breakStart || breakEndMinute is not int breakEnd)
+            return "Give the break both a start and an end";
+
+        if (breakStart >= breakEnd)
+            return "The break must start before it ends";
+
+        if (breakStart < startHour * 60 || breakEnd > endHour * 60)
+            return "The break must be inside the working hours";
+
+        if (breakStart == startHour * 60 && breakEnd == endHour * 60)
+            return "The break cannot take the whole working day";
 
         return null;
     }

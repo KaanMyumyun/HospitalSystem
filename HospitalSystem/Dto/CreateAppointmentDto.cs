@@ -19,7 +19,8 @@ public class CreateAppointmentDto
     [Required]
     public DateOnly? DateOfBirth { get; set; }
 
-    // The desk's wall-clock time with its UTC offset, e.g. 2026-09-22T09:00:00+03:00.
+    // An instant with its UTC offset, e.g. 2026-09-22T09:00:00+03:00. The clinic's
+    // wall clock at that instant must be the start of one of the doctor's slots.
     [Required]
     public DateTimeOffset? AppointmentTime { get; set; }
 

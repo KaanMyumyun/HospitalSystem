@@ -9,10 +9,13 @@ namespace HospitalSystem.Tests;
 
 public class AppointmentCreationServiceTests : AppointmentTestBase
 {
-    private AppointmentCreationService CreateService(ApplicationDbContext db, bool isFrontDesk = true, string? userId = "5")
+    private AppointmentCreationService CreateService(
+        ApplicationDbContext db, bool isFrontDesk = true, string? userId = "5", string clinicTimeZone = "UTC")
     {
         var desk = CreateCurrentUser(isFrontDesk, userId: userId);
-        return new AppointmentCreationService(db, desk, new PatientService(db), new AuditLogService(db, desk), CreateClock());
+        var clock = CreateClock();
+        return new AppointmentCreationService(
+            db, desk, new PatientService(db), new AuditLogService(db, desk), clock, TestClinic.In(clinicTimeZone, clock));
     }
 
     [Fact]
@@ -624,15 +627,19 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.Equal(DateTimeKind.Utc, stored.TimeOfAppointment.Kind);
     }
 
-    [Fact]
-    public async Task CreateAppointmentAsync_WallClockOutsideHoursButUtcInside_Fails()
+    // Hours are the clinic's, whatever offset the desk's computer sends: 17:00
+    // UTC is 20:00 in Istanbul, outside 08:00-18:00 there though inside in UTC.
+    [Theory]
+    [InlineData(20, 3)]
+    [InlineData(17, 0)]
+    [InlineData(12, -5)]
+    public async Task CreateAppointmentAsync_HoursAreTheClinicsWhateverTheOffset(int hour, int offsetHours)
     {
         using var db = CreateDbContext();
         await SeedStandardDataAsync(db);
-        var service = CreateService(db);
+        var service = CreateService(db, clinicTimeZone: "Europe/Istanbul");
         var dto = NewPatientAt(new DateTime(2026, 1, 2, 12, 0, 0, DateTimeKind.Utc));
-        // 20:00 at the desk is 17:00 UTC, inside 08:00-18:00 only if read as UTC.
-        dto.AppointmentTime = new DateTimeOffset(2026, 1, 2, 20, 0, 0, TimeSpan.FromHours(3));
+        dto.AppointmentTime = new DateTimeOffset(2026, 1, 2, hour, 0, 0, TimeSpan.FromHours(offsetHours));
 
         var result = await service.CreateAppointmentAsync(dto);
 
@@ -668,9 +675,9 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.True(result.IsSuccess);
     }
 
-    // The day is the desk's: Saturday 01:00 at UTC+3 is still Friday in UTC.
+    // The day is the clinic's: 22:00 UTC on Friday is Saturday 01:00 in Istanbul.
     [Fact]
-    public async Task CreateAppointmentAsync_WorkingDayIsTheDesksWallClockDay()
+    public async Task CreateAppointmentAsync_WorkingDayIsTheClinicsDay()
     {
         using var db = CreateDbContext();
         await SeedStandardDataAsync(db);
@@ -678,9 +685,8 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         calendar.StartTime = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         calendar.EndTime = new DateTime(2000, 1, 2, 0, 0, 0, DateTimeKind.Utc);
         await db.SaveChangesAsync();
-        var service = CreateService(db);
+        var service = CreateService(db, clinicTimeZone: "Europe/Istanbul");
         var dto = NewPatientAt(new DateTime(2026, 1, 2, 22, 0, 0, DateTimeKind.Utc));
-        dto.AppointmentTime = new DateTimeOffset(2026, 1, 3, 1, 0, 0, TimeSpan.FromHours(3));
 
         var result = await service.CreateAppointmentAsync(dto);
 
@@ -730,5 +736,42 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         });
 
         Assert.True(result.IsSuccess, result.Error);
+    }
+
+    // With a 12:00-13:00 break and 15-minute slots, 11:45 ends as the break
+    // begins and 13:00 starts as it ends.
+    [Theory]
+    [InlineData(11, 45, null)]
+    [InlineData(12, 0, "Appointment time falls in the doctor's break, 12:00-13:00")]
+    [InlineData(12, 45, "Appointment time falls in the doctor's break, 12:00-13:00")]
+    [InlineData(13, 0, null)]
+    public async Task CreateAppointmentAsync_AroundTheBreak(int hour, int minute, string? expectedError)
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        var calendar = (await db.Calendars.FindAsync(1))!;
+        calendar.BreakStartMinute = 12 * 60;
+        calendar.BreakEndMinute = 13 * 60;
+        await db.SaveChangesAsync();
+
+        var result = await CreateService(db).CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, hour, minute, 0, DateTimeKind.Utc)));
+
+        Assert.Equal(expectedError, result.Error);
+    }
+
+    [Fact]
+    public async Task CreateAppointmentAsync_OnADayOff_Fails()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        db.TimeOff.Add(new TimeOffEntity { CalendarId = 1, FirstDay = new DateOnly(2026, 1, 2), LastDay = new DateOnly(2026, 1, 2), Reason = "Holiday" });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        var dayOff = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc)));
+        var dayAfter = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 5, 10, 0, 0, DateTimeKind.Utc)));
+
+        Assert.Equal("The doctor is away on 2026-01-02", dayOff.Error);
+        Assert.True(dayAfter.IsSuccess, dayAfter.Error);
     }
 }

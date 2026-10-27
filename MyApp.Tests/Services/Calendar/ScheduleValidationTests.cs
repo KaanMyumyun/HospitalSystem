@@ -68,4 +68,20 @@ public class ScheduleValidationTests
         Assert.Equal(FailureKind.NotFound, (await ScheduleValidation.ValidateAsync(db, 99, 8, 16, 30, null))?.Failure);
         Assert.Equal(FailureKind.Conflict, (await ScheduleValidation.ValidateAsync(db, 2, 8, 16, 30, null))?.Failure);
     }
+
+    [Theory]
+    [InlineData(720, 780, null)]
+    [InlineData(480, 540, null)]
+    [InlineData(720, null, "Give the break both a start and an end")]
+    [InlineData(null, 780, "Give the break both a start and an end")]
+    [InlineData(780, 720, "The break must start before it ends")]
+    [InlineData(420, 540, "The break must be inside the working hours")]
+    [InlineData(900, 1020, "The break must be inside the working hours")]
+    [InlineData(480, 960, "The break cannot take the whole working day")]
+    public void Validate_TheBreak(int? breakStart, int? breakEnd, string? expectedError)
+    {
+        var result = ScheduleValidation.Validate(Bookable, 8, 16, 30, null, breakStart, breakEnd);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
 }

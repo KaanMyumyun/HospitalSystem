@@ -6,4 +6,6 @@ public interface IAppointmentQueryService
         AppointmentQueryDto query, CancellationToken cancellationToken = default);
     Task<ServiceResult<List<ViewAppointmentDto>>> GetMyAppointmentsAsync(
         MyAppointmentsQueryDto query, CancellationToken cancellationToken = default);
+    Task<ServiceResult<List<AppointmentHistoryEntryDto>>> GetHistoryAsync(
+        int appointmentId, CancellationToken cancellationToken = default);
 }

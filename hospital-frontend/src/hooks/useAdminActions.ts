@@ -1,18 +1,22 @@
 import { useMemo } from 'react'
 import * as api from '../api'
 import type {
+  AddTimeOffInput,
   CancelAffected,
   ChangeScheduleInput,
   CreateScheduleInput,
   DepartmentDto,
   DoctorDto,
+  TimeOffDto,
   UserDto,
   UserRole,
 } from '../api'
 import type { ConfirmOptions } from '../components/ui'
+import { formatTimeOff } from '../lib/format'
 import type { ActionOutcome } from '../types'
 
 export type AdminActions = {
+  addTimeOff: (scheduleId: number, input: AddTimeOffInput) => Promise<ActionOutcome>
   assignDoctor: (doctor: DoctorDto, departmentId: number) => Promise<ActionOutcome>
   changeDepartmentStatus: (department: DepartmentDto, isActive: boolean) => Promise<ActionOutcome>
   changeDoctorStatus: (doctor: DoctorDto, isActive: boolean) => Promise<ActionOutcome>
@@ -21,6 +25,7 @@ export type AdminActions = {
   createDepartment: (name: string) => Promise<ActionOutcome>
   createSchedule: (input: CreateScheduleInput) => Promise<ActionOutcome>
   createUser: (name: string, password: string) => Promise<ActionOutcome>
+  removeTimeOff: (scheduleId: number, timeOff: TimeOffDto, doctorName: string) => Promise<ActionOutcome>
   resetPassword: (user: UserDto, password: string) => Promise<ActionOutcome>
 }
 
@@ -41,6 +46,9 @@ export function useAdminActions(
 ): AdminActions {
   return useMemo<AdminActions>(
     () => ({
+      // Bookings on those days are listed for the admin to cancel or keep.
+      addTimeOff: (scheduleId, input) =>
+        runBookingChange((cancel) => api.addTimeOff(scheduleId, input, cancel), 'Time off added'),
       assignDoctor: async (doctor, departmentId) => {
         const department = departments.find((candidate) => candidate.id === departmentId)
         const confirmed = await confirm({
@@ -103,6 +111,15 @@ export function useAdminActions(
       createDepartment: (name) => runAction(() => api.createDepartment(name), 'Department created'),
       createSchedule: (input) => runAction(() => api.createSchedule(input), 'Schedule created'),
       createUser: (name, password) => runAction(() => api.createUser(name, password), 'User created'),
+      removeTimeOff: async (scheduleId, timeOff, doctorName) => {
+        const confirmed = await confirm({
+          title: 'Remove time off',
+          message: `Remove ${doctorName}'s time off on ${formatTimeOff(timeOff)}? Those days can be booked again.`,
+          confirmLabel: 'Remove time off',
+        })
+        if (!confirmed) return { ok: false }
+        return runAction(() => api.removeTimeOff(scheduleId, timeOff.timeOffId), 'Time off removed')
+      },
       resetPassword: async (user, password) => {
         const confirmed = await confirm({
           title: 'Reset password',

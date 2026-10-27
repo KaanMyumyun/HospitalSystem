@@ -1,18 +1,16 @@
-export function parseDateInput(value: string) {
-  const [year = '0', month = '1', day = '1'] = value.split('-')
-  return new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0)
-}
+import { clinicDate } from './clinicTime'
 
-// Today as a date input's value, local time.
+// Today's clinic date, as a date input's value.
 export function todayInputValue() {
-  return toDateInputValue(new Date())
+  return clinicDate(new Date())
 }
 
-export function toDateInputValue(value: Date) {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+// A date input's value names a real day: 2026-02-30 does not.
+export function isDateInput(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return false
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])))
+  return date.toISOString().slice(0, 10) === value
 }
 
 export function validateAppointmentInput(
@@ -31,9 +29,9 @@ export function validateAppointmentInput(
 
   if (!dateOfBirth) return 'Date of birth is required'
 
-  const birthDate = parseDateInput(dateOfBirth)
-  if (Number.isNaN(birthDate.getTime())) return 'Date of birth is invalid'
-  if (birthDate.getTime() > appointmentTime.getTime()) {
+  if (!isDateInput(dateOfBirth)) return 'Date of birth is invalid'
+  // Dates in this form compare in order as text.
+  if (dateOfBirth > clinicDate(appointmentTime)) {
     return 'Date of birth cannot be after the appointment date'
   }
 

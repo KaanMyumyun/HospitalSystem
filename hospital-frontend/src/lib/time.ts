@@ -15,16 +15,3 @@ export function scheduleWindow(schedule: ScheduleDto) {
 export function clockLabel(minutes: number) {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 }
-
-export function toLocalIsoString(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, '0')
-  const offset = -date.getTimezoneOffset()
-  const sign = offset >= 0 ? '+' : '-'
-  const absolute = Math.abs(offset)
-
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-    `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
-    `${sign}${pad(Math.floor(absolute / 60))}:${pad(absolute % 60)}`
-  )
-}
