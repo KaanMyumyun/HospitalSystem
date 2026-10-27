@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
 using Moq;
 using Npgsql;
 
@@ -119,6 +120,27 @@ public class PostgresTests : AuthTestBase
 
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.False(db.Database.HasPendingModelChanges());
+    }
+
+    // What --migrate and an API with Database:RunMigrationsOnStartup run. The
+    // migrations go through ConnectionStrings:Migrations when it is set, and a
+    // second run finds nothing to do.
+    [PostgresFact]
+    public async Task ApplyingMigrations_UsesTheMigrationsConnection_ThenHasNothingToDo()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            // Nothing listens on port 1, so the API's own connection would fail.
+            ["ConnectionStrings:DefaultConnection"] = "Host=127.0.0.1;Port=1;Timeout=2",
+            ["ConnectionStrings:Migrations"] = database.ConnectionString,
+        }).Build();
+
+        Assert.Equal(0, await DatabaseMigrationCommand.ApplyAsync(configuration));
+        Assert.Equal(0, await DatabaseMigrationCommand.ApplyAsync(configuration));
+
+        await using var db = database.CreateContext();
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
     }
 
     // Three migrations that did nothing were deleted. A database that applied

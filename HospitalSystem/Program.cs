@@ -324,11 +324,14 @@ var builder = WebApplication.CreateBuilder(args);
         });
     }
 
-    if (app.Configuration.GetValue<bool>("Database:RunMigrationsOnStartup"))
+    // As --migrate does. A release whose migrations fail stops here, before it
+    // listens, so a platform that waits for the new release to answer keeps
+    // the previous one serving.
+    if (app.Configuration.GetValue<bool>("Database:RunMigrationsOnStartup")
+        && await DatabaseMigrationCommand.ApplyAsync(app.Configuration) != 0)
     {
-        using var scope = app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        db.Database.Migrate();
+        Environment.ExitCode = 1;
+        return;
     }
     if (app.Environment.IsDevelopment())
     {

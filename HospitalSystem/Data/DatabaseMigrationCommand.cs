@@ -14,10 +14,27 @@ public static class DatabaseMigrationCommand
             return 2;
         }
 
+        IConfiguration configuration;
         try
         {
-            var configuration = LoadConfiguration();
-            var connectionString = configuration.GetConnectionString("DefaultConnection");
+            configuration = LoadConfiguration();
+        }
+        catch (Exception exception)
+        {
+            return Failed(exception);
+        }
+
+        return await ApplyAsync(configuration, cancellationToken);
+    }
+
+    // Applies the migrations the database does not have yet, for --migrate and
+    // for an API that starts with Database:RunMigrationsOnStartup: 0 on success,
+    // 1 on failure. Only migration ids and safe status reach the console.
+    public static async Task<int> ApplyAsync(IConfiguration configuration, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var connectionString = MigrationConnectionString(configuration);
             if (string.IsNullOrWhiteSpace(connectionString))
             {
                 Console.Error.WriteLine("Database migration failed: ConnectionStrings:DefaultConnection is not configured.");
@@ -40,10 +57,18 @@ public static class DatabaseMigrationCommand
             // may contain sensitive data. Emit only release migration IDs and safe status.
             Console.WriteLine("Applying database migrations.");
             var pending = (await db.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
+            if (pending.Length == 0)
+            {
+                // Most API starts, so they skip taking the migration lock.
+                Console.WriteLine("No pending migrations: the database is up to date.");
+                return 0;
+            }
+
             foreach (var migration in pending)
                 Console.WriteLine($"Pending migration: {migration}");
 
-            // EF Core 9+ and Npgsql serialize migration execution using a database lock.
+            // EF Core 9+ and Npgsql serialize migration execution using a database lock
+            // (LOCK TABLE on the history table, held for a transaction).
             // This applies only Up migrations; image rollback must not downgrade schema.
             await db.Database.MigrateAsync(cancellationToken);
             Console.WriteLine("Database migrations completed successfully.");
@@ -56,10 +81,24 @@ public static class DatabaseMigrationCommand
         }
         catch (Exception exception)
         {
-            var sqlState = exception is PostgresException postgres ? $", SQLSTATE {postgres.SqlState}" : "";
-            Console.Error.WriteLine($"Database migration failed ({exception.GetType().Name}{sqlState}). Check database access and the reviewed migration SQL.");
-            return 1;
+            return Failed(exception);
         }
+    }
+
+    private static int Failed(Exception exception)
+    {
+        var sqlState = exception is PostgresException postgres ? $", SQLSTATE {postgres.SqlState}" : "";
+        Console.Error.WriteLine($"Database migration failed ({exception.GetType().Name}{sqlState}). Check database access and the reviewed migration SQL.");
+        return 1;
+    }
+
+    // Migrations can have a connection of their own, ConnectionStrings:Migrations,
+    // such as Neon's direct host where the API uses the pooled one, as Neon
+    // advises for schema changes. Without it, the API's.
+    private static string? MigrationConnectionString(IConfiguration configuration)
+    {
+        var migrations = configuration.GetConnectionString("Migrations");
+        return string.IsNullOrWhiteSpace(migrations) ? configuration.GetConnectionString("DefaultConnection") : migrations;
     }
 
     // The same appsettings, user-secrets and environment sources as the API,
