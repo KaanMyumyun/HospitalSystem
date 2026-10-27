@@ -1,4 +1,5 @@
 using HospitalSystem.Interfaces;
+using HospitalSystem.Services;
 using HospitalSystem.Services.Calendar;
 using Microsoft.EntityFrameworkCore;
 using Moq;
@@ -20,9 +21,21 @@ public class ScheduleWorkingDaysTests
         return mock.Object;
     }
 
+    private static ScheduleCreationService CreationService(ApplicationDbContext db)
+    {
+        var admin = Admin();
+        return new(db, admin, new AuditLogService(db, admin));
+    }
+
+    private static ScheduleModificationService ModificationService(ApplicationDbContext db)
+    {
+        var admin = Admin();
+        return new(db, admin, new AuditLogService(db, admin));
+    }
+
     private static async Task SeedDoctorAsync(ApplicationDbContext db, bool withSchedule = false)
     {
-        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Pediatrics", IsActive = true });
+        db.Departments.Add(new DepartmentEntity { Id = 1, Name = "Pediatrics", IsActive = true });
         db.Users.Add(new UserEntity { Id = 1, Name = "Doctor", PasswordHash = "hashed", Role = UserRole.Doctor });
         db.Doctors.Add(new DoctorEntity { Id = 1, DepartmentId = 1, UserId = 1, IsActive = true });
         if (withSchedule)
@@ -48,7 +61,7 @@ public class ScheduleWorkingDaysTests
     {
         using var db = CreateDbContext();
         await SeedDoctorAsync(db);
-        var service = new ScheduleCreationService(db, Admin(), new TestAuditLogService(db));
+        var service = CreationService(db);
 
         var result = await service.CreateScheduleAsync(NewSchedule(null));
 
@@ -61,7 +74,7 @@ public class ScheduleWorkingDaysTests
     {
         using var db = CreateDbContext();
         await SeedDoctorAsync(db);
-        var service = new ScheduleCreationService(db, Admin(), new TestAuditLogService(db));
+        var service = CreationService(db);
 
         var result = await service.CreateScheduleAsync(NewSchedule([DayOfWeek.Sunday, DayOfWeek.Monday, DayOfWeek.Monday]));
 
@@ -74,7 +87,7 @@ public class ScheduleWorkingDaysTests
     {
         using var db = CreateDbContext();
         await SeedDoctorAsync(db);
-        var service = new ScheduleCreationService(db, Admin(), new TestAuditLogService(db));
+        var service = CreationService(db);
 
         var result = await service.CreateScheduleAsync(NewSchedule([]));
 
@@ -88,7 +101,7 @@ public class ScheduleWorkingDaysTests
     {
         using var db = CreateDbContext();
         await SeedDoctorAsync(db, withSchedule: true);
-        var service = new ScheduleModificationService(db, Admin(), new TestAuditLogService(db));
+        var service = ModificationService(db);
 
         var result = await service.ChangeScheduleAsync(new ChangeScheduleDto
         {
@@ -104,7 +117,7 @@ public class ScheduleWorkingDaysTests
     {
         using var db = CreateDbContext();
         await SeedDoctorAsync(db, withSchedule: true);
-        var service = new ScheduleModificationService(db, Admin(), new TestAuditLogService(db));
+        var service = ModificationService(db);
 
         var result = await service.ChangeScheduleAsync(new ChangeScheduleDto
         {
@@ -124,7 +137,7 @@ public class ScheduleWorkingDaysTests
     {
         using var db = CreateDbContext();
         await SeedDoctorAsync(db, withSchedule: true);
-        var service = new ScheduleModificationService(db, Admin(), new TestAuditLogService(db));
+        var service = ModificationService(db);
 
         var result = await service.ChangeScheduleAsync(new ChangeScheduleDto
         {

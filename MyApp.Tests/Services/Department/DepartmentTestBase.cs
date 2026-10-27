@@ -25,8 +25,8 @@ public abstract class DepartmentTestBase
 
     protected async Task SeedAsync(ApplicationDbContext db, bool isDoctorActive = false)
     {
-        var cardiology = new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = false };
-        var emergency = new DepartmentEntity { Id = 2, Department = "Emergency", IsActive = true };
+        var cardiology = new DepartmentEntity { Id = 1, Name = "Cardiology", IsActive = false };
+        var emergency = new DepartmentEntity { Id = 2, Name = "Emergency", IsActive = true };
 
         var doctorUser1 = new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.Doctor };
         var doctorUser2 = new UserEntity { Id = 2, Name = "Dr Test2", PasswordHash = "hashed", Role = UserRole.Doctor };

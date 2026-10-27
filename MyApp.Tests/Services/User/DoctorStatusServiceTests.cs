@@ -8,7 +8,10 @@ namespace HospitalSystem.Tests;
 public class DoctorStatusServiceTests : UserTestBase
 {
     private DoctorStatusService CreateService(ApplicationDbContext db, bool isAdmin = true, SecurityStampCache? stamps = null)
-        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db), stamps ?? CreateStampCache());
+    {
+        var admin = CreateCurrentUser(isAdmin);
+        return new(db, admin, new AuditLogService(db, admin), stamps ?? CreateStampCache());
+    }
 
     [Fact]
     public async Task ChangeDoctorsStatusAsync_Admin_Succeeds()

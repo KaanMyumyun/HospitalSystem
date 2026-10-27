@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.Auth;
-using System.Text.RegularExpressions;
 
 namespace HospitalSystem.Services.Auth;
 
@@ -12,9 +11,7 @@ public class UserCreationService(
     IAuditLogService auditLog,
     IPasswordHasher<UserEntity> hasher) : IUserCreationService
 {
-    private static readonly Regex ValidUsername = new(@"^[A-Za-z][A-Za-z0-9_.-]{2,39}$", RegexOptions.Compiled);
-
-    public async Task<CreateUserResultDto> CreateUserAsync(CreateUserDto dto)
+    public async Task<CreateUserResultDto> CreateUserAsync(CreateUserDto dto, CancellationToken cancellationToken = default)
     {
         if (currentUser.RequireAdmin<CreateUserResultDto>("create a user") is { } refusal)
             return refusal;
@@ -23,15 +20,12 @@ public class UserCreationService(
             return CreateUserResultDto.Fail("Name and password are required");
 
         var name = dto.Name.Trim();
-        if (!ValidUsername.IsMatch(name))
-            return CreateUserResultDto.Fail("Username must start with a letter and use only letters, numbers, dots, hyphens, or underscores");
-
-        if (dto.Password.Length < 8)
-            return CreateUserResultDto.Fail("Password must be at least 8 characters long");
+        if ((AccountRules.UsernameError(name) ?? AccountRules.PasswordError(dto.Password)) is { } error)
+            return CreateUserResultDto.Fail(error);
 
         // Usernames ignore case, so "Admin" and "admin" cannot both exist.
         var nameKey = name.ToLowerInvariant();
-        var exists = await context.Users.AnyAsync(u => u.Name.ToLower() == nameKey);
+        var exists = await context.Users.AnyAsync(u => u.Name.ToLower() == nameKey, cancellationToken);
         if (exists)
             return CreateUserResultDto.Conflict("Name already exists");
 
@@ -43,14 +37,14 @@ public class UserCreationService(
 
         user.PasswordHash = hasher.HashPassword(user, dto.Password);
 
-        await using var transaction = await context.Database.BeginTransactionAsync();
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         context.Users.Add(user);
-        await context.SaveChangesAsync();
+        await context.SaveChangesAsync(cancellationToken);
 
-        await auditLog.LogAsync("CreateUser", "User", user.Id, $"Created user {user.Name}");
-        await context.SaveChangesAsync();
-        await transaction.CommitAsync();
+        await auditLog.LogAsync("CreateUser", "User", user.Id, $"Created user {user.Name}", cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return CreateUserResultDto.Success();
     }

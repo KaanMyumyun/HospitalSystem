@@ -2,5 +2,6 @@ namespace HospitalSystem.Interfaces;
 
 public interface IAuditLogQueryService
 {
-    Task<ServiceResult<PagedResult<AuditLogEntryDto>>> ListAsync(AuditLogQueryDto query);
+    Task<ServiceResult<PagedResult<AuditLogEntryDto>>> ListAsync(
+        AuditLogQueryDto query, CancellationToken cancellationToken = default);
 }

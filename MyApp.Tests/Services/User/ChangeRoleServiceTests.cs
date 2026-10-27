@@ -11,7 +11,10 @@ namespace HospitalSystem.Tests;
 public class ChangeRoleServiceTests : UserTestBase
 {
     private ChangeRoleService CreateService(ApplicationDbContext db, bool isAdmin = true, SecurityStampCache? stamps = null)
-        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db), stamps ?? CreateStampCache());
+    {
+        var admin = CreateCurrentUser(isAdmin);
+        return new(db, admin, new AuditLogService(db, admin), stamps ?? CreateStampCache());
+    }
 
     private static ICurrentUserService CreateCurrentUserWithId(string userId, bool isAdmin = true)
     {
@@ -104,7 +107,7 @@ public class ChangeRoleServiceTests : UserTestBase
     {
         var db = CreateDbContext();
         db.Users.Add(new UserEntity { Id = 1, Name = "Regular User", Role = UserRole.FrontDesk, PasswordHash = "hash" });
-        db.Departments.Add(new DepartmentEntity { Id = 7, Department = "Neurology", IsActive = true });
+        db.Departments.Add(new DepartmentEntity { Id = 7, Name = "Neurology", IsActive = true });
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
@@ -123,7 +126,7 @@ public class ChangeRoleServiceTests : UserTestBase
     {
         var db = CreateDbContext();
         db.Users.Add(new UserEntity { Id = 1, Name = "Regular User", Role = UserRole.FrontDesk, PasswordHash = "hash" });
-        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true });
+        db.Departments.Add(new DepartmentEntity { Id = 1, Name = "Cardiology", IsActive = true });
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
@@ -143,7 +146,7 @@ public class ChangeRoleServiceTests : UserTestBase
     {
         var db = CreateDbContext();
         db.Users.Add(new UserEntity { Id = 1, Name = "Regular User", Role = UserRole.Pending, PasswordHash = "hash" });
-        db.Departments.Add(new DepartmentEntity { Id = 2, Department = "Closed Ward", IsActive = false });
+        db.Departments.Add(new DepartmentEntity { Id = 2, Name = "Closed Ward", IsActive = false });
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
@@ -175,7 +178,7 @@ public class ChangeRoleServiceTests : UserTestBase
     {
         var db = CreateDbContext();
         await SeedDoctorAsync(db, isDoctorActive: false, userRole: UserRole.FrontDesk);
-        db.Departments.Add(new DepartmentEntity { Id = 2, Department = "Neurology", IsActive = true });
+        db.Departments.Add(new DepartmentEntity { Id = 2, Name = "Neurology", IsActive = true });
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
@@ -206,7 +209,8 @@ public class ChangeRoleServiceTests : UserTestBase
         var db = CreateDbContext();
         db.Users.Add(new UserEntity { Id = 1, Name = "Admin User", Role = UserRole.Admin, PasswordHash = "hash" });
         await db.SaveChangesAsync();
-        var service = new ChangeRoleService(db, CreateCurrentUserWithId("1"), new TestAuditLogService(db), CreateStampCache());
+        var admin = CreateCurrentUserWithId("1");
+        var service = new ChangeRoleService(db, admin, new AuditLogService(db, admin), CreateStampCache());
 
         var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.FrontDesk });
 
@@ -220,7 +224,8 @@ public class ChangeRoleServiceTests : UserTestBase
         var db = CreateDbContext();
         db.Users.Add(new UserEntity { Id = 1, Name = "Only Admin", Role = UserRole.Admin, PasswordHash = "hash" });
         await db.SaveChangesAsync();
-        var service = new ChangeRoleService(db, CreateCurrentUserWithId("2"), new TestAuditLogService(db), CreateStampCache());
+        var admin = CreateCurrentUserWithId("2");
+        var service = new ChangeRoleService(db, admin, new AuditLogService(db, admin), CreateStampCache());
 
         var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.FrontDesk });
 
@@ -235,11 +240,15 @@ public class ChangeRoleServiceTests : UserTestBase
         db.Users.Add(new UserEntity { Id = 1, Name = "Admin One", Role = UserRole.Admin, PasswordHash = "hash" });
         db.Users.Add(new UserEntity { Id = 2, Name = "Admin Two", Role = UserRole.Admin, PasswordHash = "hash" });
         await db.SaveChangesAsync();
-        var service = new ChangeRoleService(db, CreateCurrentUserWithId("2"), new TestAuditLogService(db), CreateStampCache());
+        var admin = CreateCurrentUserWithId("2");
+        var service = new ChangeRoleService(db, admin, new AuditLogService(db, admin), CreateStampCache());
 
         var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.FrontDesk });
 
         Assert.True(result.IsSuccess);
+        var entry = await db.AuditLogs.SingleAsync(a => a.Action == "ChangeUserRole");
+        Assert.Equal(2, entry.ActorUserId);
+        Assert.Equal("Admin Two", entry.ActorName);
     }
 
     [Fact]

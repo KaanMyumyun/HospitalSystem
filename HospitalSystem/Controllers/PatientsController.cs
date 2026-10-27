@@ -11,22 +11,23 @@ public class PatientsController : ControllerBase
     [Authorize(Roles = "FrontDesk,DemoFrontDesk")]
     [HttpGet]
     public async Task<ActionResult<ServiceResult<PagedResult<PatientSummaryDto>>>> ListPatients(
-        [FromQuery] PatientQueryDto query, [FromServices] IPatientRecordService service)
-        => this.ToActionResult(await service.ListPatientsAsync(query));
+        [FromQuery] PatientQueryDto query, [FromServices] IPatientRecordService service, CancellationToken cancellationToken)
+        => this.ToActionResult(await service.ListPatientsAsync(query, cancellationToken));
 
     [Authorize(Roles = "FrontDesk,DemoFrontDesk")]
     [HttpGet("{patientId:int}")]
     public async Task<ActionResult<ServiceResult<PatientDetailsDto>>> GetPatient(
-        int patientId, [FromServices] IPatientRecordService service)
-        => this.ToActionResult(await service.GetPatientAsync(patientId));
+        int patientId, [FromServices] IPatientRecordService service, CancellationToken cancellationToken)
+        => this.ToActionResult(await service.GetPatientAsync(patientId, cancellationToken));
 
     // Replaces the name, phone number and date of birth.
     [Authorize(Roles = "FrontDesk")]
     [HttpPut("{patientId:int}")]
     public async Task<ActionResult<PatientActionResultDto>> UpdatePatient(
-        int patientId, [FromBody] UpdatePatientDto dto, [FromServices] IPatientRecordService service)
+        int patientId, [FromBody] UpdatePatientDto dto, [FromServices] IPatientRecordService service,
+        CancellationToken cancellationToken)
     {
         dto.PatientId = patientId;
-        return this.ToActionResult(await service.UpdatePatientAsync(dto));
+        return this.ToActionResult(await service.UpdatePatientAsync(dto, cancellationToken));
     }
 }

@@ -2,5 +2,6 @@ namespace HospitalSystem.Interfaces.Appointments;
 
 public interface IAppointmentCreationService
 {
-    Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppointmentDto dto);
+    Task<CreateAppointmentResultDto> CreateAppointmentAsync(
+        CreateAppointmentDto dto, CancellationToken cancellationToken = default);
 }

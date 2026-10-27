@@ -11,21 +11,23 @@ public class DepartmentsController : ControllerBase
     [Authorize(Roles = "FrontDesk,Admin,DemoAdmin,DemoFrontDesk")]
     [HttpGet]
     public async Task<ActionResult<ServiceResult<List<ViewDepartmentDto>>>> ListDepartments(
-        [FromServices] IDepartmentQueryService service)
-        => this.ToActionResult(await service.ListDepartmentsAsync());
+        [FromServices] IDepartmentQueryService service, CancellationToken cancellationToken)
+        => this.ToActionResult(await service.ListDepartmentsAsync(cancellationToken));
 
     [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<ActionResult<DepartmentActionResultDto>> CreateDepartment(
-        [FromBody] CreateDepartmentDto dto, [FromServices] IDepartmentCreationService service)
-        => this.ToActionResult(await service.CreateDepartmentAsync(dto));
+        [FromBody] CreateDepartmentDto dto, [FromServices] IDepartmentCreationService service,
+        CancellationToken cancellationToken)
+        => this.ToActionResult(await service.CreateDepartmentAsync(dto, cancellationToken));
 
     [Authorize(Roles = "Admin")]
     [HttpPatch("{departmentId:int}/status")]
     public async Task<ActionResult<DepartmentActionResultDto>> ChangeDepartmentStatus(
-        int departmentId, [FromBody] ChangeDepartmentStatusDto dto, [FromServices] IDepartmentStatusService service)
+        int departmentId, [FromBody] ChangeDepartmentStatusDto dto, [FromServices] IDepartmentStatusService service,
+        CancellationToken cancellationToken)
     {
         dto.DepartmentId = departmentId;
-        return this.ToActionResult(await service.ChangeDepartmentStatusAsync(dto));
+        return this.ToActionResult(await service.ChangeDepartmentStatusAsync(dto, cancellationToken));
     }
 }

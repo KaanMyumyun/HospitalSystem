@@ -1,16 +1,9 @@
-import type {
-  ChangeScheduleInput,
-  CreateScheduleInput,
-  DepartmentDto,
-  DoctorDto,
-  ScheduleDto,
-  UserDto,
-  UserRole,
-  UsersPage,
-} from '../../api'
+import type { UsersPage } from '../../api'
 import { EmptyState, Metric, PageHint, StatusBadge } from '../../components/ui'
+import type { AdminActions } from '../../hooks/useAdminActions'
+import { useWorkspace } from '../../hooks/useWorkspace'
 import { adminTitle, formatTime, initials } from '../../lib/format'
-import type { ActionOutcome, ActivityEntry, AdminSection, Screen } from '../../types'
+import type { ActivityEntry, AdminSection, Screen } from '../../types'
 import { AuditLogTab } from './AuditLogTab'
 import { DepartmentsTab } from './DepartmentsTab'
 import { DoctorsTab } from './DoctorsTab'
@@ -18,61 +11,33 @@ import { SchedulesTab } from './SchedulesTab'
 import { UsersTab } from './UsersTab'
 
 export function AdminDashboard({
-  departments,
-  doctors,
-  loading,
-  schedules,
-  selectedDepartment,
-  selectedDepartmentId,
   section,
-  searchQuery,
-  isReadOnly,
+  selectedDepartmentId,
   activity,
   usersPage,
   usersLoading,
   canReadAuditLog,
-  onAssignDoctor,
-  onChangeDepartmentStatus,
-  onChangeDoctorStatus,
-  onChangeSchedule,
-  onChangeUserRole,
-  onCreateDepartment,
-  onCreateSchedule,
-  onCreateUser,
-  onError,
+  actions,
   onNavigate,
-  onResetPassword,
   onSelectDepartment,
   onUsersPageChange,
 }: {
-  departments: DepartmentDto[]
-  doctors: DoctorDto[]
-  loading: boolean
-  schedules: ScheduleDto[]
-  selectedDepartment: DepartmentDto | null
-  selectedDepartmentId: number | null
   section: AdminSection
-  searchQuery: string
-  isReadOnly: boolean
+  // Null until one is chosen; the inspector shows the first department then.
+  selectedDepartmentId: number | null
   activity: ActivityEntry[]
   usersPage: UsersPage | null
   usersLoading: boolean
   // Admins only: entries name users, which demo admins may not see.
   canReadAuditLog: boolean
-  onAssignDoctor: (doctor: DoctorDto, departmentId: number) => Promise<ActionOutcome>
-  onChangeDepartmentStatus: (department: DepartmentDto, isActive: boolean) => Promise<ActionOutcome>
-  onChangeDoctorStatus: (doctor: DoctorDto, isActive: boolean) => Promise<ActionOutcome>
-  onChangeSchedule: (scheduleId: number, input: ChangeScheduleInput) => Promise<ActionOutcome>
-  onChangeUserRole: (user: UserDto, role: UserRole) => Promise<ActionOutcome>
-  onCreateDepartment: (name: string) => Promise<ActionOutcome>
-  onCreateSchedule: (input: CreateScheduleInput) => Promise<ActionOutcome>
-  onCreateUser: (name: string, password: string) => Promise<ActionOutcome>
-  onError: (message: string) => void
+  actions: AdminActions
   onNavigate: (screen: Screen) => void
-  onResetPassword: (user: UserDto, password: string) => Promise<ActionOutcome>
   onSelectDepartment: (departmentId: number) => void
   onUsersPageChange: (page: number) => void
 }) {
+  const { departments, doctors, schedules, loading } = useWorkspace()
+  const selectedDepartment =
+    departments.find((department) => department.id === selectedDepartmentId) ?? departments[0] ?? null
   const selectedDoctors = selectedDepartment
     ? doctors.filter((doctor) => doctor.departmentId === selectedDepartment.id)
     : []
@@ -93,57 +58,31 @@ export function AdminDashboard({
 
         {section === 'departments' && (
           <DepartmentsTab
-            departments={departments}
-            doctors={doctors}
-            schedules={schedules}
-            loading={loading}
-            searchQuery={searchQuery}
             selectedDepartmentId={selectedDepartmentId}
-            isReadOnly={isReadOnly}
-            onChangeDepartmentStatus={onChangeDepartmentStatus}
-            onCreateDepartment={onCreateDepartment}
+            onChangeDepartmentStatus={actions.changeDepartmentStatus}
+            onCreateDepartment={actions.createDepartment}
             onSelectDepartment={onSelectDepartment}
           />
         )}
 
         {section === 'doctors' && (
-          <DoctorsTab
-            departments={departments}
-            doctors={doctors}
-            loading={loading}
-            searchQuery={searchQuery}
-            isReadOnly={isReadOnly}
-            onAssignDoctor={onAssignDoctor}
-            onChangeDoctorStatus={onChangeDoctorStatus}
-          />
+          <DoctorsTab onAssignDoctor={actions.assignDoctor} onChangeDoctorStatus={actions.changeDoctorStatus} />
         )}
 
         {section === 'schedules' && (
-          <SchedulesTab
-            schedules={schedules}
-            departments={departments}
-            doctors={doctors}
-            loading={loading}
-            searchQuery={searchQuery}
-            isReadOnly={isReadOnly}
-            onChangeSchedule={onChangeSchedule}
-            onCreateSchedule={onCreateSchedule}
-          />
+          <SchedulesTab onChangeSchedule={actions.changeSchedule} onCreateSchedule={actions.createSchedule} />
         )}
 
-        {section === 'audit' && (
-          <AuditLogTab enabled={canReadAuditLog} searchQuery={searchQuery} onError={onError} />
-        )}
+        {section === 'audit' && <AuditLogTab enabled={canReadAuditLog} />}
 
         {section === 'users' && (
           <UsersTab
             usersPage={usersPage}
             loading={loading || usersLoading}
-            isReadOnly={isReadOnly}
-            onChangeUserRole={onChangeUserRole}
-            onCreateUser={onCreateUser}
+            onChangeUserRole={actions.changeUserRole}
+            onCreateUser={actions.createUser}
             onPageChange={onUsersPageChange}
-            onResetPassword={onResetPassword}
+            onResetPassword={actions.resetPassword}
           />
         )}
       </section>

@@ -1,3 +1,4 @@
+using HospitalSystem.Services;
 using HospitalSystem.Services.Appointments;
 using Xunit;
 
@@ -6,7 +7,10 @@ namespace HospitalSystem.Tests;
 public class AppointmentCancellationServiceTests : AppointmentTestBase
 {
     private AppointmentCancellationService CreateService(ApplicationDbContext db, bool isFrontDesk = true)
-        => new(db, CreateCurrentUser(isFrontDesk), new TestAuditLogService(db));
+    {
+        var desk = CreateCurrentUser(isFrontDesk);
+        return new(db, desk, new AuditLogService(db, desk));
+    }
 
     [Fact]
     public async Task CancelAppointmentAsync_FrontDesk_Succeeds()
@@ -26,6 +30,11 @@ public class AppointmentCancellationServiceTests : AppointmentTestBase
         Assert.Equal(AppointmentStatus.Cancelled, updated!.Status);
         Assert.Equal("Patient requested cancellation", updated.CancellationReason);
         Assert.NotNull(updated.CancelledAt);
+        // Audited as the desk user who cancelled it.
+        var entry = Assert.Single(db.AuditLogs, a => a.Action == "CancelAppointment");
+        Assert.Equal(1, entry.EntityId);
+        Assert.Equal(5, entry.ActorUserId);
+        Assert.Equal("Front Desk Admin", entry.ActorName);
     }
 
     [Fact]

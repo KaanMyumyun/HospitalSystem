@@ -13,7 +13,8 @@ public class ResetPasswordService(
     SecurityStampCache stamps,
     IPasswordHasher<UserEntity> hasher) : IResetPasswordService
 {
-    public async Task<ResetPasswordResultDto> ResetPasswordAsync(ResetPasswordDto dto)
+    public async Task<ResetPasswordResultDto> ResetPasswordAsync(
+        ResetPasswordDto dto, CancellationToken cancellationToken = default)
     {
         if (currentUser.RequireAdmin<ResetPasswordResultDto>("reset a password") is { } refusal)
             return refusal;
@@ -21,23 +22,24 @@ public class ResetPasswordService(
         if (string.IsNullOrWhiteSpace(dto.NewPassword))
             return ResetPasswordResultDto.Fail("No password entered");
 
-        if (dto.NewPassword.Length < 8)
-            return ResetPasswordResultDto.Fail("Password must be at least 8 characters long");
+        if (AccountRules.PasswordError(dto.NewPassword) is { } passwordError)
+            return ResetPasswordResultDto.Fail(passwordError);
 
         await using var transaction = context.Database.IsNpgsql()
-            ? await context.Database.BeginTransactionAsync()
+            ? await context.Database.BeginTransactionAsync(cancellationToken)
             : null;
-        var result = await ResetPasswordWithLockedUserAsync(dto);
+        var result = await ResetPasswordWithLockedUserAsync(dto, cancellationToken);
         if (transaction is not null)
-            await transaction.CommitAsync();
+            await transaction.CommitAsync(cancellationToken);
         if (result.IsSuccess)
             stamps.Forget(dto.UserId);
         return result;
     }
 
-    private async Task<ResetPasswordResultDto> ResetPasswordWithLockedUserAsync(ResetPasswordDto dto)
+    private async Task<ResetPasswordResultDto> ResetPasswordWithLockedUserAsync(
+        ResetPasswordDto dto, CancellationToken cancellationToken)
     {
-        var user = await SignInLockout.FindByIdForUpdateAsync(context, dto.UserId);
+        var user = await SignInLockout.FindByIdForUpdateAsync(context, dto.UserId, cancellationToken);
         if (user == null)
             return ResetPasswordResultDto.NotFound("User not found");
 
@@ -50,8 +52,9 @@ public class ResetPasswordService(
             "ResetPassword",
             "User",
             user.Id,
-            $"Password reset for user {user.Name}{(unlocked ? ", which lifted the sign-in lock" : "")}");
-        await context.SaveChangesAsync();
+            $"Password reset for user {user.Name}{(unlocked ? ", which lifted the sign-in lock" : "")}",
+            cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
 
         return ResetPasswordResultDto.Success();
     }

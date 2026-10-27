@@ -12,7 +12,8 @@ public class AppointmentQueryService(
     // Six weeks covers a month view and keeps one response small.
     private static readonly TimeSpan MaxWindow = TimeSpan.FromDays(42);
 
-    public async Task<ServiceResult<List<ViewAppointmentDto>>> GetAppointmentsAsync(AppointmentQueryDto query)
+    public async Task<ServiceResult<List<ViewAppointmentDto>>> GetAppointmentsAsync(
+        AppointmentQueryDto query, CancellationToken cancellationToken = default)
     {
         if (!currentUser.IsDesk() && !currentUser.IsInRole(UserRole.DemoFrontDesk))
             return ServiceResult<List<ViewAppointmentDto>>.Forbidden("Not allowed to list appointments");
@@ -25,11 +26,12 @@ public class AppointmentQueryService(
             return ServiceResult<List<ViewAppointmentDto>>.Fail(windowError);
 
         return ServiceResult<List<ViewAppointmentDto>>.Success(
-            await ListAsync(a => a.DoctorId == doctorId, from, to));
+            await ListAsync(a => a.DoctorId == doctorId, from, to, cancellationToken));
     }
 
     // A doctor sees only their own appointments.
-    public async Task<ServiceResult<List<ViewAppointmentDto>>> GetMyAppointmentsAsync(MyAppointmentsQueryDto query)
+    public async Task<ServiceResult<List<ViewAppointmentDto>>> GetMyAppointmentsAsync(
+        MyAppointmentsQueryDto query, CancellationToken cancellationToken = default)
     {
         if (!currentUser.IsInRole(UserRole.Doctor) || !int.TryParse(currentUser.UserId, out var userId))
             return ServiceResult<List<ViewAppointmentDto>>.Forbidden("Only doctors have their own appointments");
@@ -42,7 +44,7 @@ public class AppointmentQueryService(
             return ServiceResult<List<ViewAppointmentDto>>.Fail(windowError);
 
         return ServiceResult<List<ViewAppointmentDto>>.Success(
-            await ListAsync(a => a.Doctor.UserId == userId, from, to));
+            await ListAsync(a => a.Doctor.UserId == userId, from, to, cancellationToken));
     }
 
     private static string? CheckWindow(DateTimeOffset from, DateTimeOffset to)
@@ -61,7 +63,8 @@ public class AppointmentQueryService(
     private Task<List<ViewAppointmentDto>> ListAsync(
         Expression<Func<AppointmentEntity, bool>> whose,
         DateTimeOffset from,
-        DateTimeOffset to)
+        DateTimeOffset to,
+        CancellationToken cancellationToken)
     {
         var fromUtc = from.UtcDateTime;
         var toUtc = to.UtcDateTime;
@@ -83,6 +86,6 @@ public class AppointmentQueryService(
                 AppointmentTime = a.TimeOfAppointment,
                 Status = a.Status
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
     }
 }

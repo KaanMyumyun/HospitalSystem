@@ -57,6 +57,9 @@ tagged releases yet, so everything is listed under Unreleased.
   handler), and a PostgreSQL tier for migrations, indexes, constraints and
   concurrent lockout updates. The PostgreSQL tests run when
   `HOSPITALSYSTEM_TEST_POSTGRES` names a server and are skipped otherwise.
+- `dotnet HospitalSystem.dll --create-admin <username>` creates an admin,
+  reading the password from standard input, so a new database no longer needs
+  a hand-made password hash and an SQL insert.
 
 ### Changed
 
@@ -164,6 +167,30 @@ tagged releases yet, so everything is listed under Unreleased.
 - Controllers are grouped by resource; role checks, read-only controls and
   table states are written once; services take the password hasher and the
   clock from dependency injection; misspelt folders and files are renamed.
+- A doctor has one schedule, and the database enforces it: of two created at
+  once, the second gets `409`. Migration `OneSchedulePerDoctor` stops while a
+  doctor has more than one; see the README.
+- An appointment has to start on one of the doctor's slots, on the minute.
+- Department names are at most 100 characters (migration
+  `LimitDepartmentNameLength`).
+- Audit entries keep the id of whoever made the change as well as their
+  username, and tokens carry the username. Migration
+  `AddAuditLogActorUserId` converts earlier entries, which held the id where
+  the name belongs.
+- The audit log has an index for its newest-first pages, which keeps them
+  fast as the log grows.
+- When a client disconnects, the API stops that request's database work.
+- A production frontend build needs `VITE_API_URL` and stops without it,
+  instead of building an app that calls `localhost`; CI's check build warns.
+- Frontend screens read what they share (departments, doctors, schedules,
+  loading, search, read-only) from a React context instead of long prop
+  lists, their callbacks keep their identity between renders, and the
+  reception calendar finds each slot's appointments with one lookup.
+
+### Removed
+
+- Three migrations that did nothing. A database that applied them keeps their
+  history rows, which are ignored.
 
 ### Fixed
 
@@ -241,6 +268,10 @@ tagged releases yet, so everything is listed under Unreleased.
 - Every form field has a label, the sign-in form works with password managers,
   the reception calendar's slots name their day and time for screen readers,
   and several error messages are spelt correctly.
+- Changing a schedule stored its hours on the day of the change instead of on
+  the date new schedules use. Migration `RepairScheduleRows` moves existing
+  schedules back, and gives schedules from before slot lengths existed the
+  30-minute slots the reception calendar showed for them.
 
 ### Security
 
@@ -289,3 +320,6 @@ tagged releases yet, so everything is listed under Unreleased.
   so rate limits apply per client; the README explains how to check it.
 - The API refuses to start with a published example JWT key, and a token
   stops working 30 seconds after it expires instead of five minutes.
+- Demo accounts can only read: the API refuses any other request from them,
+  whatever roles an endpoint allows, instead of relying on each endpoint's
+  role list.

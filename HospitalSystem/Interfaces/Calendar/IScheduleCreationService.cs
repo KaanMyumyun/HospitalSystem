@@ -2,5 +2,5 @@ namespace HospitalSystem.Interfaces.Calendar;
 
 public interface IScheduleCreationService
 {
-    Task<CalendarActionResult> CreateScheduleAsync(CreateSchedule dto);
+    Task<CalendarActionResult> CreateScheduleAsync(CreateSchedule dto, CancellationToken cancellationToken = default);
 }

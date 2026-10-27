@@ -1,6 +1,8 @@
 using HospitalSystem.Interfaces;
+using HospitalSystem.Services;
 using HospitalSystem.Services.Appointments;
 using HospitalSystem.Services.Auth;
+using HospitalSystem.Services.Calendar;
 using HospitalSystem.Services.User;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -18,7 +20,7 @@ public class PostgresTests : AuthTestBase
     private static readonly DateTimeOffset LockoutTime = new(2026, 10, 23, 12, 0, 0, TimeSpan.Zero);
 
     private LoginService CreateLoginService(ApplicationDbContext db, IPasswordHasher<UserEntity> hasher) =>
-        new(db, CreateJwtOptions(), CreateDemoOptions(), new TestAuditLogService(db), hasher, new FixedClock(LockoutTime));
+        new(db, CreateJwtOptions(), CreateDemoOptions(), new AuditLogService(db, Nobody()), hasher, new FixedClock(LockoutTime));
 
     private static async Task<int> SeedLoginUserAsync(PostgresDatabase database, int failedCount)
     {
@@ -92,7 +94,7 @@ public class PostgresTests : AuthTestBase
 
     private static async Task<(int DoctorId, int DeskId, int PatientId)> SeedBookableDoctorAsync(ApplicationDbContext db)
     {
-        var department = new DepartmentEntity { Department = "Cardiology", IsActive = true };
+        var department = new DepartmentEntity { Name = "Cardiology", IsActive = true };
         var doctorUser = new UserEntity { Name = "drhouse", PasswordHash = "x", Role = UserRole.Doctor };
         var desk = new UserEntity { Name = "desk", PasswordHash = "x", Role = UserRole.FrontDesk };
         var doctor = new DoctorEntity { User = doctorUser, Department = department, IsActive = true };
@@ -119,6 +121,25 @@ public class PostgresTests : AuthTestBase
         Assert.False(db.Database.HasPendingModelChanges());
     }
 
+    // Three migrations that did nothing were deleted. A database that applied
+    // them keeps their history rows, which EF leaves alone.
+    [PostgresFact]
+    public async Task ADatabaseThatAppliedTheDeletedEmptyMigrations_StillMigrates()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = await database.CreateMigratedContextAsync();
+        await database.ExecuteAsync("""
+            INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
+                ('20260106163944_..', '8.0.0'),
+                ('20260216193104_UpdateDoctorScheduleModel', '8.0.0'),
+                ('20260217143525_AddCalendarScheduleS', '8.0.0');
+            """);
+
+        await db.Database.MigrateAsync();
+
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
+    }
+
     [PostgresFact]
     public async Task Usernames_AreUniqueIgnoringCase()
     {
@@ -142,11 +163,11 @@ public class PostgresTests : AuthTestBase
         await using var database = await PostgresDatabase.CreateAsync();
         await using (var db = await database.CreateMigratedContextAsync())
         {
-            db.Departments.Add(new DepartmentEntity { Department = "Cardiology", IsActive = true });
+            db.Departments.Add(new DepartmentEntity { Name = "Cardiology", IsActive = true });
             await db.SaveChangesAsync();
         }
         await using var second = database.CreateContext();
-        second.Departments.Add(new DepartmentEntity { Department = "cardiology", IsActive = true });
+        second.Departments.Add(new DepartmentEntity { Name = "cardiology", IsActive = true });
 
         var error = await Assert.ThrowsAsync<DbUpdateException>(() => second.SaveChangesAsync());
 
@@ -205,7 +226,7 @@ public class PostgresTests : AuthTestBase
         var desk = new Mock<ICurrentUserService>();
         desk.Setup(x => x.IsInRole(UserRole.FrontDesk)).Returns(true);
         desk.Setup(x => x.UserId).Returns(deskId.ToString());
-        var service = new AppointmentCreationService(db, desk.Object, new PatientService(db), new TestAuditLogService(db),
+        var service = new AppointmentCreationService(db, desk.Object, new PatientService(db), new AuditLogService(db, desk.Object),
             new FixedClock(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero)));
         var booking = new CreateAppointmentDto
         {
@@ -224,6 +245,130 @@ public class PostgresTests : AuthTestBase
     }
 
     [PostgresFact]
+    public async Task ADoctor_HasOneSchedule()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = await database.CreateMigratedContextAsync();
+        var (doctorId, _, _) = await SeedBookableDoctorAsync(db);
+        var second = new CalendarEntity { DoctorId = doctorId, SlotDurationMin = 30 };
+        second.SetHours(13, 17);
+        db.Calendars.Add(second);
+
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+
+        Assert.Equal("IX_Calendars_DoctorId", UniqueViolation(error).ConstraintName);
+    }
+
+    // Two admins create a schedule for one doctor at the same time: both pass
+    // the check, and the database refuses the second, which gets the message
+    // the check gives.
+    [PostgresFact]
+    public async Task CreatingTwoSchedulesForADoctorAtOnce_TheSecondIsAConflict()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        int doctorId;
+        await using (var setup = await database.CreateMigratedContextAsync())
+        {
+            (doctorId, _, _) = await SeedBookableDoctorAsync(setup);
+            await database.ExecuteAsync("""DELETE FROM "Calendars" """);
+        }
+        var competing = new CompetingScheduleInterceptor(database, doctorId);
+        await using var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseNpgsql(database.ConnectionString)
+            .AddInterceptors(competing)
+            .Options);
+        var admin = new Mock<ICurrentUserService>();
+        admin.Setup(x => x.IsInRole(UserRole.Admin)).Returns(true);
+        var service = new ScheduleCreationService(db, admin.Object, new AuditLogService(db, admin.Object));
+
+        var result = await service.CreateScheduleAsync(new CreateSchedule { DoctorId = doctorId, StartHour = 8, EndHour = 16, SlotDurationMin = 30 });
+
+        Assert.True(competing.Inserted);
+        Assert.Equal(FailureKind.Conflict, result.Failure);
+        Assert.Equal(ScheduleValidation.AlreadyScheduled, result.Error);
+        Assert.Equal(1L, await database.ScalarAsync<long>("""SELECT count(*) FROM "Calendars" """));
+        Assert.Equal(0L, await database.ScalarAsync<long>("""SELECT count(*) FROM "AuditLogs" """));
+    }
+
+    // Inserts another schedule for the doctor just before the service saves
+    // its own, as a request from another admin would.
+    private sealed class CompetingScheduleInterceptor(PostgresDatabase database, int doctorId) : SaveChangesInterceptor
+    {
+        public bool Inserted { get; private set; }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (!Inserted && eventData.Context!.ChangeTracker.Entries<CalendarEntity>().Any(e => e.State == EntityState.Added))
+            {
+                Inserted = true;
+                await database.ExecuteAsync($"""
+                    INSERT INTO "Calendars" ("DoctorId", "StartTime", "EndTime", "SlotDurationMin")
+                    VALUES ({doctorId}, '2000-01-01 09:00+00', '2000-01-01 17:00+00', 60)
+                    """);
+            }
+            return result;
+        }
+    }
+
+    // The migration cannot choose which of a doctor's schedules to keep, so it
+    // stops, changes nothing, and runs once all but one are deleted.
+    [PostgresFact]
+    public async Task OneSchedulePerDoctor_StopsWhileADoctorHasTwo()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        await db.GetService<IMigrator>().MigrateAsync("CaseInsensitiveDepartmentNames");
+        await database.ExecuteAsync("""
+            INSERT INTO "Departments" ("Department", "IsActive") VALUES ('Cardiology', true);
+            INSERT INTO "Users" ("Name", "PasswordHash", "Role", "SecurityStamp") VALUES ('drhouse', 'x', 'Doctor', 's');
+            INSERT INTO "Doctors" ("DepartmentId", "UserId", "IsActive") SELECT d."Id", u."Id", true FROM "Departments" d, "Users" u;
+            INSERT INTO "Calendars" ("DoctorId", "StartTime", "EndTime", "SlotDurationMin")
+            SELECT "Id", '2000-01-01 08:00+00'::timestamptz, '2000-01-01 12:00+00'::timestamptz, 30 FROM "Doctors"
+            UNION ALL SELECT "Id", '2000-01-01 13:00+00'::timestamptz, '2000-01-01 17:00+00'::timestamptz, 30 FROM "Doctors";
+            """);
+
+        var error = await Assert.ThrowsAsync<PostgresException>(() => db.Database.MigrateAsync());
+
+        Assert.Equal("P0001", error.SqlState);
+        Assert.Contains("more than one schedule", error.MessageText);
+        Assert.Equal(0L, await database.ScalarAsync<long>("""SELECT count(*) FROM pg_indexes WHERE indexdef LIKE 'CREATE UNIQUE INDEX "IX_Calendars_DoctorId"%'"""));
+
+        await database.ExecuteAsync("""DELETE FROM "Calendars" WHERE "Id" = (SELECT max("Id") FROM "Calendars")""");
+        await db.Database.MigrateAsync();
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
+    }
+
+    // Changing a schedule used to store it on the day of the change, and
+    // schedules older than slot lengths have none. The repair keeps the times
+    // of day, an end at midnight, and the 30 minutes the calendar showed.
+    [PostgresFact]
+    public async Task RepairScheduleRows_MovesHoursToOneDate_AndFillsMissingSlotLengths()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        await db.GetService<IMigrator>().MigrateAsync("OneSchedulePerDoctor");
+        await database.ExecuteAsync("""
+            INSERT INTO "Departments" ("Department", "IsActive") VALUES ('Cardiology', true);
+            INSERT INTO "Users" ("Name", "PasswordHash", "Role", "SecurityStamp") VALUES ('drone', 'x', 'Doctor', 's1'), ('drtwo', 'x', 'Doctor', 's2');
+            INSERT INTO "Doctors" ("DepartmentId", "UserId", "IsActive") SELECT d."Id", u."Id", true FROM "Departments" d, "Users" u ORDER BY u."Id";
+            INSERT INTO "Calendars" ("DoctorId", "StartTime", "EndTime", "SlotDurationMin")
+            SELECT min("Id"), '2026-10-25 16:00+00'::timestamptz, '2026-10-26 00:00+00'::timestamptz, 15 FROM "Doctors"
+            UNION ALL SELECT max("Id"), '2000-01-01 08:00+00'::timestamptz, '2000-01-01 16:00+00'::timestamptz, 0 FROM "Doctors";
+            """);
+
+        await db.Database.MigrateAsync();
+
+        var schedules = await db.Calendars.OrderBy(c => c.DoctorId).ToListAsync();
+        Assert.Equal(CalendarEntity.HoursDate.AddHours(16), schedules[0].StartTime);
+        Assert.Equal(CalendarEntity.HoursDate.AddDays(1), schedules[0].EndTime);
+        Assert.Equal(15, schedules[0].SlotDurationMin);
+        Assert.Equal(CalendarEntity.HoursDate.AddHours(8), schedules[1].StartTime);
+        Assert.Equal(CalendarEntity.HoursDate.AddHours(16), schedules[1].EndTime);
+        Assert.Equal(30, schedules[1].SlotDurationMin);
+    }
+
+    [PostgresFact]
     public async Task ColumnLengths_HoldInTheDatabaseToo()
     {
         await using var database = await PostgresDatabase.CreateAsync();
@@ -233,6 +378,67 @@ public class PostgresTests : AuthTestBase
         var error = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
 
         Assert.Equal(PostgresErrorCodes.StringDataRightTruncation, Assert.IsType<PostgresException>(error.InnerException).SqlState);
+    }
+
+    [PostgresFact]
+    public async Task DepartmentNames_HoldAtMost100Characters()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = await database.CreateMigratedContextAsync();
+        db.Departments.Add(new DepartmentEntity { Name = new string('a', 100), IsActive = true });
+        await db.SaveChangesAsync();
+        db.Departments.Add(new DepartmentEntity { Name = new string('b', 101), IsActive = true });
+
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+
+        Assert.Equal(PostgresErrorCodes.StringDataRightTruncation, Assert.IsType<PostgresException>(error.InnerException).SqlState);
+    }
+
+    // The migration cannot shorten a name well, so it stops, changes nothing,
+    // and runs once the name is shortened by hand.
+    [PostgresFact]
+    public async Task LimitDepartmentNameLength_StopsWhileANameIsTooLong()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        await db.GetService<IMigrator>().MigrateAsync("RepairScheduleRows");
+        await database.ExecuteAsync($"""INSERT INTO "Departments" ("Department", "IsActive") VALUES ('{new string('a', 101)}', true)""");
+
+        var error = await Assert.ThrowsAsync<PostgresException>(() => db.Database.MigrateAsync());
+
+        Assert.Equal("P0001", error.SqlState);
+        Assert.Contains("longer than 100 characters", error.MessageText);
+        Assert.Equal("text", await database.ScalarAsync<string>("""SELECT data_type FROM information_schema.columns WHERE table_name = 'Departments' AND column_name = 'Department'"""));
+
+        await database.ExecuteAsync("""UPDATE "Departments" SET "Department" = 'Cardiology'""");
+        await db.Database.MigrateAsync();
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
+    }
+
+    // Entries named their actor by user id. The migration keeps the id in
+    // ActorUserId and puts the username in ActorName; "Unknown" and the id of
+    // no user stay as they were.
+    [PostgresFact]
+    public async Task AddAuditLogActorUserId_NamesTheActorsOfEarlierEntries()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        await db.GetService<IMigrator>().MigrateAsync("LimitDepartmentNameLength");
+        await database.ExecuteAsync("""
+            INSERT INTO "Users" ("Name", "PasswordHash", "Role", "SecurityStamp") VALUES ('alice', 'x', 'Admin', 's');
+            INSERT INTO "AuditLogs" ("Action", "EntityType", "EntityId", "Details", "ActorName", "CreatedAt")
+            SELECT 'CreateUser', 'User', 1, 'Created user bob', "Id"::text, now() FROM "Users";
+            INSERT INTO "AuditLogs" ("Action", "EntityType", "EntityId", "Details", "ActorName", "CreatedAt") VALUES
+                ('SignInFailed', 'User', 0, 'Failed sign-in with an unknown username', 'Unknown', now()),
+                ('ResetPassword', 'User', 1, 'Password reset for user bob', '999', now());
+            """);
+
+        await db.Database.MigrateAsync();
+
+        var aliceId = await db.Users.Select(u => u.Id).SingleAsync();
+        var entries = await db.AuditLogs.OrderBy(a => a.Id).ToListAsync();
+        Assert.Equal([aliceId, null, null], entries.Select(e => e.ActorUserId));
+        Assert.Equal(["alice", "Unknown", "999"], entries.Select(e => e.ActorName));
     }
 
     // During a deploy or after a rollback, an image without the newest
@@ -316,7 +522,7 @@ public class PostgresTests : AuthTestBase
         var paused = new PausedWrongPasswordHasher();
         var admin = new Mock<ICurrentUserService>();
         admin.Setup(x => x.IsInRole(UserRole.Admin)).Returns(true);
-        var reset = new ResetPasswordService(resetDb, admin.Object, new TestAuditLogService(resetDb),
+        var reset = new ResetPasswordService(resetDb, admin.Object, new AuditLogService(resetDb, admin.Object),
             new SecurityStampCache(new MemoryCache(new MemoryCacheOptions())), new PasswordHasher<UserEntity>());
 
         var first = Task.Run(() => CreateLoginService(firstDb, paused).LoginAsync(new LoginDto { Name = "lockout", Password = "wrong-password" }));
@@ -342,13 +548,13 @@ public class PostgresTests : AuthTestBase
         await using var database = await PostgresDatabase.CreateAsync();
         await using var db = await database.CreateMigratedContextAsync();
         var user = new UserEntity { Name = "newdoc", PasswordHash = "x", Role = UserRole.Pending };
-        var department = new DepartmentEntity { Department = "Neurology", IsActive = true };
+        var department = new DepartmentEntity { Name = "Neurology", IsActive = true };
         db.AddRange(user, department);
         await db.SaveChangesAsync();
         var admin = new Mock<ICurrentUserService>();
         admin.Setup(x => x.IsInRole(UserRole.Admin)).Returns(true);
         admin.Setup(x => x.UserId).Returns("0");
-        var service = new ChangeRoleService(db, admin.Object, new TestAuditLogService(db),
+        var service = new ChangeRoleService(db, admin.Object, new AuditLogService(db, admin.Object),
             new SecurityStampCache(new MemoryCache(new MemoryCacheOptions())));
 
         var missing = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = user.Id, NewRole = UserRole.Doctor, DepartmentId = department.Id + 100 });

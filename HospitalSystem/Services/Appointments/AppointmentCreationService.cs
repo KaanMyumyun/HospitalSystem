@@ -14,7 +14,8 @@ public class AppointmentCreationService(
 {
     private const int MaxPossibleMatches = 10;
 
-    public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(CreateAppointmentDto dto)
+    public async Task<CreateAppointmentResultDto> CreateAppointmentAsync(
+        CreateAppointmentDto dto, CancellationToken cancellationToken = default)
     {
         if (!currentUser.IsDesk())
             return CreateAppointmentResultDto.Forbidden("You are not allowed to create appointments");
@@ -47,16 +48,14 @@ public class AppointmentCreationService(
             from d in context.Doctors
             where d.Id == dto.DoctorId
             // A join, not FirstOrDefault on d.Calendars, which EF turns into a
-            // numbering of every schedule on file; the join reads this
-            // doctor's from the DoctorId index.
+            // numbering of every schedule on file; the join reads the doctor's
+            // one schedule from the DoctorId index.
             from c in d.Calendars.DefaultIfEmpty()
             let samePatientId = context.Patients
                 .Where(p => p.PhoneNumber == phoneNumber && p.Name.ToLower() == patientNameKey && p.DateOfBirth == dateOfBirth)
                 .OrderBy(p => p.Id)
                 .Select(p => (int?)p.Id)
                 .FirstOrDefault()
-            // A doctor with more than one schedule is booked against the first.
-            orderby c.Id
             select new
             {
                 d.IsActive,
@@ -92,7 +91,7 @@ public class AppointmentCreationService(
                     .ToList(),
                 ChosenPatientExists = chosenPatientId != null && context.Patients.Any(p => p.Id == chosenPatientId)
             })
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
         if (doctor == null)
             return CreateAppointmentResultDto.NotFound("Doctor not found");
 
@@ -134,10 +133,10 @@ public class AppointmentCreationService(
                 doctor.PossibleMatches);
         }
 
-        await using var transaction = await context.Database.BeginTransactionAsync();
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         var bookedPatientId = patientId
-            ?? await patientService.CreatePatientAsync(patientName, phoneNumber, dateOfBirth!.Value);
+            ?? await patientService.CreatePatientAsync(patientName, phoneNumber, dateOfBirth!.Value, cancellationToken);
 
         var appointment = new AppointmentEntity
         {
@@ -153,7 +152,7 @@ public class AppointmentCreationService(
 
         try
         {
-            await context.SaveChangesAsync();
+            await context.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
@@ -161,9 +160,14 @@ public class AppointmentCreationService(
             return CreateAppointmentResultDto.Conflict("Doctor already booked for that time slot");
         }
 
-        await auditLog.LogAsync("CreateAppointment", "Appointment", appointment.Id, $"Created appointment for doctor {dto.DoctorId}");
-        await context.SaveChangesAsync();
-        await transaction.CommitAsync();
+        await auditLog.LogAsync(
+            "CreateAppointment",
+            "Appointment",
+            appointment.Id,
+            $"Created appointment for doctor {dto.DoctorId}",
+            cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return CreateAppointmentResultDto.Success();
     }
@@ -203,6 +207,14 @@ public class AppointmentCreationService(
 
         if (requestedMinutes < startMinutes || requestedMinutes + schedule.SlotDurationMin > endMinutes)
             return "Appointment time is outside the doctor's working hours";
+
+        // A booking starts on one of the doctor's slots, on the minute, so two
+        // bookings for one slot have the same time and the unique index on
+        // doctor and time refuses the second even when they race.
+        var slot = TimeSpan.FromMinutes(schedule.SlotDurationMin);
+        var intoSchedule = requestedTime.TimeOfDay - TimeSpan.FromMinutes(startMinutes);
+        if (slot <= TimeSpan.Zero || intoSchedule.Ticks % slot.Ticks != 0)
+            return $"Appointment time must be the start of one of the doctor's {schedule.SlotDurationMin}-minute slots";
 
         return null;
     }

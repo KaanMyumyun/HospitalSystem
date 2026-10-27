@@ -1,13 +1,7 @@
 import { useState } from 'react'
-import type {
-  ChangeScheduleInput,
-  CreateScheduleInput,
-  DayOfWeek,
-  DepartmentDto,
-  DoctorDto,
-  ScheduleDto,
-} from '../../api'
+import type { ChangeScheduleInput, CreateScheduleInput, DayOfWeek, ScheduleDto } from '../../api'
 import { GuardedButton, TableStatus } from '../../components/ui'
+import { useWorkspace } from '../../hooks/useWorkspace'
 import { formatWorkingDays } from '../../lib/format'
 import { clockLabel, scheduleWindow } from '../../lib/time'
 import type { ActionOutcome } from '../../types'
@@ -16,24 +10,13 @@ const weekOrder: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'F
 const mondayToFriday = weekOrder.slice(0, 5)
 
 export function SchedulesTab({
-  schedules,
-  departments,
-  doctors,
-  loading,
-  searchQuery,
-  isReadOnly,
   onChangeSchedule,
   onCreateSchedule,
 }: {
-  schedules: ScheduleDto[]
-  departments: DepartmentDto[]
-  doctors: DoctorDto[]
-  loading: boolean
-  searchQuery: string
-  isReadOnly: boolean
   onChangeSchedule: (scheduleId: number, input: ChangeScheduleInput) => Promise<ActionOutcome>
   onCreateSchedule: (input: CreateScheduleInput) => Promise<ActionOutcome>
 }) {
+  const { schedules, departments, doctors, loading, searchQuery, isReadOnly } = useWorkspace()
   const [scheduleDoctorId, setScheduleDoctorId] = useState<number | ''>('')
   const [scheduleStartHour, setScheduleStartHour] = useState('8')
   const [scheduleEndHour, setScheduleEndHour] = useState('16')

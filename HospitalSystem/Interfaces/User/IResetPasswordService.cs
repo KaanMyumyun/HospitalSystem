@@ -2,5 +2,5 @@ namespace HospitalSystem.Interfaces.User;
 
 public interface IResetPasswordService
 {
-    Task<ResetPasswordResultDto> ResetPasswordAsync(ResetPasswordDto dto);
+    Task<ResetPasswordResultDto> ResetPasswordAsync(ResetPasswordDto dto, CancellationToken cancellationToken = default);
 }

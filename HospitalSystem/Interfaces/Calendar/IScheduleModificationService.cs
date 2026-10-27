@@ -2,5 +2,5 @@ namespace HospitalSystem.Interfaces.Calendar;
 
 public interface IScheduleModificationService
 {
-        Task<CalendarActionResult> ChangeScheduleAsync(ChangeScheduleDto dto);
+    Task<CalendarActionResult> ChangeScheduleAsync(ChangeScheduleDto dto, CancellationToken cancellationToken = default);
 }

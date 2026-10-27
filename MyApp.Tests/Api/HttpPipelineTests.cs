@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using HospitalSystem.Interfaces.Auth;
 using HospitalSystem.Interfaces.Department;
 using HospitalSystem.Services.Auth;
 using Microsoft.AspNetCore.Authorization;
@@ -43,7 +44,7 @@ public class HttpPipelineTests
         var desk = new UserEntity { Name = "desk", Role = UserRole.FrontDesk };
         desk.PasswordHash = hasher.HashPassword(desk, Password);
         db.Users.AddRange(admin, desk);
-        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true });
+        db.Departments.Add(new DepartmentEntity { Id = 1, Name = "Cardiology", IsActive = true });
         await db.SaveChangesAsync();
         return new Started(app, admin, desk);
     }
@@ -117,6 +118,51 @@ public class HttpPipelineTests
         }
     }
 
+    // Whatever roles an endpoint lists, it requires DemoReadOnly too, so no
+    // endpoint, now or later, lets a demo account change data.
+    [Fact]
+    public async Task EveryEndpointButSignInAndHealth_RequiresTheDemoReadOnlyPolicy()
+    {
+        await using var started = await StartAsync();
+        var endpoints = started.App.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Where(e => e.Metadata.GetMetadata<IAllowAnonymous>() is null)
+            .ToList();
+
+        Assert.True(endpoints.Count >= 20, $"only {endpoints.Count} protected endpoints found");
+        Assert.All(endpoints, endpoint =>
+            Assert.Contains(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>(), data => data.Policy == DemoReadOnly.Policy));
+    }
+
+    [Fact]
+    public async Task ADemoAccount_CanReadButNotChange()
+    {
+        var changePassword = new Mock<IChangePasswordService>();
+        await using var started = await StartAsync(
+            new Dictionary<string, string?> { ["Demo:Enabled"] = "true" },
+            services => services.AddScoped(_ => changePassword.Object));
+        using (var scope = started.App.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.Users.Add(new UserEntity { Name = "DemoAdmin", PasswordHash = "x", Role = UserRole.DemoAdmin });
+            await db.SaveChangesAsync();
+        }
+        var signIn = await started.App.CreateClient().PostAsJsonAsync("/api/auth/demo-login", new { role = "DemoAdmin" });
+        signIn.EnsureSuccessStatusCode();
+        var demo = Authorized(started.App, (await signIn.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("token").GetString()!);
+
+        Assert.Equal(HttpStatusCode.OK, (await demo.GetAsync("/api/departments")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await demo.PostAsJsonAsync("/api/departments", new { name = "Neurology" })).StatusCode);
+        // Open to any signed-in user, so only the policy keeps a demo account out.
+        var change = await demo.PostAsJsonAsync("/api/auth/change-password",
+            new { currentPassword = "anything-at-all", newPassword = "something-else" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, change.StatusCode);
+        changePassword.Verify(s => s.ChangeOwnPasswordAsync(It.IsAny<ChangePasswordDto>(), It.IsAny<CancellationToken>()), Times.Never);
+        using var check = started.App.Services.CreateScope();
+        Assert.Single(check.ServiceProvider.GetRequiredService<ApplicationDbContext>().Departments);
+    }
+
     [Fact]
     public async Task ATokenFromSignIn_OpensTheEndpointsOfItsRole()
     {
@@ -163,6 +209,22 @@ public class HttpPipelineTests
         var justExpired = MakeToken(started.Admin, DateTime.UtcNow.AddSeconds(-10));
 
         Assert.Equal(HttpStatusCode.OK, (await Authorized(started.App, justExpired).GetAsync("/api/users")).StatusCode);
+    }
+
+    // The token names its user, so a change is audited with who made it: the
+    // id, and the username as stored, whatever case was typed at sign-in.
+    [Fact]
+    public async Task AChange_IsAuditedWithTheUsersIdAndName()
+    {
+        await using var started = await StartAsync();
+        var admin = Authorized(started.App, await TokenAsync(started.App.CreateClient(), "ADMIN"));
+
+        (await admin.PostAsJsonAsync("/api/departments", new { name = "Neurology" })).EnsureSuccessStatusCode();
+
+        using var scope = started.App.Services.CreateScope();
+        var entry = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().AuditLogs.Single(a => a.Action == "CreateDepartment");
+        Assert.Equal(started.Admin.Id, entry.ActorUserId);
+        Assert.Equal("admin", entry.ActorName);
     }
 
     [Fact]
@@ -263,7 +325,7 @@ public class HttpPipelineTests
     public async Task AnUnhandledException_GetsA500WithoutItsDetails()
     {
         var failing = new Mock<IDepartmentQueryService>();
-        failing.Setup(s => s.ListDepartmentsAsync()).ThrowsAsync(new InvalidOperationException("secret detail"));
+        failing.Setup(s => s.ListDepartmentsAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("secret detail"));
         await using var started = await StartAsync(services: services =>
             services.AddScoped(_ => failing.Object));
         var admin = Authorized(started.App, await TokenAsync(started.App.CreateClient(), "admin"));

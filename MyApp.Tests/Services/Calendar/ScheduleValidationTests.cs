@@ -56,7 +56,7 @@ public class ScheduleValidationTests
     public async Task ValidateAsync_ChecksTheDoctorInTheDatabase()
     {
         using var db = CreateDbContext();
-        var department = new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true };
+        var department = new DepartmentEntity { Id = 1, Name = "Cardiology", IsActive = true };
         var user = new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "x", Role = UserRole.Doctor };
         db.Doctors.Add(new DoctorEntity { Id = 1, User = user, Department = department, IsActive = true });
         db.Doctors.Add(new DoctorEntity { Id = 2, User = new UserEntity { Id = 2, Name = "Dr Two", PasswordHash = "x", Role = UserRole.Doctor }, Department = department, IsActive = true });

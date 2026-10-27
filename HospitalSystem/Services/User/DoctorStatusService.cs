@@ -12,7 +12,8 @@ public class DoctorStatusService(
     IAuditLogService auditLog,
     SecurityStampCache stamps) : IDoctorStatusService
 {
-    public async Task<ChangeDoctorsStatusResult> ChangeDoctorsStatusAsync(ChangeDoctorStatusDto dto)
+    public async Task<ChangeDoctorsStatusResult> ChangeDoctorsStatusAsync(
+        ChangeDoctorStatusDto dto, CancellationToken cancellationToken = default)
     {
         if (currentUser.RequireAdmin<ChangeDoctorsStatusResult>("change a doctor's status") is { } refusal)
             return refusal;
@@ -22,7 +23,7 @@ public class DoctorStatusService(
 
         var doctor = await context.Doctors
             .Include(d => d.User)
-            .FirstOrDefaultAsync(d => d.Id == dto.DoctorId);
+            .FirstOrDefaultAsync(d => d.Id == dto.DoctorId, cancellationToken);
 
         if (doctor == null)
             return ChangeDoctorsStatusResult.NotFound("Doctor not found");
@@ -35,9 +36,9 @@ public class DoctorStatusService(
 
         if (!isActive)
         {
-            var stranded = await AffectedBookings.LoadFutureAsync(context, a => a.DoctorId == doctor.Id);
+            var stranded = await AffectedBookings.LoadFutureAsync(context, a => a.DoctorId == doctor.Id, cancellationToken);
             var bookingRefusal = await AffectedBookings.ResolveAsync<ChangeDoctorsStatusResult>(
-                stranded, dto, auditLog, $"doctor {doctor.User.Name} deactivated");
+                stranded, dto, auditLog, $"doctor {doctor.User.Name} deactivated", cancellationToken);
             if (bookingRefusal is not null)
                 return bookingRefusal;
         }
@@ -49,8 +50,9 @@ public class DoctorStatusService(
             "ChangeDoctorStatus",
             "Doctor",
             doctor.Id,
-            $"Doctor {doctor.User.Name} set to {(isActive ? "active" : "inactive")}");
-        await context.SaveChangesAsync();
+            $"Doctor {doctor.User.Name} set to {(isActive ? "active" : "inactive")}",
+            cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
         if (!isActive)
             stamps.Forget(doctor.UserId);
 

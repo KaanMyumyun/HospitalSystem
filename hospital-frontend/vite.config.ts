@@ -52,9 +52,28 @@ function originOf(url: string) {
   }
 }
 
-export default defineConfig(({ mode }) => ({
-  plugins: [react(), notFoundPage(), contentSecurityPolicy(loadEnv(mode, process.cwd(), 'VITE_').VITE_API_URL)],
-  // Production stack traces point at the source. The code is public anyway,
-  // and browsers fetch the maps only with developer tools open.
-  build: { sourcemap: true },
-}))
+// The API's address is built into the bundle. Without VITE_API_URL a
+// production build would send every visitor's requests to localhost, so it
+// stops instead. CI builds only to check that the app compiles; there a
+// warning is enough. A Docker build does not see CI, so a missing build
+// argument fails the image.
+function requireApiUrl(apiUrl: string | undefined) {
+  if (apiUrl?.trim()) return
+  const message =
+    'VITE_API_URL is not set, so this build would call the API at http://localhost:5272/api. ' +
+    'Set it to the API the build is for, for example VITE_API_URL=http://localhost:5272/api npm run build.'
+  if (!process.env.CI) throw new Error(message)
+  console.warn(`Warning: ${message}`)
+}
+
+export default defineConfig(({ command, mode }) => {
+  const apiUrl = loadEnv(mode, process.cwd(), 'VITE_').VITE_API_URL
+  if (command === 'build' && mode === 'production') requireApiUrl(apiUrl)
+
+  return {
+    plugins: [react(), notFoundPage(), contentSecurityPolicy(apiUrl)],
+    // Production stack traces point at the source. The code is public anyway,
+    // and browsers fetch the maps only with developer tools open.
+    build: { sourcemap: true },
+  }
+})

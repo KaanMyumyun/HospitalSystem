@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using HospitalSystem.Interfaces.Auth;
+using HospitalSystem.Services;
 using HospitalSystem.Services.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,7 +25,7 @@ public class SignInWarmupTests : AuthTestBase
             .AddScoped(_ => new ApplicationDbContext(options))
             .AddScoped<ILoginService>(provider => new LoginService(
                 provider.GetRequiredService<ApplicationDbContext>(), CreateJwtOptions(), CreateDemoOptions(),
-                new TestAuditLogService(provider.GetRequiredService<ApplicationDbContext>()),
+                new AuditLogService(provider.GetRequiredService<ApplicationDbContext>(), Nobody()),
                 new PasswordHasher<UserEntity>(), TimeProvider.System)), logger);
 
         await warmup.StartAsync(CancellationToken.None);
@@ -36,7 +37,7 @@ public class SignInWarmupTests : AuthTestBase
     public async Task StartAsync_WhenSignInFails_LogsWarningAndCompletes()
     {
         var login = new Mock<ILoginService>();
-        login.Setup(x => x.DemoLoginAsync(It.IsAny<UserRole>()))
+        login.Setup(x => x.DemoLoginAsync(It.IsAny<UserRole>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("database unavailable"));
         var logger = new RecordingLogger<SignInWarmup>();
         var warmup = CreateWarmup(services => services.AddScoped(_ => login.Object), logger);

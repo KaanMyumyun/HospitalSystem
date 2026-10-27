@@ -30,7 +30,7 @@ public abstract class UserTestBase
 
     protected async Task SeedDoctorAsync(ApplicationDbContext db, bool isDoctorActive = false, UserRole userRole = UserRole.Doctor)
     {
-        var department = new DepartmentEntity { Id = 1, Department = "Cardiology" };
+        var department = new DepartmentEntity { Id = 1, Name = "Cardiology" };
         var user = new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = userRole };
         var doctor = new DoctorEntity { Id = 1, UserId = 1, User = user, DepartmentId = 1, Department = department, IsActive = isDoctorActive };
 

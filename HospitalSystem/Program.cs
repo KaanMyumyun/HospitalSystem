@@ -34,6 +34,12 @@ if (args.Contains("--migrate", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--create-admin", StringComparer.Ordinal))
+{
+    Environment.ExitCode = await CreateAdminCommand.RunAsync(args, Console.In);
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
     var corsAllowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
@@ -186,8 +192,8 @@ var builder = WebApplication.CreateBuilder(args);
                     }
 
                     var services = context.HttpContext.RequestServices;
-                    var currentStamp = await services.GetRequiredService<SecurityStampCache>()
-                        .GetAsync(services.GetRequiredService<ApplicationDbContext>(), userId);
+                    var currentStamp = await services.GetRequiredService<SecurityStampCache>().GetAsync(
+                        services.GetRequiredService<ApplicationDbContext>(), userId, context.HttpContext.RequestAborted);
 
                     if (currentStamp == null || currentStamp != stampClaim)
                         context.Fail("Token has been revoked");
@@ -200,6 +206,9 @@ var builder = WebApplication.CreateBuilder(args);
         options.FallbackPolicy = new AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
             .Build();
+        options.AddPolicy(DemoReadOnly.Policy, policy => policy
+            .RequireAuthenticatedUser()
+            .AddRequirements(new DemoReadOnly()));
     });
 
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -369,7 +378,9 @@ var builder = WebApplication.CreateBuilder(args);
     {
         Predicate = check => check.Tags.Contains("ready")
     }).AllowAnonymous();
-    app.MapControllers();
+    // Every controller endpoint also requires DemoReadOnly, on top of its own
+    // roles; sign-in, which allows anonymous callers, needs no policy at all.
+    app.MapControllers().RequireAuthorization(DemoReadOnly.Policy);
     // The explicit pattern also covers paths with a file extension, such as
     // /favicon.ico, which MapFallback's default pattern leaves out.
     app.MapFallback("{*path}", context =>

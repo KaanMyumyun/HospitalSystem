@@ -4,6 +4,7 @@ import type { PatientDetailsDto, UpdatePatientInput } from '../api'
 import { Pager } from '../components/Pager'
 import { EmptyState, SkeletonRows, StatusBadge } from '../components/ui'
 import { usePagedList } from '../hooks/usePagedList'
+import { useWorkspace } from '../hooks/useWorkspace'
 import { formatLongDate, formatTime, initials, statusLabel } from '../lib/format'
 import { todayInputValue } from '../lib/validation'
 import type { ActionOutcome } from '../types'
@@ -11,18 +12,11 @@ import type { ActionOutcome } from '../types'
 // The front desk finds a patient by name or phone number, sees their
 // appointments, and corrects their details, such as a changed phone number.
 export function PatientsScreen({
-  searchQuery,
-  isReadOnly,
-  loading,
-  onError,
   onUpdatePatient,
 }: {
-  searchQuery: string
-  isReadOnly: boolean
-  loading: boolean
-  onError: (message: string) => void
   onUpdatePatient: (patientId: number, input: UpdatePatientInput) => Promise<ActionOutcome>
 }) {
+  const { searchQuery, isReadOnly, loading, onError } = useWorkspace()
   const { result: page, isLoading, setPage, reload: reloadList } = usePagedList(
     true,
     searchQuery,

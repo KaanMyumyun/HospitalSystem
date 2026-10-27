@@ -23,15 +23,16 @@ public class AuditLogQueryServiceTests
     {
         db.Users.Add(new UserEntity { Id = 7, Name = "alice", PasswordHash = "x", Role = UserRole.Admin });
         db.AuditLogs.AddRange(
-            Entry(1, "CreateUser", "Created user bob", "7", new DateTime(2026, 10, 1, 9, 0, 0, DateTimeKind.Utc)),
-            Entry(2, "SignInFailed", "Failed sign-in with an unknown username", "Unknown", new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc)),
-            Entry(3, "ResetPassword", "Password reset for user bob", "7", new DateTime(2026, 10, 3, 9, 0, 0, DateTimeKind.Utc)));
+            Entry(1, "CreateUser", "Created user bob", 7, "alice", new DateTime(2026, 10, 1, 9, 0, 0, DateTimeKind.Utc)),
+            Entry(2, "SignInFailed", "Failed sign-in with an unknown username", null, "Unknown", new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc)),
+            // As a release from before ActorUserId writes it: the id in ActorName.
+            Entry(3, "ResetPassword", "Password reset for user bob", null, "7", new DateTime(2026, 10, 3, 9, 0, 0, DateTimeKind.Utc)));
         await db.SaveChangesAsync();
     }
 
-    private static AuditLogEntity Entry(int id, string action, string details, string actor, DateTime at) => new()
+    private static AuditLogEntity Entry(int id, string action, string details, int? actorId, string actor, DateTime at) => new()
     {
-        Id = id, Action = action, EntityType = "User", EntityId = 1, Details = details, ActorName = actor, CreatedAt = at
+        Id = id, Action = action, EntityType = "User", EntityId = 1, Details = details, ActorUserId = actorId, ActorName = actor, CreatedAt = at
     };
 
     [Fact]

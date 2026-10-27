@@ -52,7 +52,9 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<DepartmentEntity>(builder =>
         {
-            builder.Property(s => s.Department).IsRequired();
+            // The column keeps its first name, "Department", which older
+            // releases still read and write.
+            builder.Property(s => s.Name).HasColumnName("Department").IsRequired().HasMaxLength(100);
             // Names are unique ignoring case, through the unique index
             // IX_Departments_LowerDepartment on lower("Department") that
             // migration CaseInsensitiveDepartmentNames creates in SQL.
@@ -84,6 +86,8 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<CalendarEntity>(builder =>
         {
             builder.HasOne(c => c.Doctor).WithMany(d => d.Calendars).HasForeignKey(c => c.DoctorId).OnDelete(DeleteBehavior.Restrict);
+            // One schedule per doctor. Booking reads the doctor's schedule from it.
+            builder.HasIndex(c => c.DoctorId).IsUnique();
         });
 
         modelBuilder.Entity<AuditLogEntity>(builder =>
@@ -93,6 +97,8 @@ public class ApplicationDbContext : DbContext
             builder.Property(a => a.Details).IsRequired().HasMaxLength(1000);
             builder.Property(a => a.ActorName).IsRequired().HasMaxLength(80);
             builder.HasIndex(a => new { a.EntityType, a.EntityId, a.CreatedAt });
+            // The audit screen pages through entries newest first.
+            builder.HasIndex(a => new { a.CreatedAt, a.Id });
         });
 
     }

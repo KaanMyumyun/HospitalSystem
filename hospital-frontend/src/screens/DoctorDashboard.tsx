@@ -2,20 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadMyAppointments } from '../api'
 import type { AppointmentDto } from '../api'
 import { EmptyState, SkeletonRows, StatusBadge } from '../components/ui'
+import { useWorkspace } from '../hooks/useWorkspace'
 import { formatLongDate, formatTime, statusLabel } from '../lib/format'
 import { canMarkAppointment, dayStart } from '../lib/schedule'
 import type { ActionOutcome } from '../types'
 
 // A doctor's own appointments, one day at a time, marked as they happen.
 export function DoctorDashboard({
-  loading,
-  onError,
   onChangeAppointmentStatus,
 }: {
-  loading: boolean
-  onError: (message: string) => void
   onChangeAppointmentStatus: (appointmentId: number, status: 'Completed' | 'NoShow') => Promise<ActionOutcome>
 }) {
+  const { loading, onError } = useWorkspace()
   const [dayOffset, setDayOffset] = useState(0)
   const { day, appointments, reload } = useDayAppointments(dayOffset, onError)
 

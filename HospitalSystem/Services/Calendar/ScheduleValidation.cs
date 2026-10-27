@@ -7,6 +7,9 @@ public static class ScheduleValidation
     // What the checks need to know about the schedule's doctor.
     public sealed record DoctorState(bool IsActive, bool DepartmentIsActive);
 
+    // A doctor has one schedule; changes edit it.
+    public const string AlreadyScheduled = "Doctor already has a schedule. Edit the existing schedule instead";
+
     // For a new schedule. Null when it can be created.
     public static async Task<CalendarActionResult?> ValidateAsync(
         ApplicationDbContext context,
@@ -14,7 +17,8 @@ public static class ScheduleValidation
         int startHour,
         int endHour,
         int slotDurationMin,
-        IReadOnlyCollection<DayOfWeek>? workingDays)
+        IReadOnlyCollection<DayOfWeek>? workingDays,
+        CancellationToken cancellationToken = default)
     {
         if (doctorId <= 0)
             return CalendarActionResult.Fail("Doctor is required");
@@ -30,14 +34,14 @@ public static class ScheduleValidation
                 State = new DoctorState(d.IsActive, d.Department.IsActive),
                 HasSchedule = d.Calendars.Any()
             })
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
 
         var doctorError = ValidateDoctor(doctor?.State);
         if (doctorError is not null)
             return doctorError;
 
         if (doctor!.HasSchedule)
-            return CalendarActionResult.Conflict("Doctor already has a schedule. Edit the existing schedule instead");
+            return CalendarActionResult.Conflict(AlreadyScheduled);
 
         return null;
     }

@@ -146,8 +146,8 @@ public class UserQueryServiceTests : UserTestBase
     {
         var db = CreateDbContext();
         db.Departments.AddRange(
-            new DepartmentEntity { Id = 1, Department = "Cardiology" },
-            new DepartmentEntity { Id = 2, Department = "Neurology" }
+            new DepartmentEntity { Id = 1, Name = "Cardiology" },
+            new DepartmentEntity { Id = 2, Name = "Neurology" }
         );
         db.Users.AddRange(
             new UserEntity { Id = 1, Name = "Alice", Role = UserRole.Doctor, PasswordHash = "hashed" },

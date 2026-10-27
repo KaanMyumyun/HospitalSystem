@@ -9,7 +9,8 @@ public class AppointmentCancellationService(
     ICurrentUserService currentUser,
     IAuditLogService auditLog) : IAppointmentCancellationService
 {
-    public async Task<CancelAppointmentResultDto> CancelAppointmentAsync(CancelAppointmentDto dto)
+    public async Task<CancelAppointmentResultDto> CancelAppointmentAsync(
+        CancelAppointmentDto dto, CancellationToken cancellationToken = default)
     {
         if (!currentUser.IsDesk())
             return CancelAppointmentResultDto.Forbidden("You are not allowed to cancel appointments");
@@ -18,7 +19,7 @@ public class AppointmentCancellationService(
             return CancelAppointmentResultDto.Fail("Cancellation reason is required");
 
         var appointment = await context.Appointments
-            .SingleOrDefaultAsync(a => a.Id == dto.AppointmentId);
+            .SingleOrDefaultAsync(a => a.Id == dto.AppointmentId, cancellationToken);
 
         if (appointment == null)
             return CancelAppointmentResultDto.NotFound("Appointment not found");
@@ -39,9 +40,10 @@ public class AppointmentCancellationService(
             "CancelAppointment",
             "Appointment",
             appointment.Id,
-            $"Cancelled appointment {appointment.Id}. Reason: {dto.Reason}");
+            $"Cancelled appointment {appointment.Id}. Reason: {dto.Reason}",
+            cancellationToken);
 
-        await context.SaveChangesAsync();
+        await context.SaveChangesAsync(cancellationToken);
 
         return CancelAppointmentResultDto.Success();
     }

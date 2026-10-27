@@ -16,18 +16,20 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     [EnableRateLimiting("sign-in")]
     [ServiceFilter(typeof(LoginRateLimitFilter))]
-    public async Task<ActionResult<LoginResultDto>> Login([FromBody] LoginDto dto, [FromServices] ILoginService service)
+    public async Task<ActionResult<LoginResultDto>> Login(
+        [FromBody] LoginDto dto, [FromServices] ILoginService service, CancellationToken cancellationToken)
     {
-        var result = await service.LoginAsync(dto);
+        var result = await service.LoginAsync(dto, cancellationToken);
         return result.IsSuccess ? Ok(result) : Unauthorized(result);
     }
 
     [AllowAnonymous]
     [HttpPost("demo-login")]
     [EnableRateLimiting("login")]
-    public async Task<ActionResult<LoginResultDto>> DemoLogin([FromBody] DemoLoginDto dto, [FromServices] ILoginService service)
+    public async Task<ActionResult<LoginResultDto>> DemoLogin(
+        [FromBody] DemoLoginDto dto, [FromServices] ILoginService service, CancellationToken cancellationToken)
     {
-        var result = await service.DemoLoginAsync(dto.Role);
+        var result = await service.DemoLoginAsync(dto.Role, cancellationToken);
         return result.IsSuccess ? Ok(result) : Unauthorized(result);
     }
 
@@ -35,6 +37,6 @@ public class AuthController : ControllerBase
     [HttpPost("change-password")]
     [EnableRateLimiting("login")]
     public async Task<ActionResult<ChangePasswordResultDto>> ChangePassword(
-        [FromBody] ChangePasswordDto dto, [FromServices] IChangePasswordService service)
-        => this.ToActionResult(await service.ChangeOwnPasswordAsync(dto));
+        [FromBody] ChangePasswordDto dto, [FromServices] IChangePasswordService service, CancellationToken cancellationToken)
+        => this.ToActionResult(await service.ChangeOwnPasswordAsync(dto, cancellationToken));
 }

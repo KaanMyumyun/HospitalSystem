@@ -16,22 +16,15 @@ public static class DatabaseMigrationCommand
 
         try
         {
-            // Use the same appsettings/user-secrets/environment sources as the API,
-            // but never construct a web host or register application services.
-            var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
-            {
-                Args = [],
-                EnvironmentName = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
-                    ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
-            });
-            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+            var configuration = LoadConfiguration();
+            var connectionString = configuration.GetConnectionString("DefaultConnection");
             if (string.IsNullOrWhiteSpace(connectionString))
             {
                 Console.Error.WriteLine("Database migration failed: ConnectionStrings:DefaultConnection is not configured.");
                 return 1;
             }
 
-            var commandTimeout = builder.Configuration.GetValue("Database:MigrationCommandTimeoutSeconds", 120);
+            var commandTimeout = configuration.GetValue("Database:MigrationCommandTimeoutSeconds", 120);
             if (commandTimeout <= 0)
             {
                 Console.Error.WriteLine("Database migration failed: Database:MigrationCommandTimeoutSeconds must be greater than zero.");
@@ -68,4 +61,14 @@ public static class DatabaseMigrationCommand
             return 1;
         }
     }
+
+    // The same appsettings, user-secrets and environment sources as the API,
+    // without constructing a web host or registering application services.
+    internal static IConfiguration LoadConfiguration() =>
+        Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            Args = [],
+            EnvironmentName = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+                ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+        }).Configuration;
 }

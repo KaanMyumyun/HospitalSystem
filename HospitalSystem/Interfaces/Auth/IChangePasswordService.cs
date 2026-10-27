@@ -2,5 +2,5 @@ namespace HospitalSystem.Interfaces.Auth;
 
 public interface IChangePasswordService
 {
-    Task<ChangePasswordResultDto> ChangeOwnPasswordAsync(ChangePasswordDto dto);
+    Task<ChangePasswordResultDto> ChangeOwnPasswordAsync(ChangePasswordDto dto, CancellationToken cancellationToken = default);
 }

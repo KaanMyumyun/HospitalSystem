@@ -2,5 +2,5 @@ namespace HospitalSystem.Interfaces.Department;
 
 public interface IDepartmentCreationService
 {
-    Task<DepartmentActionResultDto> CreateDepartmentAsync(CreateDepartmentDto dto);
+    Task<DepartmentActionResultDto> CreateDepartmentAsync(CreateDepartmentDto dto, CancellationToken cancellationToken = default);
 }

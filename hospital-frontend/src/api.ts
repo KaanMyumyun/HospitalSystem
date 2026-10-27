@@ -67,6 +67,8 @@ type DataOutcome = Outcome & { data: unknown }
 
 const API_ORIGIN = resolveApiOrigin(import.meta.env.VITE_API_URL)
 
+// localhost is for the dev server: a production build needs VITE_API_URL
+// (vite.config.ts).
 function resolveApiOrigin(value?: string) {
   const base = (value?.trim() || 'http://localhost:5272/api').replace(/\/+$/, '')
   return base.endsWith('/api') ? base.slice(0, -4) : base

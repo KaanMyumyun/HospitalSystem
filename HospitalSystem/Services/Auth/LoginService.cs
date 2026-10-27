@@ -27,30 +27,30 @@ public class LoginService(
     private string DummyPasswordHash =>
         _dummyPasswordHash ??= hasher.HashPassword(new UserEntity(), Guid.NewGuid().ToString());
 
-    public async Task<LoginResultDto> LoginAsync(LoginDto dto)
+    public async Task<LoginResultDto> LoginAsync(LoginDto dto, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Password))
             return LoginResultDto.Fail("Invalid credentials");
 
         await using var transaction = context.Database.IsNpgsql()
-            ? await context.Database.BeginTransactionAsync()
+            ? await context.Database.BeginTransactionAsync(cancellationToken)
             : null;
-        var result = await LoginWithLockedUserAsync(dto);
+        var result = await LoginWithLockedUserAsync(dto, cancellationToken);
         if (transaction is not null)
-            await transaction.CommitAsync();
+            await transaction.CommitAsync(cancellationToken);
         return result;
     }
 
-    private async Task<LoginResultDto> LoginWithLockedUserAsync(LoginDto dto)
+    private async Task<LoginResultDto> LoginWithLockedUserAsync(LoginDto dto, CancellationToken cancellationToken)
     {
         // Usernames ignore case: "Admin" and "admin" are the same account.
         var nameKey = dto.Name.Trim().ToLowerInvariant();
-        var user = await SignInLockout.FindByNameForUpdateAsync(context, nameKey);
+        var user = await SignInLockout.FindByNameForUpdateAsync(context, nameKey, cancellationToken);
 
         if (user == null)
         {
             hasher.VerifyHashedPassword(new UserEntity(), DummyPasswordHash, dto.Password);
-            return await RefuseAsync(null, "Failed sign-in with an unknown username");
+            return await RefuseAsync(null, "Failed sign-in with an unknown username", cancellationToken);
         }
 
         var now = clock.GetUtcNow().UtcDateTime;
@@ -59,7 +59,7 @@ public class LoginService(
             // A locked account must look like any other failed sign-in to an
             // anonymous caller, including the password-verification cost.
             hasher.VerifyHashedPassword(new UserEntity(), DummyPasswordHash, dto.Password);
-            return await RefuseAsync(user, $"Sign-in refused for user {user.Name}: account locked");
+            return await RefuseAsync(user, $"Sign-in refused for user {user.Name}: account locked", cancellationToken);
         }
 
         var result = hasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password);
@@ -67,30 +67,32 @@ public class LoginService(
         if (result == PasswordVerificationResult.Failed)
         {
             if (!SignInLockout.RecordFailure(user, now))
-                return await RefuseAsync(user, $"Failed sign-in for user {user.Name}: wrong password");
+                return await RefuseAsync(user, $"Failed sign-in for user {user.Name}: wrong password", cancellationToken);
 
-            await auditLog.LogAsync("SignInLocked", "User", user.Id, SignInLockout.LockedAuditDetails(user));
-            return await RefuseAsync(user, $"Failed sign-in for user {user.Name}: wrong password");
+            await auditLog.LogAsync("SignInLocked", "User", user.Id, SignInLockout.LockedAuditDetails(user), cancellationToken);
+            return await RefuseAsync(user, $"Failed sign-in for user {user.Name}: wrong password", cancellationToken);
         }
 
         // The password was right, so earlier wrong ones no longer count, even
         // if the role checks below refuse the sign-in.
         if (SignInLockout.Clear(user))
-            await context.SaveChangesAsync();
+            await context.SaveChangesAsync(cancellationToken);
 
         if (user.Role is UserRole.DemoAdmin or UserRole.DemoFrontDesk)
-            return await RefuseAsync(user, $"Failed sign-in for user {user.Name}: demo accounts have no password sign-in");
+            return await RefuseAsync(
+                user, $"Failed sign-in for user {user.Name}: demo accounts have no password sign-in", cancellationToken);
 
         // Only after the password check, so it does not reveal which usernames exist.
         if (user.Role == UserRole.Pending)
-            return await RefuseAsync(user, $"Sign-in refused for user {user.Name}: account awaiting approval", "Account awaiting approval");
+            return await RefuseAsync(
+                user, $"Sign-in refused for user {user.Name}: account awaiting approval", "Account awaiting approval", cancellationToken);
 
         var token = GenerateToken(user, _jwtSettings);
 
         return LoginResultDto.Success(token, user.Role);
     }
 
-    public async Task<LoginResultDto> DemoLoginAsync(UserRole role)
+    public async Task<LoginResultDto> DemoLoginAsync(UserRole role, CancellationToken cancellationToken = default)
     {
         if (!_demoSettings.Enabled)
             return LoginResultDto.Fail("Demo login is not available");
@@ -106,7 +108,8 @@ public class LoginService(
             return LoginResultDto.Fail("Invalid credentials");
 
         var nameKey = userName.ToLowerInvariant();
-        var user = await context.Users.SingleOrDefaultAsync(u => u.Name.ToLower() == nameKey && u.Role == role);
+        var user = await context.Users
+            .SingleOrDefaultAsync(u => u.Name.ToLower() == nameKey && u.Role == role, cancellationToken);
 
         if (user == null)
             return LoginResultDto.Fail("Invalid credentials");
@@ -119,10 +122,13 @@ public class LoginService(
     // Every refused password sign-in is audited. The typed username is kept
     // only when it names an account: people sometimes type a password there.
     // The save also keeps the user's failed-sign-in count.
-    private async Task<LoginResultDto> RefuseAsync(UserEntity? user, string details, string error = "Invalid credentials")
+    private Task<LoginResultDto> RefuseAsync(UserEntity? user, string details, CancellationToken cancellationToken) =>
+        RefuseAsync(user, details, "Invalid credentials", cancellationToken);
+
+    private async Task<LoginResultDto> RefuseAsync(UserEntity? user, string details, string error, CancellationToken cancellationToken)
     {
-        await auditLog.LogAsync("SignInFailed", "User", user?.Id ?? 0, details);
-        await context.SaveChangesAsync();
+        await auditLog.LogAsync("SignInFailed", "User", user?.Id ?? 0, details, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
         return LoginResultDto.Fail(error);
     }
 
@@ -132,6 +138,8 @@ public class LoginService(
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            // For the audit log, which records who made a change by name.
+            new Claim(ClaimTypes.Name, user.Name),
             new Claim(ClaimTypes.Role, user.Role.ToString()),
             new Claim(SecurityStampClaims.ClaimType, user.SecurityStamp)
         };

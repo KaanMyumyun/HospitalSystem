@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
+using HospitalSystem.Services;
 using HospitalSystem.Services.Auth;
 using Xunit;
 
@@ -10,7 +11,7 @@ public class LoginServiceTests : AuthTestBase
 {
     private LoginService CreateService(ApplicationDbContext db, bool demoEnabled = true, TimeProvider? clock = null,
         IPasswordHasher<UserEntity>? hasher = null)
-        => new(db, CreateJwtOptions(), CreateDemoOptions(demoEnabled), new TestAuditLogService(db),
+        => new(db, CreateJwtOptions(), CreateDemoOptions(demoEnabled), new AuditLogService(db, Nobody()),
             hasher ?? new PasswordHasher<UserEntity>(), clock ?? TimeProvider.System);
 
     private sealed class CountingPasswordHasher : IPasswordHasher<UserEntity>
@@ -200,18 +201,20 @@ public class LoginServiceTests : AuthTestBase
         Assert.Equal(user.SecurityStamp, principal.FindFirst(SecurityStampClaims.ClaimType)?.Value);
     }
 
+    // The username as stored, not as typed: the audit log records it.
     [Fact]
-    public async Task LoginAsync_Token_CarriesUserIdAndRole()
+    public async Task LoginAsync_Token_CarriesUserIdNameAndRole()
     {
         var db = CreateDbContext();
         var user = await SeedUserAsync(db, UserRole.FrontDesk, "Reception");
         var service = CreateService(db);
 
-        var result = await service.LoginAsync(new LoginDto { Name = "Reception", Password = TestPassword });
+        var result = await service.LoginAsync(new LoginDto { Name = "RECEPTION", Password = TestPassword });
 
         Assert.True(result.IsSuccess);
         var principal = ReadValidatedToken(result.Token!);
         Assert.Equal(user.Id.ToString(), principal.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+        Assert.Equal("Reception", principal.FindFirst(ClaimTypes.Name)?.Value);
         Assert.Equal(UserRole.FrontDesk.ToString(), principal.FindFirst(ClaimTypes.Role)?.Value);
     }
 

@@ -97,22 +97,23 @@ export function buildWeekSlots(
     times.push(clockLabel(minutes))
   }
 
+  // The doctor's appointments by the minute they start, in the order the API
+  // listed them, so each slot finds its own with one lookup.
+  const byMinute = new Map<string, AppointmentDto[]>()
+  for (const item of appointments ?? []) {
+    if (item.doctorId !== doctorId) continue
+    const key = minuteKey(new Date(item.appointmentTime))
+    const atMinute = byMinute.get(key)
+    if (atMinute) atMinute.push(item)
+    else byMinute.set(key, [item])
+  }
+
   return times.map((time) =>
     days.map((day) => {
       if (!appointments) return { day, time, status: 'loading' }
 
       const slotDate = dateAtTime(day, time)
-      const matching = appointments.filter((item) => {
-        const appointmentDate = new Date(item.appointmentTime)
-        return (
-          item.doctorId === doctorId &&
-          appointmentDate.getFullYear() === slotDate.getFullYear() &&
-          appointmentDate.getMonth() === slotDate.getMonth() &&
-          appointmentDate.getDate() === slotDate.getDate() &&
-          appointmentDate.getHours() === slotDate.getHours() &&
-          appointmentDate.getMinutes() === slotDate.getMinutes()
-        )
-      })
+      const matching = byMinute.get(minuteKey(slotDate)) ?? []
 
       const appointment = matching.find((item) => item.status !== 'Cancelled')
       if (appointment) return { day, time, status: 'booked', appointment }
@@ -125,6 +126,11 @@ export function buildWeekSlots(
       return { day, time, status: 'available' }
     }),
   )
+}
+
+// A moment's local date and time to the minute, as the grid shows it.
+function minuteKey(date: Date) {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}`
 }
 
 export function getNextAvailableSlot(slots: Slot[][]) {

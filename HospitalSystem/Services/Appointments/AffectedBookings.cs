@@ -16,7 +16,8 @@ internal static class AffectedBookings
     // patient and doctor needed to describe them.
     public static Task<List<AppointmentEntity>> LoadFutureAsync(
         ApplicationDbContext context,
-        Expression<Func<AppointmentEntity, bool>> filter)
+        Expression<Func<AppointmentEntity, bool>> filter,
+        CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
         return context.Appointments
@@ -26,7 +27,7 @@ internal static class AffectedBookings
             .Where(filter)
             .OrderBy(a => a.TimeOfAppointment)
             .ThenBy(a => a.Id)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
     }
 
     // Null when the change can go ahead: nothing is stranded, or the request
@@ -35,7 +36,8 @@ internal static class AffectedBookings
         IReadOnlyList<AppointmentEntity> stranded,
         ICancelsAffectedBookings request,
         IAuditLogService auditLog,
-        string change)
+        string change,
+        CancellationToken cancellationToken = default)
         where TResult : BookingChangeResult<TResult>, new()
     {
         if (stranded.Count == 0)
@@ -63,7 +65,8 @@ internal static class AffectedBookings
                 "CancelAppointment",
                 "Appointment",
                 appointment.Id,
-                $"Cancelled appointment {appointment.Id} ({change}). Reason: {reason}");
+                $"Cancelled appointment {appointment.Id} ({change}). Reason: {reason}",
+                cancellationToken);
         }
 
         return null;

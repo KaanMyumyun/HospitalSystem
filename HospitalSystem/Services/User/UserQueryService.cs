@@ -9,7 +9,8 @@ public class UserQueryService(
     ICurrentUserService currentUser,
     TimeProvider clock) : IUserQueryService
 {
-    public async Task<ServiceResult<PagedResult<UserDisplayDto>>> ListUsersAsync(UserQueryDto query)
+    public async Task<ServiceResult<PagedResult<UserDisplayDto>>> ListUsersAsync(
+        UserQueryDto query, CancellationToken cancellationToken = default)
     {
         if (!currentUser.IsAdmin())
             return ServiceResult<PagedResult<UserDisplayDto>>.Forbidden("Not allowed to list users");
@@ -50,13 +51,13 @@ public class UserQueryService(
                 // one round trip.
                 TotalCount = users.Count()
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         // An empty page carries no total. On page 1 there is nothing to
         // count; a later page is past the last match and needs its own count.
         var totalCount = rows.Count > 0 ? rows[0].TotalCount
             : query.Page == 1 ? 0
-            : await users.CountAsync();
+            : await users.CountAsync(cancellationToken);
 
         return ServiceResult<PagedResult<UserDisplayDto>>.Success(new PagedResult<UserDisplayDto>
         {
@@ -67,7 +68,7 @@ public class UserQueryService(
         });
     }
 
-    public async Task<ServiceResult<List<DoctorDisplayDto>>> ListDoctorsAsync()
+    public async Task<ServiceResult<List<DoctorDisplayDto>>> ListDoctorsAsync(CancellationToken cancellationToken = default)
     {
         if (!currentUser.CanReadReferenceData())
             return ServiceResult<List<DoctorDisplayDto>>.Forbidden("You are not allowed to list doctors");
@@ -83,7 +84,7 @@ public class UserQueryService(
                 UserId = d.UserId,
                 IsActive = d.IsActive
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return ServiceResult<List<DoctorDisplayDto>>.Success(doctors);
     }
