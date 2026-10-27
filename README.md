@@ -107,6 +107,20 @@ rules:
 * **Backend API:** Hosted on [Render](https://render.com/)
 * **Database:** Serverless PostgreSQL hosted on [Neon](https://neon.tech/)
 
+Render deploys every merge to main. With these in the service's environment,
+each new release brings Neon up to date before it serves:
+
+* `Database__RunMigrationsOnStartup` = `true`
+* `ConnectionStrings__Migrations` = the Neon connection string with the direct
+  host (the endpoint name without `-pooler`)
+
+If a migration fails, the release exits before it listens, the deploy fails,
+and the previous release keeps serving. Migrations run while that previous
+release is still up, which is why they must keep it working (see
+[Create the database schema](#3-create-the-database-schema)). A free instance
+runs the check on every cold start; with nothing to apply it is one quick
+query.
+
 The frontend build adds a `404.html` copy of the app shell, so Pages answers
 unknown paths with a real 404, and `hospital-frontend/public/_headers` sets the
 same cache and security headers that `nginx.conf` sets for the Docker image.
@@ -398,7 +412,17 @@ per SQL command, not for the entire process. Migration failures log the error
 type and PostgreSQL error code when available, without dumping connection
 strings, SQL, or database exception details.
 
-For local development, `Database__RunMigrationsOnStartup=true` remains supported.
+With `Database__RunMigrationsOnStartup=true`, the API runs the same migrations
+when it starts, before it listens, with the same output, and exits with code
+`1` if they fail. A start with nothing to apply only checks the history table.
+`docker compose` uses it, and so can a single-instance host such as the live
+demo's (see [Deployment](#live-demo-cloudflare-pages-render-and-neon-always-on)).
+`ConnectionStrings__Migrations`, when set, is the connection migrations use
+instead of `DefaultConnection`, for `--migrate` and at startup alike. On Neon,
+give it the direct host (the endpoint name without `-pooler`), as Neon advises
+for schema changes; the pooled host works too, because EF's migration lock
+lasts one transaction.
+
 In EKS, leave startup migrations disabled and run the privileged operator's
 migration Job before changing Deployment images. The image-only deploy identity
 must not gain permission to create Jobs or read backend secrets. The Job must
@@ -584,6 +608,12 @@ a build argument, and fails to build without one.
   only in case
 * Everyone except demo accounts can change their own password from the top
   bar
+* A token lasts an hour. While someone keeps using the app, the frontend
+  swaps it for a new one (`POST /api/auth/refresh`) once it is ten minutes
+  old, so a session in use carries on for up to 12 hours after signing in. A
+  session left alone for about an hour ends, and revoking a user's tokens
+  (role change, password reset, disabling a doctor) still signs them out at
+  once. Demo sessions are not renewed
 
 | Role | Screens |
 | --- | --- |
@@ -608,6 +638,7 @@ routes (`/api/Users/change-role` and the like), which no longer answer.
 |   POST | /api/auth/login      | Authenticate and return JWT      |
 |   POST | /api/auth/demo-login | Sign in a demo account, if enabled |
 |   POST | /api/auth/change-password | Change your own password    |
+|   POST | /api/auth/refresh    | A new token for the same session |
 
 `change-password` takes `currentPassword` and `newPassword` (at least 8
 characters, and not the current one) and returns a new `token`. Tokens issued
@@ -615,6 +646,13 @@ before the change stop working, so the user's other sessions are signed out.
 It shares the per-IP authentication limit with demo sign-in, and demo accounts
 cannot use it. Failed
 sign-ins and failed password changes are recorded in the audit log.
+
+`refresh` returns a new token for the signed-in user, like sign-in does, for
+up to 12 hours after they signed in; the new token expires an hour later or
+when those 12 hours are up, whichever comes first. After that it answers
+`403`, as it does for tokens issued before renewal existed and for demo
+accounts. Sign-in and `refresh` also return `timeZone`, the clinic's time
+zone (see [Clinic time zone](#clinic-time-zone)).
 
 ### Users
 
@@ -667,15 +705,18 @@ bookings; see
 |    GET | /api/appointments                           | One doctor's appointments in a time window  |
 |   POST | /api/appointments/{appointmentId}/cancel    | Cancel appointment                          |
 |  PATCH | /api/appointments/{appointmentId}/status    | Mark an appointment completed or no-show    |
+|   POST | /api/appointments/{appointmentId}/move      | Move an appointment to another time or doctor |
+|    GET | /api/appointments/{appointmentId}/history   | Who booked, moved, cancelled or marked it   |
 |    GET | /api/appointments/mine                      | The signed-in doctor's appointments in a time window |
 
-`CreateAppointment` takes `appointmentTime` as the front desk's local time with
-its UTC offset, for example `2026-09-22T09:00:00+03:00`. That clock time must
-fall on one of the doctor's working days and inside their working hours, and
-be the start of one of the doctor's slots, on the minute: with 30-minute slots
-from 08:00, `09:30` but not `09:40`. The appointment is stored in UTC. An
-appointment lasts one slot of the doctor's schedule and cannot overlap another
-scheduled appointment.
+`CreateAppointment` takes `appointmentTime` with its UTC offset, for example
+`2026-09-22T09:00:00+03:00`. The clinic's clock at that moment
+([Clinic time zone](#clinic-time-zone)) must fall on one of the doctor's
+working days, inside their working hours and outside their break, not on a day
+of their time off, and be the start of one of the doctor's slots, on the
+minute: with 30-minute slots from 08:00, `09:30` but not `09:40`. The
+appointment is stored in UTC. An appointment lasts one slot of the doctor's
+schedule and cannot overlap another scheduled appointment.
 
 The patient is matched on phone number, name and date of birth together. Phone
 numbers are compared as digits, keeping a leading `+`, and names ignoring
@@ -701,6 +742,17 @@ marked, and a mark can be corrected later. The front desk can mark any
 appointment and a doctor only their own. Each change is recorded in the audit
 log.
 
+`move` takes `appointmentTime` and, to change doctor, `doctorId`. The new time
+is checked as a booking is, and the old slot is freed in the same save, so
+nobody can take the new slot in between. Only a scheduled appointment that has
+not started can be moved; it keeps its id, its patient and its history, and
+the move is recorded in the audit log. In the reception screen, Move
+Appointment lets the desk pick an open slot of any doctor or week.
+
+`history` lists the appointment's audit log entries, oldest first, each with
+`createdAt`, `action`, `details` and `actor`. Both are for the front desk
+only; the reception screen shows the history under the selected booking.
+
 ### Patients
 
 | Method | Endpoint                     | Description                                       |
@@ -724,16 +776,34 @@ do, and records what changed in the audit log.
 |   POST | /api/schedules               | Create a new schedule       |
 |    PUT | /api/schedules/{scheduleId}  | Modify an existing schedule |
 |    GET | /api/schedules               | View all schedules          |
+|   POST | /api/schedules/{scheduleId}/time-off | Give the doctor days off |
+| DELETE | /api/schedules/{scheduleId}/time-off/{timeOffId} | Take time off back |
 
 A doctor has one schedule: creating a second is refused with `409`, and
 changes edit the existing one.
 
 Schedules have `workingDays`, a list of day names such as `"Monday"`.
-Creation uses Monday to Friday when it is left out. Changing a schedule
-also requires `timeZone`, the IANA time zone of whoever makes the change, such
-as `Europe/Sofia`, because it checks the doctor's future bookings against the
-new hours and days in that time zone. The frontend sends the browser's time
-zone.
+Creation uses Monday to Friday when it is left out. A schedule can have a
+daily break, `breakStartMinute` and `breakEndMinute` in minutes after
+midnight (`720` and `780` for 12:00-13:00): both or neither, inside the
+working hours, and not all of them. A change replaces the break, so leaving
+both out removes it.
+
+Time off takes `firstDay` and `lastDay`, clinic dates with both included, and
+an optional `reason` of up to 200 characters. It can last up to a year, cannot
+end in the past, and cannot overlap the doctor's other time off (`409`).
+Schedules list the time off that has not ended yet. Nothing can be booked on
+those days, and the reception calendar shows them as away and the break as
+such.
+
+### Clinic time zone
+
+Working hours, breaks, time off and bookings are times on the clinic's clock,
+in the time zone `Clinic:TimeZone` names (an IANA name, `Europe/Sofia` by
+default in `appsettings.json`). The API checks bookings in that zone, and the
+frontend shows and enters every date and time in it, whatever zone a desk
+computer is set to. It learns the zone at sign-in. The API does not start
+without a zone it knows.
 
 ### Audit log
 
@@ -750,9 +820,9 @@ entry.
 
 ### Changes that affect future bookings
 
-Changing a schedule's hours, slot length or working days, deactivating a doctor
-or a department, or taking the Doctor role away can leave future bookings at
-times the doctor no longer works. Such a change is not saved. The response is
+Changing a schedule's hours, slot length, working days or break, adding time
+off, deactivating a doctor or a department, or taking the Doctor role away can
+leave future bookings at times the doctor no longer works. Such a change is not saved. The response is
 `409` with `affectedAppointmentCount` and `affectedAppointments`: the first 100
 of those bookings, soonest first, each with `appointmentId`, `appointmentTime`,
 `doctorName` and `patientInitials`. Either move the bookings and try again, or
@@ -956,7 +1026,7 @@ VITE_API_URL=http://localhost:5272/api npm run build
 Full Docker support:
 
 * Multi-stage Dockerfile for ASP.NET Core backend (Alpine, with `tzdata` for
-  the time zone names schedule changes use)
+  the clinic's time zone)
 * Dockerfile for React + Vite frontend (served via Nginx)
 * Docker Compose for local development
 
