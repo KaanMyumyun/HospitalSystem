@@ -2,5 +2,5 @@ namespace HospitalSystem.Interfaces.User;
 
 public interface ICreateDoctorService
 {
-    Task<CreateDoctorResultDto> CreateDoctorAsync(CreateDoctorDto dto);
+    Task<CreateDoctorResultDto> CreateDoctorAsync(CreateDoctorDto dto, CancellationToken cancellationToken = default);
 }

@@ -17,7 +17,8 @@ public class PatientRecordService(
     private bool CanRead() =>
         currentUser.IsDesk() || currentUser.IsInRole(UserRole.DemoFrontDesk);
 
-    public async Task<ServiceResult<PagedResult<PatientSummaryDto>>> ListPatientsAsync(PatientQueryDto query)
+    public async Task<ServiceResult<PagedResult<PatientSummaryDto>>> ListPatientsAsync(
+        PatientQueryDto query, CancellationToken cancellationToken = default)
     {
         if (!CanRead())
             return ServiceResult<PagedResult<PatientSummaryDto>>.Forbidden("Not allowed to list patients");
@@ -59,13 +60,13 @@ public class PatientRecordService(
                 // one round trip.
                 TotalCount = patients.Count()
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         // An empty page carries no total. On page 1 there is nothing to
         // count; a later page is past the last match and needs its own count.
         var totalCount = rows.Count > 0 ? rows[0].TotalCount
             : query.Page == 1 ? 0
-            : await patients.CountAsync();
+            : await patients.CountAsync(cancellationToken);
 
         return ServiceResult<PagedResult<PatientSummaryDto>>.Success(new PagedResult<PatientSummaryDto>
         {
@@ -76,7 +77,8 @@ public class PatientRecordService(
         });
     }
 
-    public async Task<ServiceResult<PatientDetailsDto>> GetPatientAsync(int patientId)
+    public async Task<ServiceResult<PatientDetailsDto>> GetPatientAsync(
+        int patientId, CancellationToken cancellationToken = default)
     {
         if (!CanRead())
             return ServiceResult<PatientDetailsDto>.Forbidden("Not allowed to view patients");
@@ -105,14 +107,15 @@ public class PatientRecordService(
                     })
                     .ToList()
             })
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
 
         return patient is null
             ? ServiceResult<PatientDetailsDto>.NotFound("Patient not found")
             : ServiceResult<PatientDetailsDto>.Success(patient);
     }
 
-    public async Task<PatientActionResultDto> UpdatePatientAsync(UpdatePatientDto dto)
+    public async Task<PatientActionResultDto> UpdatePatientAsync(
+        UpdatePatientDto dto, CancellationToken cancellationToken = default)
     {
         if (!currentUser.IsDesk())
             return PatientActionResultDto.Forbidden("You are not allowed to change patient details");
@@ -131,7 +134,7 @@ public class PatientRecordService(
         if (dateOfBirth > DateOnly.FromDateTime(DateTime.UtcNow))
             return PatientActionResultDto.Fail("Date of birth cannot be in the future");
 
-        var patient = await context.Patients.FindAsync(dto.PatientId);
+        var patient = await context.Patients.FindAsync([dto.PatientId], cancellationToken);
         if (patient is null)
             return PatientActionResultDto.NotFound("Patient not found");
 
@@ -150,8 +153,13 @@ public class PatientRecordService(
         patient.Name = name;
         patient.PhoneNumber = phoneNumber;
         patient.DateOfBirth = dateOfBirth;
-        await auditLog.LogAsync("UpdatePatient", "Patient", patient.Id, $"Patient {patient.Id}: changed {string.Join(", ", changes)}");
-        await context.SaveChangesAsync();
+        await auditLog.LogAsync(
+            "UpdatePatient",
+            "Patient",
+            patient.Id,
+            $"Patient {patient.Id}: changed {string.Join(", ", changes)}",
+            cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
 
         return PatientActionResultDto.Success();
     }

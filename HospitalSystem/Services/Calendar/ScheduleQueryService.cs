@@ -8,7 +8,7 @@ public class ScheduleQueryService(
     ApplicationDbContext context,
     ICurrentUserService currentUser) : IScheduleQueryService
 {
-    public async Task<ServiceResult<List<ViewSchedule>>> ViewScheduleAsync()
+    public async Task<ServiceResult<List<ViewSchedule>>> ViewScheduleAsync(CancellationToken cancellationToken = default)
     {
         if (!currentUser.CanReadReferenceData())
             return ServiceResult<List<ViewSchedule>>.Forbidden("Not allowed to list schedules");
@@ -24,7 +24,7 @@ public class ScheduleQueryService(
                 SlotDurationMin = u.SlotDurationMin,
                 WorkingDays = u.WorkingDays
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return ServiceResult<List<ViewSchedule>>.Success(schedule);
     }

@@ -1,4 +1,5 @@
 using HospitalSystem.Interfaces;
+using HospitalSystem.Services;
 using HospitalSystem.Services.Appointments;
 using Microsoft.EntityFrameworkCore;
 using Moq;
@@ -18,7 +19,7 @@ public class AppointmentStatusServiceTests : AppointmentTestBase
     }
 
     private static AppointmentStatusService CreateService(ApplicationDbContext db, ICurrentUserService user) =>
-        new(db, user, new TestAuditLogService(db));
+        new(db, user, new AuditLogService(db, user));
 
     private static ChangeAppointmentStatusDto Mark(int appointmentId, AppointmentStatus status) =>
         new() { AppointmentId = appointmentId, Status = status };

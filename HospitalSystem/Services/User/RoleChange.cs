@@ -9,7 +9,8 @@ internal static class RoleChange
         ApplicationDbContext context,
         ICurrentUserService currentUser,
         UserEntity user,
-        UserRole newRole)
+        UserRole newRole,
+        CancellationToken cancellationToken = default)
     {
         if (!Enum.IsDefined(typeof(UserRole), newRole) ||
             newRole is UserRole.Pending or UserRole.DemoAdmin or UserRole.DemoFrontDesk)
@@ -26,7 +27,7 @@ internal static class RoleChange
 
         if (user.Role == UserRole.Admin && newRole != UserRole.Admin)
         {
-            var hasOtherAdmin = await context.Users.AnyAsync(u => u.Role == UserRole.Admin && u.Id != user.Id);
+            var hasOtherAdmin = await context.Users.AnyAsync(u => u.Role == UserRole.Admin && u.Id != user.Id, cancellationToken);
             if (!hasOtherAdmin)
                 return "Cannot demote the last remaining admin";
         }

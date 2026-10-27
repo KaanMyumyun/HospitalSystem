@@ -24,11 +24,13 @@ public sealed class SignInWarmup(
             var services = scope.ServiceProvider;
 
             // Does nothing unless demo sign-in is enabled.
-            await services.GetRequiredService<ILoginService>().DemoLoginAsync(UserRole.DemoFrontDesk);
-            await SecurityStampClaims.CurrentStampAsync(services.GetRequiredService<ApplicationDbContext>(), 0);
+            await services.GetRequiredService<ILoginService>().DemoLoginAsync(UserRole.DemoFrontDesk, cancellationToken);
+            await SecurityStampClaims.CurrentStampAsync(
+                services.GetRequiredService<ApplicationDbContext>(), 0, cancellationToken);
 
             // A token for no real user, thrown away; it would fail the stamp check anyway.
-            LoginService.GenerateToken(new UserEntity { Role = UserRole.Pending, SecurityStamp = "warm-up" }, _jwtSettings);
+            LoginService.GenerateToken(
+                new UserEntity { Name = "warm-up", Role = UserRole.Pending, SecurityStamp = "warm-up" }, _jwtSettings);
         }
         catch (Exception exception)
         {

@@ -1,3 +1,4 @@
+using HospitalSystem.Services;
 using HospitalSystem.Services.Appointments;
 using Microsoft.EntityFrameworkCore;
 using Moq;
@@ -10,8 +11,8 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
 {
     private AppointmentCreationService CreateService(ApplicationDbContext db, bool isFrontDesk = true, string? userId = "5")
     {
-        var patientService = new PatientService(db);
-        return new AppointmentCreationService(db, CreateCurrentUser(isFrontDesk, userId: userId), patientService, new TestAuditLogService(db), CreateClock());
+        var desk = CreateCurrentUser(isFrontDesk, userId: userId);
+        return new AppointmentCreationService(db, desk, new PatientService(db), new AuditLogService(db, desk), CreateClock());
     }
 
     [Fact]
@@ -50,7 +51,9 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.Equal(5, appointment.CreatedByTheFrontDeskId);
         Assert.Null(appointment.CancelledAt);
         Assert.Equal(Now.UtcDateTime, appointment.CreatedAt);
-        Assert.Contains(db.AuditLogs, a => a.Action == "CreateAppointment" && a.EntityId == appointment.Id);
+        var entry = Assert.Single(db.AuditLogs, a => a.Action == "CreateAppointment" && a.EntityId == appointment.Id);
+        Assert.Equal(5, entry.ActorUserId);
+        Assert.Equal("Front Desk Admin", entry.ActorName);
     }
 
     [Fact]
@@ -347,14 +350,15 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.Equal("Date of birth cannot be after the appointment date", result.Error);
     }
 
+    // Bookings start on the doctor's slots, every 15 minutes from 08:00 here,
+    // on the minute, so two bookings for one slot always have the same time.
     [Theory]
-    [InlineData(9, 46)]
-    [InlineData(9, 50)]
-    [InlineData(9, 59)]
-    [InlineData(10, 1)]
-    [InlineData(10, 5)]
-    [InlineData(10, 14)]
-    public async Task CreateAppointmentAsync_PartiallyOverlappingTime_Fails(int hour, int minute)
+    [InlineData(9, 46, 0)]
+    [InlineData(9, 59, 0)]
+    [InlineData(10, 1, 0)]
+    [InlineData(10, 14, 0)]
+    [InlineData(11, 0, 30)]
+    public async Task CreateAppointmentAsync_OffTheSlotGrid_Fails(int hour, int minute, int second)
     {
         using var db = CreateDbContext();
         await SeedStandardDataAsync(db);
@@ -363,18 +367,17 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         var dto = new CreateAppointmentDto
         {
             DoctorId = 1,
-            PatientName = "Overlapping Patient",
-            PhoneNumber = $"555-{hour:D2}{minute:D2}",
+            PatientName = "Off Grid Patient",
+            PhoneNumber = "555-0101",
             DateOfBirth = new DateOnly(1990, 1, 1),
-            AppointmentTime = new DateTime(2026, 1, 1, hour, minute, 0, DateTimeKind.Utc)
+            AppointmentTime = new DateTime(2026, 1, 1, hour, minute, second, DateTimeKind.Utc)
         };
 
         var result = await service.CreateAppointmentAsync(dto);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal("Doctor already booked for that time slot", result.Error);
-        Assert.True(result.IsConflict);
-        Assert.False(await db.Appointments.AnyAsync(a => a.TimeOfAppointment == dto.AppointmentTime));
+        Assert.Equal(FailureKind.Invalid, result.Failure);
+        Assert.Equal("Appointment time must be the start of one of the doctor's 15-minute slots", result.Error);
+        Assert.Equal(3, await db.Appointments.CountAsync());
     }
 
     [Theory]
@@ -421,25 +424,58 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.True(result.IsSuccess);
     }
 
+    // A booking made before times had to start on a slot can sit between two
+    // slots, here at 10:05 on 2026-01-02. A new booking lasts one of the
+    // doctor's slots, however long, and may not overlap it.
     [Theory]
-    [InlineData(30, 9, 31)]
-    [InlineData(30, 9, 45)]
-    [InlineData(30, 10, 15)]
-    [InlineData(30, 10, 29)]
-    [InlineData(60, 9, 30)]
-    [InlineData(60, 10, 45)]
+    [InlineData(15, 10, 0)]
+    [InlineData(15, 10, 15)]
+    [InlineData(30, 10, 0)]
+    [InlineData(30, 10, 30)]
+    [InlineData(60, 10, 0)]
+    [InlineData(60, 11, 0)]
     public async Task CreateAppointmentAsync_WithinDoctorsSlotLengthOfBooking_Fails(int slotMinutes, int hour, int minute)
     {
         using var db = CreateDbContext();
-        await SeedStandardDataAsync(db);
-        (await db.Calendars.FindAsync(1))!.SlotDurationMin = slotMinutes;
-        await db.SaveChangesAsync();
+        await SeedOffGridBookingAsync(db, slotMinutes);
+        var service = CreateService(db);
+        var dto = NewPatientAt(new DateTime(2026, 1, 2, hour, minute, 0, DateTimeKind.Utc));
+
+        var result = await service.CreateAppointmentAsync(dto);
+
+        Assert.True(result.IsConflict);
+        Assert.Equal("Doctor already booked for that time slot", result.Error);
+        Assert.False(await db.Appointments.AnyAsync(a => a.TimeOfAppointment == dto.AppointmentTime));
+    }
+
+    [Theory]
+    [InlineData(15, 9, 45)]
+    [InlineData(15, 10, 30)]
+    [InlineData(30, 9, 30)]
+    [InlineData(30, 11, 0)]
+    [InlineData(60, 9, 0)]
+    [InlineData(60, 12, 0)]
+    public async Task CreateAppointmentAsync_ASlotClearOfABookingOffTheGrid_Succeeds(int slotMinutes, int hour, int minute)
+    {
+        using var db = CreateDbContext();
+        await SeedOffGridBookingAsync(db, slotMinutes);
         var service = CreateService(db);
 
-        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 1, hour, minute, 0, DateTimeKind.Utc)));
+        var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 2, hour, minute, 0, DateTimeKind.Utc)));
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal("Doctor already booked for that time slot", result.Error);
+        Assert.True(result.IsSuccess, result.Error);
+    }
+
+    private async Task SeedOffGridBookingAsync(ApplicationDbContext db, int slotMinutes)
+    {
+        await SeedStandardDataAsync(db);
+        (await db.Calendars.FindAsync(1))!.SlotDurationMin = slotMinutes;
+        db.Appointments.Add(new AppointmentEntity
+        {
+            Id = 4, Status = AppointmentStatus.Scheduled, DoctorId = 1, PatientId = 1, CreatedByTheFrontDeskId = 5,
+            TimeOfAppointment = new DateTime(2026, 1, 2, 10, 5, 0, DateTimeKind.Utc), CreatedAt = Now.UtcDateTime
+        });
+        await db.SaveChangesAsync();
     }
 
     [Fact]

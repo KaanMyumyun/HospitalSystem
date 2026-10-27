@@ -1,3 +1,4 @@
+using HospitalSystem.Services;
 using HospitalSystem.Services.Appointments;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,8 +9,11 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
 {
     private static readonly DateOnly PatientOneBirthDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-30));
 
-    private AppointmentCreationService CreateService(ApplicationDbContext db) =>
-        new(db, CreateCurrentUser(), new PatientService(db), new TestAuditLogService(db), CreateClock());
+    private AppointmentCreationService CreateService(ApplicationDbContext db)
+    {
+        var desk = CreateCurrentUser();
+        return new(db, desk, new PatientService(db), new AuditLogService(db, desk), CreateClock());
+    }
 
     private static CreateAppointmentDto Booking(string name, string phoneNumber, DateOnly dateOfBirth) => new()
     {

@@ -7,7 +7,8 @@ public class PatientService(ApplicationDbContext context) : IPatientService
 {
     // Booking looks for the patient in its own query and calls this only when
     // a new patient is to be registered.
-    public async Task<int> CreatePatientAsync(string name, string phoneNumber, DateOnly dateOfBirth)
+    public async Task<int> CreatePatientAsync(
+        string name, string phoneNumber, DateOnly dateOfBirth, CancellationToken cancellationToken = default)
     {
         var patient = new PatientEntity
         {
@@ -17,7 +18,7 @@ public class PatientService(ApplicationDbContext context) : IPatientService
         };
 
         context.Patients.Add(patient);
-        await context.SaveChangesAsync();
+        await context.SaveChangesAsync(cancellationToken);
 
         return patient.Id;
     }

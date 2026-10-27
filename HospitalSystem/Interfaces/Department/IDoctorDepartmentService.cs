@@ -2,5 +2,6 @@ namespace HospitalSystem.Interfaces.Department;
 
 public interface IDoctorDepartmentService
 {
-    Task<DepartmentActionResultDto> ChangeDoctorDepartmentAsync(ChangeDoctorDepartmentDto dto);
+    Task<DepartmentActionResultDto> ChangeDoctorDepartmentAsync(
+        ChangeDoctorDepartmentDto dto, CancellationToken cancellationToken = default);
 }

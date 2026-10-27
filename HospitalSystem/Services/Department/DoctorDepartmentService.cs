@@ -9,7 +9,8 @@ public class DoctorDepartmentService(
     ICurrentUserService currentUser,
     IAuditLogService auditLog) : IDoctorDepartmentService
 {
-    public async Task<DepartmentActionResultDto> ChangeDoctorDepartmentAsync(ChangeDoctorDepartmentDto dto)
+    public async Task<DepartmentActionResultDto> ChangeDoctorDepartmentAsync(
+        ChangeDoctorDepartmentDto dto, CancellationToken cancellationToken = default)
     {
         if (currentUser.RequireAdmin<DepartmentActionResultDto>("change a doctor's department") is { } refusal)
             return refusal;
@@ -25,7 +26,7 @@ public class DoctorDepartmentService(
                     .Select(x => (bool?)x.IsActive)
                     .FirstOrDefault()
             })
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
         if (found == null)
             return DepartmentActionResultDto.NotFound("Doctor not found");
 
@@ -48,8 +49,9 @@ public class DoctorDepartmentService(
             "ChangeDoctorDepartment",
             "Doctor",
             doctor.Id,
-            $"Doctor {doctor.Id} moved from department {oldDepartmentId} to {dto.DepartmentId}");
-        await context.SaveChangesAsync();
+            $"Doctor {doctor.Id} moved from department {oldDepartmentId} to {dto.DepartmentId}",
+            cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
 
         return DepartmentActionResultDto.Success();
     }

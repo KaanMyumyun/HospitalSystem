@@ -11,7 +11,7 @@ public class CreateDoctorService(
     IAuditLogService auditLog,
     SecurityStampCache stamps) : ICreateDoctorService
 {
-    public async Task<CreateDoctorResultDto> CreateDoctorAsync(CreateDoctorDto dto)
+    public async Task<CreateDoctorResultDto> CreateDoctorAsync(CreateDoctorDto dto, CancellationToken cancellationToken = default)
     {
         if (currentUser.RequireAdmin<CreateDoctorResultDto>("create a doctor") is { } refusal)
             return refusal;
@@ -29,7 +29,7 @@ public class CreateDoctorService(
                     .Select(d => (bool?)d.IsActive)
                     .FirstOrDefault()
             })
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
         if (found == null)
             return CreateDoctorResultDto.NotFound("User not found");
 
@@ -43,11 +43,11 @@ public class CreateDoctorService(
         if (!departmentIsActive)
             return CreateDoctorResultDto.Fail("Department is not active");
 
-        await using var transaction = await context.Database.BeginTransactionAsync();
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         if (user.Role != UserRole.Doctor)
         {
-            var roleError = await RoleChange.ApplyAsync(context, currentUser, user, UserRole.Doctor);
+            var roleError = await RoleChange.ApplyAsync(context, currentUser, user, UserRole.Doctor, cancellationToken);
             if (roleError is not null)
                 return CreateDoctorResultDto.Fail(roleError);
         }
@@ -70,11 +70,16 @@ public class CreateDoctorService(
             doctor.IsActive = true;
         }
 
-        await context.SaveChangesAsync();
+        await context.SaveChangesAsync(cancellationToken);
 
-        await auditLog.LogAsync("CreateDoctor", "Doctor", doctor.Id, $"User {user.Name} made a doctor in department {dto.DepartmentId}");
-        await context.SaveChangesAsync();
-        await transaction.CommitAsync();
+        await auditLog.LogAsync(
+            "CreateDoctor",
+            "Doctor",
+            doctor.Id,
+            $"User {user.Name} made a doctor in department {dto.DepartmentId}",
+            cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         stamps.Forget(user.Id);
 
         return CreateDoctorResultDto.Success();

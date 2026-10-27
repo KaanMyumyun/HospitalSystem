@@ -11,7 +11,8 @@ public class AppointmentStatusService(
     ICurrentUserService currentUser,
     IAuditLogService auditLog) : IAppointmentStatusService
 {
-    public async Task<AppointmentStatusResultDto> ChangeStatusAsync(ChangeAppointmentStatusDto dto)
+    public async Task<AppointmentStatusResultDto> ChangeStatusAsync(
+        ChangeAppointmentStatusDto dto, CancellationToken cancellationToken = default)
     {
         var isDesk = currentUser.IsDesk();
         if (!isDesk && !currentUser.IsInRole(UserRole.Doctor))
@@ -25,7 +26,7 @@ public class AppointmentStatusService(
 
         var appointment = await context.Appointments
             .Include(a => a.Doctor)
-            .SingleOrDefaultAsync(a => a.Id == dto.AppointmentId);
+            .SingleOrDefaultAsync(a => a.Id == dto.AppointmentId, cancellationToken);
         if (appointment == null)
             return AppointmentStatusResultDto.NotFound("Appointment not found");
 
@@ -47,8 +48,9 @@ public class AppointmentStatusService(
             "ChangeAppointmentStatus",
             "Appointment",
             appointment.Id,
-            $"Appointment {appointment.Id} marked {Describe(status)} (was {Describe(previous)})");
-        await context.SaveChangesAsync();
+            $"Appointment {appointment.Id} marked {Describe(status)} (was {Describe(previous)})",
+            cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
 
         return AppointmentStatusResultDto.Success();
     }

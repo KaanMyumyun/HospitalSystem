@@ -36,7 +36,7 @@ public abstract class AppointmentTestBase
 
     protected async Task SeedStandardDataAsync(ApplicationDbContext db, bool isDoctorActive = true)
     {
-        var department = new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true };
+        var department = new DepartmentEntity { Id = 1, Name = "Cardiology", IsActive = true };
 
         var userDoctor = new UserEntity { Id = 1, Name = "Dr. Test", PasswordHash = "dummy_hash", Role = UserRole.Doctor };
         var userFrontDesk = new UserEntity { Id = 5, Name = "Front Desk Admin", PasswordHash = "dummy_hash", Role = UserRole.FrontDesk };

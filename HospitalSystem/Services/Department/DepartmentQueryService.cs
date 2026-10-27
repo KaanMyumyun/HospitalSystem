@@ -6,7 +6,7 @@ namespace HospitalSystem.Services.Department;
 
 public class DepartmentQueryService(ApplicationDbContext context, ICurrentUserService currentUser) : IDepartmentQueryService
 {
-    public async Task<ServiceResult<List<ViewDepartmentDto>>> ListDepartmentsAsync()
+    public async Task<ServiceResult<List<ViewDepartmentDto>>> ListDepartmentsAsync(CancellationToken cancellationToken = default)
     {
         if (!currentUser.CanReadReferenceData())
             return ServiceResult<List<ViewDepartmentDto>>.Forbidden("Not allowed to list departments");
@@ -15,10 +15,10 @@ public class DepartmentQueryService(ApplicationDbContext context, ICurrentUserSe
             .Select(d => new ViewDepartmentDto
             {
                 Id = d.Id,
-                Name = d.Department,
+                Name = d.Name,
                 IsActive = d.IsActive
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return ServiceResult<List<ViewDepartmentDto>>.Success(departments);
     }

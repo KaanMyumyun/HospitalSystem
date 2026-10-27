@@ -9,13 +9,16 @@ namespace HospitalSystem.Tests;
 public class CreateDoctorServiceTests : UserTestBase
 {
     private CreateDoctorService CreateService(ApplicationDbContext db, bool isAdmin = true, SecurityStampCache? stamps = null)
-        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db), stamps ?? CreateStampCache());
+    {
+        var admin = CreateCurrentUser(isAdmin);
+        return new(db, admin, new AuditLogService(db, admin), stamps ?? CreateStampCache());
+    }
 
     [Fact]
     public async Task CreateDoctorAsync_Admin_Succeeds()
     {
         var db = CreateDbContext();
-        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true });
+        db.Departments.Add(new DepartmentEntity { Id = 1, Name = "Cardiology", IsActive = true });
         db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.Pending });
         await db.SaveChangesAsync();
         var service = CreateService(db);
@@ -75,7 +78,7 @@ public class CreateDoctorServiceTests : UserTestBase
     {
         var db = CreateDbContext();
         await SeedDoctorAsync(db, isDoctorActive: false, userRole: UserRole.Doctor);
-        db.Departments.Add(new DepartmentEntity { Id = 2, Department = "Neurology", IsActive = true });
+        db.Departments.Add(new DepartmentEntity { Id = 2, Name = "Neurology", IsActive = true });
         await db.SaveChangesAsync();
         var service = CreateService(db);
 
@@ -95,7 +98,7 @@ public class CreateDoctorServiceTests : UserTestBase
     public async Task CreateDoctorAsync_UserWithAnotherRole_Fails(UserRole role)
     {
         var db = CreateDbContext();
-        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true });
+        db.Departments.Add(new DepartmentEntity { Id = 1, Name = "Cardiology", IsActive = true });
         db.Users.Add(new UserEntity { Id = 1, Name = "Someone", PasswordHash = "hashed", Role = role });
         await db.SaveChangesAsync();
         var service = CreateService(db);
@@ -112,7 +115,7 @@ public class CreateDoctorServiceTests : UserTestBase
     public async Task CreateDoctorAsync_InactiveDepartment_Fails()
     {
         var db = CreateDbContext();
-        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = false });
+        db.Departments.Add(new DepartmentEntity { Id = 1, Name = "Cardiology", IsActive = false });
         db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.Pending });
         await db.SaveChangesAsync();
         var service = CreateService(db);
@@ -128,7 +131,7 @@ public class CreateDoctorServiceTests : UserTestBase
     public async Task CreateDoctorAsync_PendingUser_BumpsSecurityStamp()
     {
         var db = CreateDbContext();
-        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true });
+        db.Departments.Add(new DepartmentEntity { Id = 1, Name = "Cardiology", IsActive = true });
         db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.Pending });
         await db.SaveChangesAsync();
         var originalStamp = (await db.Users.FindAsync(1))!.SecurityStamp;
@@ -144,7 +147,7 @@ public class CreateDoctorServiceTests : UserTestBase
     public async Task CreateDoctorAsync_PendingUser_ForgetsTheCachedStamp()
     {
         var db = CreateDbContext();
-        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true });
+        db.Departments.Add(new DepartmentEntity { Id = 1, Name = "Cardiology", IsActive = true });
         db.Users.Add(new UserEntity { Id = 1, Name = "Dr Test", PasswordHash = "hashed", Role = UserRole.Pending });
         await db.SaveChangesAsync();
         var stamps = CreateStampCache();

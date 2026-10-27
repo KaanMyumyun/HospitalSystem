@@ -1,4 +1,5 @@
 using HospitalSystem.Interfaces;
+using HospitalSystem.Services;
 using HospitalSystem.Services.Auth;
 using HospitalSystem.Services.Calendar;
 using HospitalSystem.Services.Department;
@@ -36,7 +37,7 @@ public class AffectedBookingsTests
     // Friday, with three future bookings, one past one and one cancelled.
     private static async Task SeedAsync(ApplicationDbContext db)
     {
-        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Cardiology", IsActive = true });
+        db.Departments.Add(new DepartmentEntity { Id = 1, Name = "Cardiology", IsActive = true });
         db.Users.AddRange(
             new UserEntity { Id = 1, Name = "drhouse", PasswordHash = "x", Role = UserRole.Doctor },
             new UserEntity { Id = 5, Name = "desk", PasswordHash = "x", Role = UserRole.FrontDesk },
@@ -74,8 +75,11 @@ public class AffectedBookingsTests
     private static ChangeScheduleDto Hours(int start, int end, int slot = 30, string timeZone = "Europe/Sofia") =>
         new() { ScheduleId = 1, StartHour = start, EndHour = end, SlotDurationMin = slot, TimeZone = timeZone };
 
-    private static ScheduleModificationService ScheduleService(ApplicationDbContext db) =>
-        new(db, Admin(), new TestAuditLogService(db));
+    private static ScheduleModificationService ScheduleService(ApplicationDbContext db)
+    {
+        var admin = Admin();
+        return new(db, admin, new AuditLogService(db, admin));
+    }
 
     private static async Task<AppointmentStatus> StatusOf(ApplicationDbContext db, int id) =>
         (await db.Appointments.AsNoTracking().SingleAsync(a => a.Id == id)).Status;
@@ -181,7 +185,8 @@ public class AffectedBookingsTests
     {
         using var db = CreateDbContext();
         await SeedAsync(db);
-        var service = new DoctorStatusService(db, Admin(), new TestAuditLogService(db), new SecurityStampCache(new MemoryCache(new MemoryCacheOptions())));
+        var admin = Admin();
+        var service = new DoctorStatusService(db, admin, new AuditLogService(db, admin), new SecurityStampCache(new MemoryCache(new MemoryCacheOptions())));
 
         var refused = await service.ChangeDoctorsStatusAsync(new ChangeDoctorStatusDto { DoctorId = 1, IsActive = false });
         var done = await service.ChangeDoctorsStatusAsync(new ChangeDoctorStatusDto
@@ -202,7 +207,8 @@ public class AffectedBookingsTests
     {
         using var db = CreateDbContext();
         await SeedAsync(db);
-        var service = new DepartmentStatusService(db, Admin(), new TestAuditLogService(db));
+        var admin = Admin();
+        var service = new DepartmentStatusService(db, admin, new AuditLogService(db, admin));
 
         var refused = await service.ChangeDepartmentStatusAsync(new ChangeDepartmentStatusDto { DepartmentId = 1, IsActive = false });
         var done = await service.ChangeDepartmentStatusAsync(new ChangeDepartmentStatusDto
@@ -221,7 +227,8 @@ public class AffectedBookingsTests
     {
         using var db = CreateDbContext();
         await SeedAsync(db);
-        var service = new ChangeRoleService(db, Admin(), new TestAuditLogService(db), new SecurityStampCache(new MemoryCache(new MemoryCacheOptions())));
+        var admin = Admin();
+        var service = new ChangeRoleService(db, admin, new AuditLogService(db, admin), new SecurityStampCache(new MemoryCache(new MemoryCacheOptions())));
 
         var result = await service.ChangeRoleAsync(new ChangeRoleDto { UserId = 1, NewRole = UserRole.FrontDesk });
 

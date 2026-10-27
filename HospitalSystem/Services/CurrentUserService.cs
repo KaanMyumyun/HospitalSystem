@@ -8,6 +8,10 @@ public class CurrentUserService(IHttpContextAccessor httpContextAccessor) : ICur
     public string? UserId =>
         httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
+    // Null for a token issued before tokens carried the username.
+    public string? UserName =>
+        httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.Name)?.Value;
+
     // Role claims may come as ClaimTypes.Role or a plain "role", and a name
     // with spaces ("Front Desk") still matches its enum value.
     public bool IsInRole(UserRole role)

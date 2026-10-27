@@ -9,7 +9,8 @@ public class AuditLogQueryService(
     ApplicationDbContext context,
     ICurrentUserService currentUser) : IAuditLogQueryService
 {
-    public async Task<ServiceResult<PagedResult<AuditLogEntryDto>>> ListAsync(AuditLogQueryDto query)
+    public async Task<ServiceResult<PagedResult<AuditLogEntryDto>>> ListAsync(
+        AuditLogQueryDto query, CancellationToken cancellationToken = default)
     {
         if (!currentUser.IsAdmin())
             return ServiceResult<PagedResult<AuditLogEntryDto>>.Forbidden("Not allowed to read the audit log");
@@ -40,23 +41,27 @@ public class AuditLogQueryService(
                     EntityType = a.EntityType,
                     EntityId = a.EntityId,
                     Details = a.Details,
-                    // ActorName holds the acting user's id, or "Unknown".
-                    Actor = context.Users
-                        .Where(u => u.Id.ToString() == a.ActorName)
-                        .Select(u => u.Name)
-                        .FirstOrDefault() ?? a.ActorName
+                    // An entry names its actor. One that an older release
+                    // wrote during a deploy has no ActorUserId and holds the
+                    // actor's id in ActorName, which is resolved here.
+                    Actor = a.ActorUserId != null
+                        ? a.ActorName
+                        : context.Users
+                            .Where(u => u.Id.ToString() == a.ActorName)
+                            .Select(u => u.Name)
+                            .FirstOrDefault() ?? a.ActorName
                 },
                 // Counted by the same statement, so a page and its total cost
                 // one round trip.
                 TotalCount = entries.Count()
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         // An empty page carries no total. On page 1 there is nothing to
         // count; a later page is past the last match and needs its own count.
         var totalCount = rows.Count > 0 ? rows[0].TotalCount
             : query.Page == 1 ? 0
-            : await entries.CountAsync();
+            : await entries.CountAsync(cancellationToken);
 
         return ServiceResult<PagedResult<AuditLogEntryDto>>.Success(new PagedResult<AuditLogEntryDto>
         {

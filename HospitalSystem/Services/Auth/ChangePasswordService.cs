@@ -19,7 +19,8 @@ public class ChangePasswordService(
 {
     private readonly JwtSettings _jwtSettings = jwtOptions.Value;
 
-    public async Task<ChangePasswordResultDto> ChangeOwnPasswordAsync(ChangePasswordDto dto)
+    public async Task<ChangePasswordResultDto> ChangeOwnPasswordAsync(
+        ChangePasswordDto dto, CancellationToken cancellationToken = default)
     {
         if (currentUser.IsDemo())
             return ChangePasswordResultDto.Forbidden("Demo accounts have no password to change");
@@ -27,26 +28,27 @@ public class ChangePasswordService(
         if (!int.TryParse(currentUser.UserId, out var userId))
             return ChangePasswordResultDto.Forbidden("Sign in to change your password");
 
-        if (dto.NewPassword.Length < 8)
-            return ChangePasswordResultDto.Fail("Password must be at least 8 characters long");
+        if (AccountRules.PasswordError(dto.NewPassword) is { } passwordError)
+            return ChangePasswordResultDto.Fail(passwordError);
 
         if (dto.NewPassword == dto.CurrentPassword)
             return ChangePasswordResultDto.Fail("The new password must be different from the current one");
 
         await using var transaction = context.Database.IsNpgsql()
-            ? await context.Database.BeginTransactionAsync()
+            ? await context.Database.BeginTransactionAsync(cancellationToken)
             : null;
-        var result = await ChangeOwnPasswordWithLockedUserAsync(dto, userId);
+        var result = await ChangeOwnPasswordWithLockedUserAsync(dto, userId, cancellationToken);
         if (transaction is not null)
-            await transaction.CommitAsync();
+            await transaction.CommitAsync(cancellationToken);
         if (result.IsSuccess)
             stamps.Forget(userId);
         return result;
     }
 
-    private async Task<ChangePasswordResultDto> ChangeOwnPasswordWithLockedUserAsync(ChangePasswordDto dto, int userId)
+    private async Task<ChangePasswordResultDto> ChangeOwnPasswordWithLockedUserAsync(
+        ChangePasswordDto dto, int userId, CancellationToken cancellationToken)
     {
-        var user = await SignInLockout.FindByIdForUpdateAsync(context, userId);
+        var user = await SignInLockout.FindByIdForUpdateAsync(context, userId, cancellationToken);
         if (user is null)
             return ChangePasswordResultDto.NotFound("User not found");
 
@@ -58,19 +60,29 @@ public class ChangePasswordService(
 
         if (hasher.VerifyHashedPassword(user, user.PasswordHash, dto.CurrentPassword) == PasswordVerificationResult.Failed)
         {
-            await auditLog.LogAsync("ChangePasswordFailed", "User", user.Id, $"User {user.Name} gave a wrong current password");
+            await auditLog.LogAsync(
+                "ChangePasswordFailed",
+                "User",
+                user.Id,
+                $"User {user.Name} gave a wrong current password",
+                cancellationToken);
             var locked = SignInLockout.RecordFailure(user, now);
             if (locked)
-                await auditLog.LogAsync("SignInLocked", "User", user.Id, SignInLockout.LockedAuditDetails(user));
-            await context.SaveChangesAsync();
+                await auditLog.LogAsync(
+                    "SignInLocked",
+                    "User",
+                    user.Id,
+                    SignInLockout.LockedAuditDetails(user),
+                    cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
             return ChangePasswordResultDto.Fail(locked ? SignInLockout.LockedMessage(user, now) : "The current password is not correct");
         }
 
         SignInLockout.Clear(user);
         user.PasswordHash = hasher.HashPassword(user, dto.NewPassword);
         user.SecurityStamp = Guid.NewGuid().ToString();
-        await auditLog.LogAsync("ChangePassword", "User", user.Id, $"User {user.Name} changed their password");
-        await context.SaveChangesAsync();
+        await auditLog.LogAsync("ChangePassword", "User", user.Id, $"User {user.Name} changed their password", cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
 
         var result = ChangePasswordResultDto.Success();
         result.Token = LoginService.GenerateToken(user, _jwtSettings);

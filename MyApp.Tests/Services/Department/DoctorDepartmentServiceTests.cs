@@ -7,7 +7,10 @@ namespace HospitalSystem.Tests;
 public class DoctorDepartmentServiceTests : DepartmentTestBase
 {
     private DoctorDepartmentService CreateService(ApplicationDbContext db, bool isAdmin = true)
-        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db));
+    {
+        var admin = CreateCurrentUser(isAdmin);
+        return new(db, admin, new AuditLogService(db, admin));
+    }
 
     [Fact]
     public async Task ChangeDoctorDepartmentAsync_Admin_Succeeds()

@@ -1,5 +1,7 @@
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.Calendar;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace HospitalSystem.Services.Calendar;
 
@@ -8,7 +10,7 @@ public class ScheduleCreationService(
     ICurrentUserService currentUser,
     IAuditLogService auditLog) : IScheduleCreationService
 {
-    public async Task<CalendarActionResult> CreateScheduleAsync(CreateSchedule dto)
+    public async Task<CalendarActionResult> CreateScheduleAsync(CreateSchedule dto, CancellationToken cancellationToken = default)
     {
         if (currentUser.RequireAdmin<CalendarActionResult>("create a schedule") is { } refusal)
             return refusal;
@@ -19,33 +21,43 @@ public class ScheduleCreationService(
             dto.StartHour,
             dto.EndHour,
             dto.SlotDurationMin,
-            dto.WorkingDays);
+            dto.WorkingDays,
+            cancellationToken);
 
         if (validationError is not null)
             return validationError;
 
-        var dummyDate = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var start = dummyDate.AddHours(dto.StartHour);
-        var end = dummyDate.AddHours(dto.EndHour);
-
-        // Unlike ChangeScheduleAsync, no overlap check: ValidateAsync has already
-        // refused a doctor who has any schedule, so there is nothing to overlap.
-        await using var transaction = await context.Database.BeginTransactionAsync();
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         var calendar = new CalendarEntity
         {
             DoctorId = dto.DoctorId,
-            StartTime = start,
-            EndTime = end,
             SlotDurationMin = dto.SlotDurationMin,
             WorkingDays = ScheduleDays.Normalize(dto.WorkingDays ?? CalendarEntity.Weekdays)
         };
+        calendar.SetHours(dto.StartHour, dto.EndHour);
         context.Calendars.Add(calendar);
-        await context.SaveChangesAsync();
 
-        await auditLog.LogAsync("CreateSchedule", "Calendar", calendar.Id, $"Created schedule for doctor {dto.DoctorId}");
-        await context.SaveChangesAsync();
-        await transaction.CommitAsync();
+        // ValidateAsync refused a doctor who has a schedule; the unique index on
+        // Calendars.DoctorId refuses the second of two made at the same time.
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            context.Entry(calendar).State = EntityState.Detached;
+            return CalendarActionResult.Conflict(ScheduleValidation.AlreadyScheduled);
+        }
+
+        await auditLog.LogAsync(
+            "CreateSchedule",
+            "Calendar",
+            calendar.Id,
+            $"Created schedule for doctor {dto.DoctorId}",
+            cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return CalendarActionResult.Success();
     }

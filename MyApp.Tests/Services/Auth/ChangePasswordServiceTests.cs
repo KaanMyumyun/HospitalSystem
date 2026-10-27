@@ -1,4 +1,5 @@
 using HospitalSystem.Interfaces;
+using HospitalSystem.Services;
 using HospitalSystem.Services.Auth;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +16,7 @@ public class ChangePasswordServiceTests : AuthTestBase
         mock.Setup(x => x.IsInRole(It.IsAny<UserRole>())).Returns<UserRole>(r => r == role);
         mock.Setup(x => x.UserId).Returns(userId);
         return new ChangePasswordService(
-            db, mock.Object, new TestAuditLogService(db), new SecurityStampCache(new MemoryCache(new MemoryCacheOptions())), CreateJwtOptions(),
+            db, mock.Object, new AuditLogService(db, mock.Object), new SecurityStampCache(new MemoryCache(new MemoryCacheOptions())), CreateJwtOptions(),
             new PasswordHasher<UserEntity>(), clock ?? TimeProvider.System);
     }
 

@@ -12,39 +12,44 @@ public class AppointmentsController : ControllerBase
     [Authorize(Roles = "FrontDesk,DemoFrontDesk")]
     [HttpGet]
     public async Task<ActionResult<ServiceResult<List<ViewAppointmentDto>>>> ListAppointments(
-        [FromQuery] AppointmentQueryDto query, [FromServices] IAppointmentQueryService service)
-        => this.ToActionResult(await service.GetAppointmentsAsync(query));
+        [FromQuery] AppointmentQueryDto query, [FromServices] IAppointmentQueryService service,
+        CancellationToken cancellationToken)
+        => this.ToActionResult(await service.GetAppointmentsAsync(query, cancellationToken));
 
     [Authorize(Roles = "Doctor")]
     [HttpGet("mine")]
     public async Task<ActionResult<ServiceResult<List<ViewAppointmentDto>>>> MyAppointments(
-        [FromQuery] MyAppointmentsQueryDto query, [FromServices] IAppointmentQueryService service)
-        => this.ToActionResult(await service.GetMyAppointmentsAsync(query));
+        [FromQuery] MyAppointmentsQueryDto query, [FromServices] IAppointmentQueryService service,
+        CancellationToken cancellationToken)
+        => this.ToActionResult(await service.GetMyAppointmentsAsync(query, cancellationToken));
 
     [Authorize(Roles = "FrontDesk")]
     [HttpPost]
     public async Task<ActionResult<CreateAppointmentResultDto>> CreateAppointment(
-        [FromBody] CreateAppointmentDto dto, [FromServices] IAppointmentCreationService service)
-        => this.ToActionResult(await service.CreateAppointmentAsync(dto));
+        [FromBody] CreateAppointmentDto dto, [FromServices] IAppointmentCreationService service,
+        CancellationToken cancellationToken)
+        => this.ToActionResult(await service.CreateAppointmentAsync(dto, cancellationToken));
 
     // A cancelled appointment stays on record with its reason, so this is
     // not a DELETE.
     [Authorize(Roles = "FrontDesk")]
     [HttpPost("{appointmentId:int}/cancel")]
     public async Task<ActionResult<CancelAppointmentResultDto>> CancelAppointment(
-        int appointmentId, [FromBody] CancelAppointmentDto dto, [FromServices] IAppointmentCancellationService service)
+        int appointmentId, [FromBody] CancelAppointmentDto dto, [FromServices] IAppointmentCancellationService service,
+        CancellationToken cancellationToken)
     {
         dto.AppointmentId = appointmentId;
-        return this.ToActionResult(await service.CancelAppointmentAsync(dto));
+        return this.ToActionResult(await service.CancelAppointmentAsync(dto, cancellationToken));
     }
 
     // Completed or NoShow, once the appointment has started.
     [Authorize(Roles = "FrontDesk,Doctor")]
     [HttpPatch("{appointmentId:int}/status")]
     public async Task<ActionResult<AppointmentStatusResultDto>> ChangeAppointmentStatus(
-        int appointmentId, [FromBody] ChangeAppointmentStatusDto dto, [FromServices] IAppointmentStatusService service)
+        int appointmentId, [FromBody] ChangeAppointmentStatusDto dto, [FromServices] IAppointmentStatusService service,
+        CancellationToken cancellationToken)
     {
         dto.AppointmentId = appointmentId;
-        return this.ToActionResult(await service.ChangeStatusAsync(dto));
+        return this.ToActionResult(await service.ChangeStatusAsync(dto, cancellationToken));
     }
 }

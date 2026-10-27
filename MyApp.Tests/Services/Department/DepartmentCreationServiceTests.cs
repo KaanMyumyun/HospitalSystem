@@ -8,7 +8,10 @@ namespace HospitalSystem.Tests;
 public class DepartmentCreationServiceTests : DepartmentTestBase
 {
     private DepartmentCreationService CreateService(ApplicationDbContext db, bool isAdmin = true)
-        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db));
+    {
+        var admin = CreateCurrentUser(isAdmin);
+        return new(db, admin, new AuditLogService(db, admin));
+    }
 
     [Fact]
     public async Task CreateDepartmentAsync_Admin_Succeeds()
@@ -20,7 +23,7 @@ public class DepartmentCreationServiceTests : DepartmentTestBase
         var result = await service.CreateDepartmentAsync(new CreateDepartmentDto { Name = "DDD" });
 
         Assert.True(result.IsSuccess);
-        var department = await db.Departments.SingleAsync(d => d.Department == "DDD");
+        var department = await db.Departments.SingleAsync(d => d.Name == "DDD");
         Assert.Contains(db.AuditLogs, a => a.Action == "CreateDepartment" && a.EntityId == department.Id);
     }
 
@@ -59,10 +62,11 @@ public class DepartmentCreationServiceTests : DepartmentTestBase
         var createResult = await service.CreateDepartmentAsync(new CreateDepartmentDto { Name = "DDD" });
         Assert.True(createResult.IsSuccess);
 
-        var newDepartment = await db.Departments.SingleAsync(d => d.Department == "DDD");
+        var newDepartment = await db.Departments.SingleAsync(d => d.Name == "DDD");
         Assert.True(newDepartment.IsActive);
 
-        var assignmentService = new DoctorDepartmentService(db, CreateCurrentUser(), new TestAuditLogService(db));
+        var admin = CreateCurrentUser();
+        var assignmentService = new DoctorDepartmentService(db, admin, new AuditLogService(db, admin));
         var assignResult = await assignmentService.ChangeDoctorDepartmentAsync(
             new ChangeDoctorDepartmentDto { DoctorId = 1, DepartmentId = newDepartment.Id });
 
@@ -93,7 +97,7 @@ public class DepartmentCreationServiceTests : DepartmentTestBase
         var result = await service.CreateDepartmentAsync(new CreateDepartmentDto { Name = "  Neurology  " });
 
         Assert.True(result.IsSuccess);
-        Assert.Equal("Neurology", (await db.Departments.SingleAsync()).Department);
+        Assert.Equal("Neurology", (await db.Departments.SingleAsync()).Name);
     }
 
     [Fact]

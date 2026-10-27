@@ -17,31 +17,33 @@ internal static class SignInLockout
     // returns the earlier in-memory values even though the SELECT waited for
     // another transaction to finish. New materializations already have the
     // current values and need no second query.
-    public static async Task<UserEntity?> FindByNameForUpdateAsync(ApplicationDbContext context, string nameKey)
+    public static async Task<UserEntity?> FindByNameForUpdateAsync(
+        ApplicationDbContext context, string nameKey, CancellationToken cancellationToken = default)
     {
         if (!context.Database.IsNpgsql())
-            return await context.Users.SingleOrDefaultAsync(u => u.Name.ToLower() == nameKey);
+            return await context.Users.SingleOrDefaultAsync(u => u.Name.ToLower() == nameKey, cancellationToken);
 
         var trackedIds = context.ChangeTracker.Entries<UserEntity>().Select(e => e.Entity.Id).ToHashSet();
         var user = await context.Users
             .FromSqlInterpolated($"SELECT * FROM \"Users\" WHERE lower(\"Name\") = {nameKey} FOR UPDATE")
-            .SingleOrDefaultAsync();
+            .SingleOrDefaultAsync(cancellationToken);
         if (user is not null && trackedIds.Contains(user.Id))
-            await context.Entry(user).ReloadAsync();
+            await context.Entry(user).ReloadAsync(cancellationToken);
         return user;
     }
 
-    public static async Task<UserEntity?> FindByIdForUpdateAsync(ApplicationDbContext context, int id)
+    public static async Task<UserEntity?> FindByIdForUpdateAsync(
+        ApplicationDbContext context, int id, CancellationToken cancellationToken = default)
     {
         if (!context.Database.IsNpgsql())
-            return await context.Users.FindAsync(id);
+            return await context.Users.FindAsync([id], cancellationToken);
 
         var wasTracked = context.ChangeTracker.Entries<UserEntity>().Any(e => e.Entity.Id == id);
         var user = await context.Users
             .FromSqlInterpolated($"SELECT * FROM \"Users\" WHERE \"Id\" = {id} FOR UPDATE")
-            .SingleOrDefaultAsync();
+            .SingleOrDefaultAsync(cancellationToken);
         if (user is not null && wasTracked)
-            await context.Entry(user).ReloadAsync();
+            await context.Entry(user).ReloadAsync(cancellationToken);
         return user;
     }
 

@@ -12,7 +12,7 @@ public class ChangeRoleService(
     IAuditLogService auditLog,
     SecurityStampCache stamps) : IChangeRoleService
 {
-    public async Task<ChangeRoleResultDto> ChangeRoleAsync(ChangeRoleDto dto)
+    public async Task<ChangeRoleResultDto> ChangeRoleAsync(ChangeRoleDto dto, CancellationToken cancellationToken = default)
     {
         if (currentUser.RequireAdmin<ChangeRoleResultDto>("change a user's role") is { } refusal)
             return refusal;
@@ -20,7 +20,7 @@ public class ChangeRoleService(
         // With the doctor row, if the user has one: one query instead of two.
         var user = await context.Users
             .Include(u => u.Doctor)
-            .FirstOrDefaultAsync(u => u.Id == dto.UserId);
+            .FirstOrDefaultAsync(u => u.Id == dto.UserId, cancellationToken);
         if (user == null)
             return ChangeRoleResultDto.NotFound("User not found");
 
@@ -35,7 +35,7 @@ public class ChangeRoleService(
                 var departmentIsActive = await context.Departments
                     .Where(d => d.Id == departmentId)
                     .Select(d => (bool?)d.IsActive)
-                    .FirstOrDefaultAsync();
+                    .FirstOrDefaultAsync(cancellationToken);
                 if (departmentIsActive is null)
                     return ChangeRoleResultDto.NotFound("Department not found");
                 if (departmentIsActive == false)
@@ -48,16 +48,16 @@ public class ChangeRoleService(
         }
 
         var oldRole = user.Role;
-        var roleError = await RoleChange.ApplyAsync(context, currentUser, user, dto.NewRole);
+        var roleError = await RoleChange.ApplyAsync(context, currentUser, user, dto.NewRole, cancellationToken);
         if (roleError is not null)
             return ChangeRoleResultDto.Fail(roleError);
 
         // Taking the role away deactivates the doctor below.
         if (dto.NewRole != UserRole.Doctor && doctor is { IsActive: true })
         {
-            var stranded = await AffectedBookings.LoadFutureAsync(context, a => a.DoctorId == doctor.Id);
+            var stranded = await AffectedBookings.LoadFutureAsync(context, a => a.DoctorId == doctor.Id, cancellationToken);
             var bookingRefusal = await AffectedBookings.ResolveAsync<ChangeRoleResultDto>(
-                stranded, dto, auditLog, $"user {user.Name} is no longer a doctor");
+                stranded, dto, auditLog, $"user {user.Name} is no longer a doctor", cancellationToken);
             if (bookingRefusal is not null)
                 return bookingRefusal;
         }
@@ -85,8 +85,9 @@ public class ChangeRoleService(
             "ChangeUserRole",
             "User",
             user.Id,
-            $"User {user.Name} role changed from {oldRole} to {dto.NewRole}{department}");
-        await context.SaveChangesAsync();
+            $"User {user.Name} role changed from {oldRole} to {dto.NewRole}{department}",
+            cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
         stamps.Forget(user.Id);
         return ChangeRoleResultDto.Success();
     }

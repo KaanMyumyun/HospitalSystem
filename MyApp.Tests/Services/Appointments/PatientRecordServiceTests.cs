@@ -1,4 +1,5 @@
 using HospitalSystem.Interfaces;
+using HospitalSystem.Services;
 using HospitalSystem.Services.Appointments;
 using Microsoft.EntityFrameworkCore;
 using Moq;
@@ -9,8 +10,11 @@ namespace HospitalSystem.Tests;
 // Three (5550003); appointments 1-3 belong to patients 1-3.
 public class PatientRecordServiceTests : AppointmentTestBase
 {
-    private PatientRecordService CreateService(ApplicationDbContext db, bool isFrontDesk = true, bool isDemoFrontDesk = false) =>
-        new(db, CreateCurrentUser(isFrontDesk, isDemoFrontDesk), new TestAuditLogService(db));
+    private PatientRecordService CreateService(ApplicationDbContext db, bool isFrontDesk = true, bool isDemoFrontDesk = false)
+    {
+        var desk = CreateCurrentUser(isFrontDesk, isDemoFrontDesk);
+        return new(db, desk, new AuditLogService(db, desk));
+    }
 
     private static UpdatePatientDto Update(int patientId = 1, string name = "Patient One", string phone = "5550001", DateOnly? dateOfBirth = null) =>
         new() { PatientId = patientId, Name = name, PhoneNumber = phone, DateOfBirth = dateOfBirth ?? new DateOnly(1990, 1, 1) };

@@ -22,12 +22,12 @@ public class ScheduleCreationServiceTests
     {
         var currentUserMock = new Mock<ICurrentUserService>();
         currentUserMock.Setup(x => x.IsInRole(UserRole.Admin)).Returns(isAdmin);
-        return new ScheduleCreationService(db, currentUserMock.Object, new TestAuditLogService(db));
+        return new ScheduleCreationService(db, currentUserMock.Object, new AuditLogService(db, currentUserMock.Object));
     }
 
     private async Task SeedDoctorAsync(ApplicationDbContext db, bool doctorActive = true, bool departmentActive = true)
     {
-        db.Departments.Add(new DepartmentEntity { Id = 1, Department = "Pediatrics", IsActive = departmentActive });
+        db.Departments.Add(new DepartmentEntity { Id = 1, Name = "Pediatrics", IsActive = departmentActive });
         db.Users.Add(new UserEntity { Id = 1, Name = "Doctor", PasswordHash = "hashed", Role = UserRole.Doctor });
         db.Doctors.Add(new DoctorEntity { Id = 1, DepartmentId = 1, UserId = 1, IsActive = doctorActive });
         await db.SaveChangesAsync();

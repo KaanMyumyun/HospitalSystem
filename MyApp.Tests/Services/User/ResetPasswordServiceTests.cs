@@ -10,7 +10,10 @@ namespace HospitalSystem.Tests;
 public class ResetPasswordServiceTests : UserTestBase
 {
     private ResetPasswordService CreateService(ApplicationDbContext db, bool isAdmin = true, SecurityStampCache? stamps = null)
-        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db), stamps ?? CreateStampCache(), new PasswordHasher<UserEntity>());
+    {
+        var admin = CreateCurrentUser(isAdmin);
+        return new(db, admin, new AuditLogService(db, admin), stamps ?? CreateStampCache(), new PasswordHasher<UserEntity>());
+    }
 
     [Fact]
     public async Task ResetPasswordAsync_Admin_Succeeds()

@@ -2,5 +2,5 @@ namespace HospitalSystem.Interfaces.Auth;
 
 public interface IUserCreationService
 {
-    Task<CreateUserResultDto> CreateUserAsync(CreateUserDto dto);
+    Task<CreateUserResultDto> CreateUserAsync(CreateUserDto dto, CancellationToken cancellationToken = default);
 }

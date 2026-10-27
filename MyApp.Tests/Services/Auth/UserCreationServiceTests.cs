@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using HospitalSystem.Services;
 using HospitalSystem.Services.Auth;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -8,7 +9,10 @@ namespace HospitalSystem.Tests;
 public class UserCreationServiceTests : AuthTestBase
 {
     private UserCreationService CreateService(ApplicationDbContext db, bool isAdmin = true)
-        => new(db, CreateCurrentUser(isAdmin), new TestAuditLogService(db), new PasswordHasher<UserEntity>());
+    {
+        var admin = CreateCurrentUser(isAdmin);
+        return new(db, admin, new AuditLogService(db, admin), new PasswordHasher<UserEntity>());
+    }
 
     [Fact]
     public async Task CreateUserAsync_NotAdmin_Fails()

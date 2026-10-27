@@ -11,6 +11,9 @@ trim_trailing_whitespace = true
 
 [*.cs]
 indent_size = 4
+# A call that can take the method's cancellation token must be given it, so a
+# request the client abandons stops its database work. Warnings fail the build.
+dotnet_diagnostic.CA2016.severity = warning
 
 [*.conf]
 indent_size = 4

@@ -10,7 +10,8 @@ public class DepartmentStatusService(
     ICurrentUserService currentUser,
     IAuditLogService auditLog) : IDepartmentStatusService
 {
-    public async Task<DepartmentActionResultDto> ChangeDepartmentStatusAsync(ChangeDepartmentStatusDto dto)
+    public async Task<DepartmentActionResultDto> ChangeDepartmentStatusAsync(
+        ChangeDepartmentStatusDto dto, CancellationToken cancellationToken = default)
     {
         if (currentUser.RequireAdmin<DepartmentActionResultDto>("change department status") is { } refusal)
             return refusal;
@@ -18,15 +19,16 @@ public class DepartmentStatusService(
         if (dto.IsActive is not bool isActive)
             return DepartmentActionResultDto.Fail("Department status is required");
 
-        var department = await context.Departments.FirstOrDefaultAsync(d => d.Id == dto.DepartmentId);
+        var department = await context.Departments.FirstOrDefaultAsync(d => d.Id == dto.DepartmentId, cancellationToken);
         if (department == null)
             return DepartmentActionResultDto.NotFound("Department not found");
 
         if (department.IsActive && !isActive)
         {
-            var stranded = await AffectedBookings.LoadFutureAsync(context, a => a.Doctor.DepartmentId == department.Id);
+            var stranded = await AffectedBookings.LoadFutureAsync(
+                context, a => a.Doctor.DepartmentId == department.Id, cancellationToken);
             var bookingRefusal = await AffectedBookings.ResolveAsync<DepartmentActionResultDto>(
-                stranded, dto, auditLog, $"department {department.Department} deactivated");
+                stranded, dto, auditLog, $"department {department.Name} deactivated", cancellationToken);
             if (bookingRefusal is not null)
                 return bookingRefusal;
         }
@@ -36,8 +38,9 @@ public class DepartmentStatusService(
             "ChangeDepartmentStatus",
             "Department",
             department.Id,
-            $"Department {department.Department} set to {(isActive ? "active" : "inactive")}");
-        await context.SaveChangesAsync();
+            $"Department {department.Name} set to {(isActive ? "active" : "inactive")}",
+            cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
 
         return DepartmentActionResultDto.Success();
     }

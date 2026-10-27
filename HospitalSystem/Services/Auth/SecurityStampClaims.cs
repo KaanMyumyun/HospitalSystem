@@ -8,9 +8,10 @@ public static class SecurityStampClaims
 
     // The stamp a user's tokens must carry, or null if the user is gone. The
     // stamp cache and the startup warm-up share it so they run the same query.
-    public static Task<string?> CurrentStampAsync(ApplicationDbContext db, int userId) =>
+    public static Task<string?> CurrentStampAsync(
+        ApplicationDbContext db, int userId, CancellationToken cancellationToken = default) =>
         db.Users
             .Where(u => u.Id == userId)
             .Select(u => (string?)u.SecurityStamp)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(cancellationToken);
 }
