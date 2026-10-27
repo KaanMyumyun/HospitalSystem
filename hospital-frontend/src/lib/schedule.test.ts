@@ -149,6 +149,35 @@ describe('buildWeekSlots', () => {
     expect(grid[0]![0]!.appointment?.appointmentId).toBe(3)
   })
 
+  it("ignores another doctor's appointment at the same time", () => {
+    const farFutureWeekOffset = 520
+    const targetDay = weekDays(farFutureWeekOffset)[0]!
+    const appointmentTime = new Date(targetDay)
+    appointmentTime.setHours(9, 0, 0, 0)
+
+    const grid = buildWeekSlots(
+      oneHourSchedule,
+      42,
+      [appointmentAt(appointmentTime, { appointmentId: 4, doctorId: 7 })],
+      farFutureWeekOffset,
+    )
+
+    expect(grid[0]![0]!.status).toBe('available')
+  })
+
+  it('puts an appointment in the slot of the minute it starts in', () => {
+    const farFutureWeekOffset = 520
+    const targetDay = weekDays(farFutureWeekOffset)[1]!
+    const appointmentTime = new Date(targetDay)
+    appointmentTime.setHours(9, 0, 30, 0)
+
+    const grid = buildWeekSlots(oneHourSchedule, 42, [appointmentAt(appointmentTime, { appointmentId: 5 })], farFutureWeekOffset)
+
+    expect(grid[0]![1]!.status).toBe('booked')
+    expect(grid[0]![1]!.appointment?.appointmentId).toBe(5)
+    expect(grid[0]![0]!.status).toBe('available')
+  })
+
   it('keeps showing a cancellation in a past slot', () => {
     const farPastWeekOffset = -520
     const targetDay = weekDays(farPastWeekOffset)[0]!
