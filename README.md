@@ -247,7 +247,7 @@ The system is divided into two independent layers:
 │   ├── scripts/                    # generate-api-types.mjs (+ test)
 │   ├── src/
 │   │   ├── components/             # Shared UI (Sidebar, TopBar, dialogs, ui)
-│   │   ├── hooks/                  # Data loading (week, users, paged lists)
+│   │   ├── hooks/                  # Data loading, shared screen state, admin actions
 │   │   ├── screens/                # LoginScreen, dashboards, patients, NotFoundScreen
 │   │   ├── lib/                    # format, schedule, validation (+ tests)
 │   │   ├── App.tsx                 # Routing and session state
@@ -285,9 +285,9 @@ The system is divided into two independent layers:
 │   ├── Api/                        # Start the real app: OpenAPI contract, startup checks
 │   ├── Controllers/
 │   ├── Data/
+│   ├── Database/                   # PostgreSQL tests (HOSPITALSYSTEM_TEST_POSTGRES)
 │   ├── Services/
 │   ├── Dto/
-│   ├── TestAuditLogService.cs
 │   ├── GlobalUsings.cs
 │   └── MyApp.Tests.csproj
 │
@@ -418,7 +418,7 @@ longer needed. Rolling back an image never undoes a migration; this command only
 applies forward migrations. Recovery from a destructive change requires the
 separately tested restore procedure.
 
-Three migrations need attention on a database that already has data:
+These migrations need attention on a database that already has data:
 
 * `CaseInsensitiveUserNames` makes usernames unique regardless of case. If
   existing usernames differ only in case, it stops with PostgreSQL error
@@ -445,6 +445,33 @@ Three migrations need attention on a database that already has data:
   schedules. Change the days in the Schedules tab afterwards if a doctor
   works others.
 
+* `OneSchedulePerDoctor` lets a doctor have only one schedule. It stops with
+  `P0001` and changes nothing while a doctor has more than one. Delete all but
+  one for each such doctor, then run the migration again. Bookings belong to
+  the doctor, not the schedule, so none are lost:
+
+  ```sql
+  SELECT "DoctorId", string_agg("Id"::text, ', ') FROM "Calendars" GROUP BY "DoctorId" HAVING count(*) > 1;
+  ```
+
+* `RepairScheduleRows` moves every schedule's hours onto 2000-01-01, the date
+  new schedules use, keeping the times of day; changing a schedule used to
+  store it on the day of the change. Schedules from before slot lengths
+  existed have a slot length of 0, and get the 30-minute slots the reception
+  calendar already showed for them.
+
+* `LimitDepartmentNameLength` limits department names to 100 characters. It
+  stops while a longer name exists; shorten it, then run the migration again.
+  An older image still accepts a longer name and fails to save it once the
+  migration has run.
+
+  ```sql
+  SELECT "Id", "Department" FROM "Departments" WHERE char_length("Department") > 100;
+  ```
+
+* `AddAuditLogActorUserId` keeps the acting user's id in a new column,
+  `ActorUserId`, and replaces the id that `ActorName` held with the username.
+
 ### 4. Run the API
 
 ```bash
@@ -465,21 +492,31 @@ http://localhost:5272/swagger
 ### 5. Create the first admin account
 
 A new database has no users, and only an Admin can create users through the
-API, so the first admin has to be inserted directly.
-
-Generate a password hash in the format ASP.NET Core Identity uses. The command
-prompts for the password:
-
-```bash
-python3 -c 'import base64,getpass,hashlib,os,struct; p=getpass.getpass().encode(); s=os.urandom(16); print(base64.b64encode(b"\x01"+struct.pack(">III",2,100000,16)+s+hashlib.pbkdf2_hmac("sha512",p,s,100000,32)).decode())'
-```
-
-Insert the admin, replacing `<hash>` with the output:
+API. Create the first admin with `--create-admin`, after the schema exists. It
+asks for the password twice without showing it, and applies the Users tab's
+rules: a username that starts with a letter, a password of at least 8
+characters.
 
 ```bash
-docker compose exec postgres psql -U hospitaluser -d HospitalSystemDb \
-  -c "INSERT INTO \"Users\" (\"Name\", \"PasswordHash\", \"Role\", \"SecurityStamp\") VALUES ('admin', '<hash>', 'Admin', gen_random_uuid()::text);"
+cd HospitalSystem
+dotnet run -- --create-admin admin
 ```
+
+The password is read from standard input, never from the command line, so it
+stays out of the shell history and can also be piped in. Like `--migrate`, the
+command needs only the connection string, and the published image runs it too:
+
+```bash
+docker run --rm -it --env ConnectionStrings__DefaultConnection <backend-image> --create-admin admin
+```
+
+With docker compose, once the backend has started and applied the migrations:
+
+```bash
+docker compose run --rm backend --create-admin admin
+```
+
+The audit log records the new account with `Command line` as the actor.
 
 Log in as `admin` with that password. New users created from the app start as
 `Pending` until an admin assigns them a role.
@@ -508,7 +545,9 @@ docker compose exec postgres psql -U hospitaluser -d HospitalSystemDb \
 
 Demo accounts can view departments, doctors and schedules, and Demo Reception
 can view appointments and patients. Neither can view the list of user accounts
-or the audit log, or change a password.
+or the audit log, or change a password. The API refuses any request from a demo
+account other than a read (`GET`) with `403`, whatever roles the endpoint
+allows.
 
 ---
 
@@ -526,6 +565,11 @@ http://localhost:5173
 ```
 
 It calls the API at `http://localhost:5272/api` unless `VITE_API_URL` is set.
+A production build (`npm run build`) needs `VITE_API_URL`, because the API's
+address is built into the bundle; without it the build stops instead of
+producing an app that calls `localhost`. In CI, where the build only checks
+that the app compiles, it warns instead. The frontend Docker image takes it as
+a build argument, and fails to build without one.
 
 ---
 
@@ -609,6 +653,8 @@ bookings; see
 |   POST | /api/departments                        | Create department            |
 |  PATCH | /api/departments/{departmentId}/status  | Enable or disable department |
 
+A department name is 3 to 100 characters, unique ignoring case.
+
 Disabling a department can be refused with `409` when its doctors have future
 bookings; see
 [Changes that affect future bookings](#changes-that-affect-future-bookings).
@@ -625,8 +671,9 @@ bookings; see
 
 `CreateAppointment` takes `appointmentTime` as the front desk's local time with
 its UTC offset, for example `2026-09-22T09:00:00+03:00`. That clock time must
-fall on one of the doctor's working days and inside their working hours; the
-appointment is stored in UTC. An
+fall on one of the doctor's working days and inside their working hours, and
+be the start of one of the doctor's slots, on the minute: with 30-minute slots
+from 08:00, `09:30` but not `09:40`. The appointment is stored in UTC. An
 appointment lasts one slot of the doctor's schedule and cannot overlap another
 scheduled appointment.
 
@@ -678,6 +725,9 @@ do, and records what changed in the audit log.
 |    PUT | /api/schedules/{scheduleId}  | Modify an existing schedule |
 |    GET | /api/schedules               | View all schedules          |
 
+A doctor has one schedule: creating a second is refused with `409`, and
+changes edit the existing one.
+
 Schedules have `workingDays`, a list of day names such as `"Monday"`.
 Creation uses Monday to Friday when it is left out. Changing a schedule
 also requires `timeZone`, the IANA time zone of whoever makes the change, such
@@ -693,8 +743,10 @@ zone.
 
 The audit log pages like the user list, and `search` matches part of the action
 or its details. Each entry has `createdAt`, `action`, `entityType`, `entityId`,
-`details` and `actor`, the username of whoever made the change, or `Unknown`
-when nobody was signed in, as for a failed sign-in.
+`details` and `actor`, the username of whoever made the change, `Unknown` when
+nobody was signed in, as for a failed sign-in, or `Command line` for an admin
+made with `--create-admin`. The database also keeps the user's id with each
+entry.
 
 ### Changes that affect future bookings
 
@@ -829,12 +881,13 @@ service tests. They also exercise the HTTP pipeline through
 | Department | `DepartmentCreationService`, `DepartmentQueryService`, `DepartmentStatusService`, `DoctorDepartmentService` |
 | User | `ChangeRoleService`, `CreateDoctorService`, `DoctorStatusService`, `ResetPasswordService`, `UserQueryService` |
 | Audit log | `AuditLogQueryService`, `AuditLogService` |
-| Data | The `--migrate` command |
-| API | Endpoint authorization and responses, sign-in rate limiting, forwarded headers, the signing key check at startup and the [API contract](#api-contract) |
+| Data | The `--migrate` and `--create-admin` commands |
+| API | Endpoint authorization and responses, read-only demo accounts, sign-in rate limiting, forwarded headers, the signing key check at startup and the [API contract](#api-contract) |
 
 The service suite also covers `PatientService`, `ScheduleValidation` and
-`CurrentUserService`. The twelve PostgreSQL tests check actual migrations,
-indexes, constraints and concurrent account lockout updates. They run only
+`CurrentUserService`. The 21 PostgreSQL tests check actual migrations,
+indexes, constraints, concurrent account lockout updates, two schedules made
+for one doctor at the same time, and `--create-admin`. They run only
 when `HOSPITALSYSTEM_TEST_POSTGRES` holds a connection string to a PostgreSQL
 server where the tests can create temporary databases, and are reported as
 skipped otherwise, as in CI:
@@ -893,7 +946,7 @@ Test, lint and type-check the frontend with:
 cd hospital-frontend
 npm run lint
 npm test
-npm run build
+VITE_API_URL=http://localhost:5272/api npm run build
 ```
 
 ---

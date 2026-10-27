@@ -43,8 +43,10 @@ Frontend, if you changed it:
 cd hospital-frontend
 npm run lint
 npm test
-npm run build
+VITE_API_URL=http://localhost:5272/api npm run build
 ```
+
+A production build needs `VITE_API_URL`, the API it will call.
 
 ## Pull requests
 
