@@ -23,7 +23,7 @@ public class ScheduleModificationServiceTests
     {
         var currentUserMock = new Mock<ICurrentUserService>();
         currentUserMock.Setup(x => x.IsInRole(UserRole.Admin)).Returns(isAdmin);
-        return new ScheduleModificationService(db, currentUserMock.Object, new AuditLogService(db, currentUserMock.Object));
+        return new ScheduleModificationService(db, currentUserMock.Object, new AuditLogService(db, currentUserMock.Object), TestClinic.Utc());
     }
 
     private async Task SeedDoctorAsync(ApplicationDbContext db)
@@ -39,7 +39,7 @@ public class ScheduleModificationServiceTests
     {
         var db = CreateDbContext();
         var service = CreateService(db, isAdmin: false);
-        var dto = new ChangeScheduleDto { TimeZone = "UTC", ScheduleId = 1 };
+        var dto = new ChangeScheduleDto { ScheduleId = 1 };
         var result = await service.ChangeScheduleAsync(dto);
 
         Assert.False(result.IsSuccess);
@@ -52,7 +52,7 @@ public class ScheduleModificationServiceTests
     {
         var db = CreateDbContext();
         var service = CreateService(db, isAdmin: true);
-        var dto = new ChangeScheduleDto { TimeZone = "UTC", ScheduleId = 99 };
+        var dto = new ChangeScheduleDto { ScheduleId = 99 };
         var result = await service.ChangeScheduleAsync(dto);
 
         Assert.False(result.IsSuccess);
@@ -69,7 +69,7 @@ public class ScheduleModificationServiceTests
         await db.SaveChangesAsync();
 
         var service = CreateService(db, isAdmin: true);
-        var dto = new ChangeScheduleDto { TimeZone = "UTC", ScheduleId = 1, StartHour = 14, EndHour = 10 };
+        var dto = new ChangeScheduleDto { ScheduleId = 1, StartHour = 14, EndHour = 10 };
         var result = await service.ChangeScheduleAsync(dto);
 
         Assert.False(result.IsSuccess);
@@ -86,7 +86,7 @@ public class ScheduleModificationServiceTests
         await db.SaveChangesAsync();
 
         var service = CreateService(db, isAdmin: true);
-        var dto = new ChangeScheduleDto { TimeZone = "UTC", ScheduleId = 1, StartHour = 9, EndHour = 14, SlotDurationMin = 30 };
+        var dto = new ChangeScheduleDto { ScheduleId = 1, StartHour = 9, EndHour = 14, SlotDurationMin = 30 };
         var result = await service.ChangeScheduleAsync(dto);
 
         Assert.False(result.IsSuccess);
@@ -103,7 +103,7 @@ public class ScheduleModificationServiceTests
         await db.SaveChangesAsync();
 
         var service = CreateService(db, isAdmin: true);
-        var dto = new ChangeScheduleDto { TimeZone = "UTC", ScheduleId = 1, StartHour = 9, EndHour = 14, SlotDurationMin = 30 };
+        var dto = new ChangeScheduleDto { ScheduleId = 1, StartHour = 9, EndHour = 14, SlotDurationMin = 30 };
         var result = await service.ChangeScheduleAsync(dto);
 
         Assert.False(result.IsSuccess);
@@ -122,7 +122,7 @@ public class ScheduleModificationServiceTests
         await db.SaveChangesAsync();
 
         var service = CreateService(db, isAdmin: true);
-        var dto = new ChangeScheduleDto { TimeZone = "UTC", ScheduleId = 1, StartHour = 9, EndHour = 14, SlotDurationMin = 30 };
+        var dto = new ChangeScheduleDto { ScheduleId = 1, StartHour = 9, EndHour = 14, SlotDurationMin = 30 };
         var result = await service.ChangeScheduleAsync(dto);
 
         Assert.True(result.IsSuccess);
@@ -143,7 +143,7 @@ public class ScheduleModificationServiceTests
         await db.SaveChangesAsync();
 
         var result = await CreateService(db).ChangeScheduleAsync(
-            new ChangeScheduleDto { TimeZone = "UTC", ScheduleId = 1, StartHour = 16, EndHour = 24, SlotDurationMin = 30 });
+            new ChangeScheduleDto { ScheduleId = 1, StartHour = 16, EndHour = 24, SlotDurationMin = 30 });
 
         Assert.True(result.IsSuccess, result.Error);
         var calendar = await db.Calendars.SingleAsync();

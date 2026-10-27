@@ -19,7 +19,8 @@ export function TopBar({
   onChangePassword?: () => void
   onLogout: () => void
   onRefresh: () => void
-  onSearchChange: (value: string) => void
+  // Not given on a screen that has nothing to search.
+  onSearchChange?: (value: string) => void
 }) {
   return (
     <header className="topbar">
@@ -28,15 +29,17 @@ export function TopBar({
         <h1>{role === 'Reception' ? 'Reception Dashboard' : role}</h1>
       </div>
       <div className="topbar-actions">
-        <div className="search-field">
-          <Search size={16} />
-          <input
-            aria-label="Search"
-            placeholder="Search this page..."
-            value={searchQuery}
-            onChange={(event) => onSearchChange(event.target.value)}
-          />
-        </div>
+        {onSearchChange && (
+          <div className="search-field">
+            <Search size={16} />
+            <input
+              aria-label="Search"
+              placeholder="Search this page..."
+              value={searchQuery}
+              onChange={(event) => onSearchChange(event.target.value)}
+            />
+          </div>
+        )}
         <button className="icon-text-button" disabled={loading} type="button" onClick={onRefresh}>
           <RefreshCw size={16} />
           Refresh

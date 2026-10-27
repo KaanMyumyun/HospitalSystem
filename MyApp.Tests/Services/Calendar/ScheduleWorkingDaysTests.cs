@@ -30,7 +30,7 @@ public class ScheduleWorkingDaysTests
     private static ScheduleModificationService ModificationService(ApplicationDbContext db)
     {
         var admin = Admin();
-        return new(db, admin, new AuditLogService(db, admin));
+        return new(db, admin, new AuditLogService(db, admin), TestClinic.Utc());
     }
 
     private static async Task SeedDoctorAsync(ApplicationDbContext db, bool withSchedule = false)
@@ -105,7 +105,7 @@ public class ScheduleWorkingDaysTests
 
         var result = await service.ChangeScheduleAsync(new ChangeScheduleDto
         {
-            ScheduleId = 1, StartHour = 9, EndHour = 17, SlotDurationMin = 30, TimeZone = "UTC"
+            ScheduleId = 1, StartHour = 9, EndHour = 17, SlotDurationMin = 30
         });
 
         Assert.True(result.IsSuccess);
@@ -121,7 +121,7 @@ public class ScheduleWorkingDaysTests
 
         var result = await service.ChangeScheduleAsync(new ChangeScheduleDto
         {
-            ScheduleId = 1, StartHour = 8, EndHour = 16, SlotDurationMin = 30, TimeZone = "UTC",
+            ScheduleId = 1, StartHour = 8, EndHour = 16, SlotDurationMin = 30,
             WorkingDays = [DayOfWeek.Saturday, DayOfWeek.Tuesday]
         });
 
@@ -129,31 +129,12 @@ public class ScheduleWorkingDaysTests
         Assert.Equal([DayOfWeek.Tuesday, DayOfWeek.Saturday], (await db.Calendars.SingleAsync()).WorkingDays);
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("Mars/Olympus_Mons")]
-    public async Task ChangeSchedule_WithoutAKnownTimeZone_Fails(string? timeZone)
-    {
-        using var db = CreateDbContext();
-        await SeedDoctorAsync(db, withSchedule: true);
-        var service = ModificationService(db);
-
-        var result = await service.ChangeScheduleAsync(new ChangeScheduleDto
-        {
-            ScheduleId = 1, StartHour = 9, EndHour = 17, SlotDurationMin = 30, TimeZone = timeZone
-        });
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal("A valid time zone is required, such as Europe/Sofia", result.Error);
-    }
-
     [Fact]
     public async Task ListSchedules_IncludesWorkingDays()
     {
         using var db = CreateDbContext();
         await SeedDoctorAsync(db, withSchedule: true);
-        var service = new ScheduleQueryService(db, Admin());
+        var service = new ScheduleQueryService(db, Admin(), TestClinic.Utc());
 
         var result = await service.ViewScheduleAsync();
 

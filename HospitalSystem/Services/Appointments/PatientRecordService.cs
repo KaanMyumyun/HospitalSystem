@@ -9,7 +9,8 @@ namespace HospitalSystem.Services.Appointments;
 public class PatientRecordService(
     ApplicationDbContext context,
     ICurrentUserService currentUser,
-    IAuditLogService auditLog) : IPatientRecordService
+    IAuditLogService auditLog,
+    ClinicClock clinic) : IPatientRecordService
 {
     // A patient's newest appointments, up to this many, come with them.
     private const int MaxAppointments = 200;
@@ -131,7 +132,7 @@ public class PatientRecordService(
         if (dto.DateOfBirth is not DateOnly dateOfBirth)
             return PatientActionResultDto.Fail("Date of birth is required");
 
-        if (dateOfBirth > DateOnly.FromDateTime(DateTime.UtcNow))
+        if (dateOfBirth > clinic.Today)
             return PatientActionResultDto.Fail("Date of birth cannot be in the future");
 
         var patient = await context.Patients.FindAsync([dto.PatientId], cancellationToken);

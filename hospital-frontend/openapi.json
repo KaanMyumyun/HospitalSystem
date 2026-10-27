@@ -241,6 +241,117 @@
         }
       }
     },
+    "/api/appointments/{appointmentId}/move": {
+      "post": {
+        "tags": [
+          "Appointments"
+        ],
+        "parameters": [
+          {
+            "name": "appointmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MoveAppointmentDto"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MoveAppointmentDto"
+                  }
+                ]
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MoveAppointmentDto"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveAppointmentResultDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveAppointmentResultDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveAppointmentResultDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/appointments/{appointmentId}/history": {
+      "get": {
+        "tags": [
+          "Appointments"
+        ],
+        "parameters": [
+          {
+            "name": "appointmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppointmentHistoryEntryDtoListServiceResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppointmentHistoryEntryDtoListServiceResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppointmentHistoryEntryDtoListServiceResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/appointments/{appointmentId}/status": {
       "patch": {
         "tags": [
@@ -467,6 +578,35 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResultDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResultDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResultDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1264,6 +1404,126 @@
         }
       }
     },
+    "/api/schedules/{scheduleId}/time-off": {
+      "post": {
+        "tags": [
+          "Schedules"
+        ],
+        "parameters": [
+          {
+            "name": "scheduleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/AddTimeOffDto"
+                  }
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/AddTimeOffDto"
+                  }
+                ]
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/AddTimeOffDto"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarActionResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarActionResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarActionResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/schedules/{scheduleId}/time-off/{timeOffId}": {
+      "delete": {
+        "tags": [
+          "Schedules"
+        ],
+        "parameters": [
+          {
+            "name": "scheduleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "timeOffId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarActionResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarActionResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarActionResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/users": {
       "get": {
         "tags": [
@@ -1526,6 +1786,36 @@
   },
   "components": {
     "schemas": {
+      "AddTimeOffDto": {
+        "required": [
+          "firstDay",
+          "lastDay"
+        ],
+        "type": "object",
+        "properties": {
+          "firstDay": {
+            "type": "string",
+            "format": "date"
+          },
+          "lastDay": {
+            "type": "string",
+            "format": "date"
+          },
+          "reason": {
+            "maxLength": 200,
+            "type": "string",
+            "nullable": true
+          },
+          "cancelAffectedAppointments": {
+            "type": "boolean"
+          },
+          "cancellationReason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "AffectedAppointmentDto": {
         "type": "object",
         "properties": {
@@ -1542,6 +1832,45 @@
           },
           "patientInitials": {
             "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AppointmentHistoryEntryDto": {
+        "type": "object",
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "action": {
+            "type": "string"
+          },
+          "details": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AppointmentHistoryEntryDtoListServiceResult": {
+        "type": "object",
+        "properties": {
+          "isSuccess": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppointmentHistoryEntryDto"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -1912,8 +2241,14 @@
             },
             "nullable": true
           },
-          "timeZone": {
-            "type": "string",
+          "breakStartMinute": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "breakEndMinute": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           },
           "cancelAffectedAppointments": {
@@ -2058,6 +2393,16 @@
             "items": {
               "$ref": "#/components/schemas/DayOfWeek"
             },
+            "nullable": true
+          },
+          "breakStartMinute": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "breakEndMinute": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           }
         },
@@ -2222,6 +2567,41 @@
               }
             ],
             "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "timeZone": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "MoveAppointmentDto": {
+        "required": [
+          "appointmentTime"
+        ],
+        "type": "object",
+        "properties": {
+          "doctorId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "appointmentTime": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MoveAppointmentResultDto": {
+        "type": "object",
+        "properties": {
+          "isSuccess": {
+            "type": "boolean"
           },
           "error": {
             "type": "string",
@@ -2427,6 +2807,28 @@
             "type": "boolean"
           },
           "error": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "TimeOffDto": {
+        "type": "object",
+        "properties": {
+          "timeOffId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "firstDay": {
+            "type": "string",
+            "format": "date"
+          },
+          "lastDay": {
+            "type": "string",
+            "format": "date"
+          },
+          "reason": {
             "type": "string",
             "nullable": true
           }
@@ -2660,6 +3062,22 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DayOfWeek"
+            }
+          },
+          "breakStartMinute": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "breakEndMinute": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "timeOff": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeOffDto"
             }
           }
         },

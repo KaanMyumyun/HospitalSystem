@@ -72,13 +72,14 @@ public class AffectedBookingsTests
         Status = status
     };
 
-    private static ChangeScheduleDto Hours(int start, int end, int slot = 30, string timeZone = "Europe/Sofia") =>
-        new() { ScheduleId = 1, StartHour = start, EndHour = end, SlotDurationMin = slot, TimeZone = timeZone };
+    private static ChangeScheduleDto Hours(int start, int end, int slot = 30) =>
+        new() { ScheduleId = 1, StartHour = start, EndHour = end, SlotDurationMin = slot };
 
-    private static ScheduleModificationService ScheduleService(ApplicationDbContext db)
+    // The bookings above are Sofia times, so the clinic is there too.
+    private static ScheduleModificationService ScheduleService(ApplicationDbContext db, string clinicTimeZone = "Europe/Sofia")
     {
         var admin = Admin();
-        return new(db, admin, new AuditLogService(db, admin));
+        return new(db, admin, new AuditLogService(db, admin), TestClinic.In(clinicTimeZone));
     }
 
     private static async Task<AppointmentStatus> StatusOf(ApplicationDbContext db, int id) =>
@@ -139,19 +140,78 @@ public class AffectedBookingsTests
         Assert.Equal(8, (await db.Calendars.AsNoTracking().SingleAsync()).StartTime.Hour);
     }
 
-    // Bookings are compared as wall-clock times where the admin is: 06:00 UTC
-    // is 09:00 in Sofia, inside 09:00-17:00 there but not in UTC.
+    // Bookings are compared as clinic times: 06:00 UTC is 09:00 in Sofia,
+    // inside 09:00-17:00 there but not in UTC.
     [Theory]
     [InlineData("Europe/Sofia", true)]
     [InlineData("UTC", false)]
-    public async Task HoursAreReadInTheAdminsTimeZone(string timeZone, bool fits)
+    public async Task HoursAreReadInTheClinicsTimeZone(string timeZone, bool fits)
     {
         using var db = CreateDbContext();
         await SeedAsync(db);
 
-        var result = await ScheduleService(db).ChangeScheduleAsync(Hours(9, 17, timeZone: timeZone));
+        var result = await ScheduleService(db, timeZone).ChangeScheduleAsync(Hours(9, 17));
 
         Assert.Equal(fits, result.IsSuccess);
+    }
+
+    // A new break strands the bookings inside it, and only those.
+    [Fact]
+    public async Task ANewBreak_StrandsTheBookingsInsideIt()
+    {
+        using var db = CreateDbContext();
+        await SeedAsync(db);
+        var dto = Hours(8, 18);
+        dto.BreakStartMinute = 9 * 60;
+        dto.BreakEndMinute = 10 * 60;
+
+        var result = await ScheduleService(db).ChangeScheduleAsync(dto);
+
+        Assert.Equal([10, 14], result.AffectedAppointments!.Select(a => a.AppointmentId));
+        Assert.Null((await db.Calendars.AsNoTracking().SingleAsync()).BreakStartMinute);
+    }
+
+    private static TimeOffService TimeOffService(ApplicationDbContext db)
+    {
+        var admin = Admin();
+        return new(db, admin, new AuditLogService(db, admin), TestClinic.In("Europe/Sofia"));
+    }
+
+    [Fact]
+    public async Task TimeOff_StrandsThatDaysBookings_AndWithAReasonCancelsThem()
+    {
+        using var db = CreateDbContext();
+        await SeedAsync(db);
+        var monday = new DateOnly(2030, 6, 3);
+        var dto = new AddTimeOffDto { ScheduleId = 1, FirstDay = monday, LastDay = monday };
+
+        var refused = await TimeOffService(db).AddTimeOffAsync(dto);
+        dto.CancelAffectedAppointments = true;
+        dto.CancellationReason = "Doctor on leave";
+        var added = await TimeOffService(db).AddTimeOffAsync(dto);
+
+        Assert.Equal(FailureKind.Conflict, refused.Failure);
+        Assert.Equal([10, 14], refused.AffectedAppointments!.Select(a => a.AppointmentId));
+        Assert.True(added.IsSuccess, added.Error);
+        Assert.Equal(AppointmentStatus.Cancelled, await StatusOf(db, 10));
+        Assert.Equal(AppointmentStatus.Cancelled, await StatusOf(db, 14));
+        Assert.Equal(AppointmentStatus.Scheduled, await StatusOf(db, 11));
+        Assert.Equal(monday, (await db.TimeOff.SingleAsync()).FirstDay);
+    }
+
+    // The days are the clinic's: 21:30 UTC on Monday is already Tuesday in Sofia.
+    [Fact]
+    public async Task TimeOff_DaysAreTheClinics()
+    {
+        using var db = CreateDbContext();
+        await SeedAsync(db);
+        db.Appointments.Add(Booking(15, new DateTime(2030, 6, 3, 21, 30, 0, DateTimeKind.Utc)));
+        await db.SaveChangesAsync();
+        var tuesday = new DateOnly(2030, 6, 4);
+
+        var result = await TimeOffService(db).AddTimeOffAsync(new AddTimeOffDto { ScheduleId = 1, FirstDay = tuesday, LastDay = tuesday });
+
+        Assert.Equal([15, 11], result.AffectedAppointments!.Select(a => a.AppointmentId));
     }
 
     [Fact]

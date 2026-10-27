@@ -1,11 +1,32 @@
 // Generated from openapi.json by scripts/generate-api-types.mjs. Do not edit:
 // run `npm run generate:api` instead.
 
+export type AddTimeOffDto = {
+  firstDay: string
+  lastDay: string
+  reason?: string | null
+  cancelAffectedAppointments?: boolean
+  cancellationReason?: string | null
+}
+
 export type AffectedAppointmentDto = {
   appointmentId: number
   appointmentTime: string
   doctorName: string
   patientInitials: string
+}
+
+export type AppointmentHistoryEntryDto = {
+  createdAt: string
+  action: string
+  details: string
+  actor: string
+}
+
+export type AppointmentHistoryEntryDtoListServiceResult = {
+  isSuccess: boolean
+  error: string | null
+  data: AppointmentHistoryEntryDto[] | null
 }
 
 export type AppointmentStatus = 'Scheduled' | 'Completed' | 'Cancelled' | 'NoShow'
@@ -119,7 +140,8 @@ export type ChangeScheduleDto = {
   endHour?: number
   slotDurationMin?: number
   workingDays?: DayOfWeek[] | null
-  timeZone?: string | null
+  breakStartMinute?: number | null
+  breakEndMinute?: number | null
   cancelAffectedAppointments?: boolean
   cancellationReason?: string | null
 }
@@ -161,6 +183,8 @@ export type CreateSchedule = {
   endHour?: number
   slotDurationMin?: number
   workingDays?: DayOfWeek[] | null
+  breakStartMinute?: number | null
+  breakEndMinute?: number | null
 }
 
 export type CreateUserDto = {
@@ -209,6 +233,17 @@ export type LoginResultDto = {
   isSuccess: boolean
   token: string | null
   role: UserRole | null
+  error: string | null
+  timeZone: string | null
+}
+
+export type MoveAppointmentDto = {
+  doctorId?: number | null
+  appointmentTime: string
+}
+
+export type MoveAppointmentResultDto = {
+  isSuccess: boolean
   error: string | null
 }
 
@@ -276,6 +311,13 @@ export type ResetPasswordResultDto = {
   error: string | null
 }
 
+export type TimeOffDto = {
+  timeOffId: number
+  firstDay: string
+  lastDay: string
+  reason: string | null
+}
+
 export type UpdatePatientDto = {
   name: string
   phoneNumber: string
@@ -340,6 +382,9 @@ export type ViewSchedule = {
   endTime: string
   slotDurationMin: number
   workingDays: DayOfWeek[]
+  breakStartMinute: number | null
+  breakEndMinute: number | null
+  timeOff: TimeOffDto[]
 }
 
 export type ViewScheduleListServiceResult = {

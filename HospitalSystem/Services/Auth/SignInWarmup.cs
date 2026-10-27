@@ -29,8 +29,8 @@ public sealed class SignInWarmup(
                 services.GetRequiredService<ApplicationDbContext>(), 0, cancellationToken);
 
             // A token for no real user, thrown away; it would fail the stamp check anyway.
-            LoginService.GenerateToken(
-                new UserEntity { Name = "warm-up", Role = UserRole.Pending, SecurityStamp = "warm-up" }, _jwtSettings);
+            SessionTokens.Issue(
+                new UserEntity { Name = "warm-up", Role = UserRole.Pending, SecurityStamp = "warm-up" }, _jwtSettings, DateTimeOffset.UtcNow);
         }
         catch (Exception exception)
         {

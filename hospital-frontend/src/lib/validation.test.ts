@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { setClinicTimeZone } from './clinicTime'
 import { validateAppointmentInput } from './validation'
+
+afterEach(() => {
+  setClinicTimeZone('UTC')
+})
 
 describe('validateAppointmentInput', () => {
   const appointmentTime = new Date('2026-06-15T10:00:00Z')
@@ -42,6 +47,21 @@ describe('validateAppointmentInput', () => {
 
   it('rejects a date of birth after the appointment date', () => {
     expect(validateAppointmentInput('Jane Doe', '5550100', '2030-01-01', appointmentTime)).toBe(
+      'Date of birth cannot be after the appointment date',
+    )
+  })
+
+  it('rejects a day that does not exist', () => {
+    expect(validateAppointmentInput('Jane Doe', '5550100', '1990-02-30', appointmentTime)).toBe('Date of birth is invalid')
+  })
+
+  it("compares with the appointment's date at the clinic", () => {
+    setClinicTimeZone('Asia/Tokyo')
+    // 23:30 UTC on June 15 is June 16 in Tokyo, so a baby born that day can be seen.
+    const lateEvening = new Date('2026-06-15T23:30:00Z')
+
+    expect(validateAppointmentInput('Baby Doe', '5550100', '2026-06-16', lateEvening)).toBeNull()
+    expect(validateAppointmentInput('Baby Doe', '5550100', '2026-06-17', lateEvening)).toBe(
       'Date of birth cannot be after the appointment date',
     )
   })

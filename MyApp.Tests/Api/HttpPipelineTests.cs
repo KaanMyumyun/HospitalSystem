@@ -227,6 +227,25 @@ public class HttpPipelineTests
         Assert.Equal("admin", entry.ActorName);
     }
 
+    // A signed-in user swaps their token for a new one that works; a token
+    // that does not say when its session began cannot be renewed.
+    [Fact]
+    public async Task ASession_IsRenewedWithItsOwnToken()
+    {
+        await using var started = await StartAsync();
+        var signedIn = Authorized(started.App, await TokenAsync(started.App.CreateClient(), "desk"));
+
+        var renewal = await signedIn.PostAsync("/api/auth/refresh", null);
+        renewal.EnsureSuccessStatusCode();
+        var body = await renewal.Content.ReadFromJsonAsync<JsonElement>();
+        var renewed = Authorized(started.App, body.GetProperty("token").GetString()!);
+        var withoutSessionStart = Authorized(started.App, MakeToken(started.Desk, DateTime.UtcNow.AddMinutes(30)));
+
+        Assert.Equal("Europe/Sofia", body.GetProperty("timeZone").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await renewed.GetAsync("/api/departments")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await withoutSessionStart.PostAsync("/api/auth/refresh", null)).StatusCode);
+    }
+
     [Fact]
     public async Task ChangingThePassword_RevokesEarlierTokens()
     {

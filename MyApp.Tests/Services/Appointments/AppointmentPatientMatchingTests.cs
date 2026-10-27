@@ -12,7 +12,7 @@ public class AppointmentPatientMatchingTests : AppointmentTestBase
     private AppointmentCreationService CreateService(ApplicationDbContext db)
     {
         var desk = CreateCurrentUser();
-        return new(db, desk, new PatientService(db), new AuditLogService(db, desk), CreateClock());
+        return new(db, desk, new PatientService(db), new AuditLogService(db, desk), CreateClock(), TestClinic.Utc());
     }
 
     private static CreateAppointmentDto Booking(string name, string phoneNumber, DateOnly dateOfBirth) => new()

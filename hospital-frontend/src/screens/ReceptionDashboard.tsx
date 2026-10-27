@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { PossiblePatientMatchError } from '../api'
 import type { AppointmentDto, CreateAppointmentInput, DoctorDto, PatientMatchDto } from '../api'
+import { AppointmentHistory } from '../components/AppointmentHistory'
 import { EmptyState, Metric, Modal, StatusBadge } from '../components/ui'
 import { useWorkspace } from '../hooks/useWorkspace'
 import {
@@ -16,18 +17,18 @@ import {
   slotLabel,
   statusLabel,
 } from '../lib/format'
+import { clinicDate, toClinicIsoString } from '../lib/clinicTime'
 import {
   buildWeekSlots,
-  canCancelAppointment,
   canMarkAppointment,
   dateAtTime,
   getNextAvailableSlot,
   isInWeek,
+  isUpcoming,
   shownDays,
   weekDays,
 } from '../lib/schedule'
-import { toLocalIsoString } from '../lib/time'
-import { toDateInputValue, validateAppointmentInput } from '../lib/validation'
+import { validateAppointmentInput } from '../lib/validation'
 import type { ActionOutcome, Slot } from '../types'
 
 export function ReceptionDashboard({
@@ -38,6 +39,7 @@ export function ReceptionDashboard({
   onCancelAppointment,
   onChangeAppointmentStatus,
   onCreateAppointment,
+  onMoveAppointment,
   onSelectDoctor,
   onWeekOffsetChange,
 }: {
@@ -49,6 +51,7 @@ export function ReceptionDashboard({
   onCancelAppointment: (appointmentId: number, reason: string) => Promise<ActionOutcome>
   onChangeAppointmentStatus: (appointmentId: number, status: 'Completed' | 'NoShow') => Promise<ActionOutcome>
   onCreateAppointment: (input: CreateAppointmentInput) => Promise<ActionOutcome>
+  onMoveAppointment: (appointment: AppointmentDto, appointmentTime: Date, doctor: DoctorDto) => Promise<ActionOutcome>
   onSelectDoctor: (doctorId: number) => void
   onWeekOffsetChange: Dispatch<SetStateAction<number>>
 }) {
@@ -56,6 +59,9 @@ export function ReceptionDashboard({
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<number | null>(null)
   const [cancellingAppointmentId, setCancellingAppointmentId] = useState<number | null>(null)
+  // The booking being moved. Meanwhile an open slot, of any doctor or week
+  // the desk turns to, is where it goes.
+  const [moving, setMoving] = useState<AppointmentDto | null>(null)
   const [patientName, setPatientName] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
@@ -147,7 +153,7 @@ export function ReceptionDashboard({
       patientName: patientName.trim(),
       phoneNumber: phoneNumber.trim(),
       dateOfBirth,
-      appointmentTime: toLocalIsoString(appointmentTime),
+      appointmentTime: toClinicIsoString(appointmentTime),
       ...patient,
     })
     if (!outcome.ok) {
@@ -160,6 +166,13 @@ export function ReceptionDashboard({
       return
     }
     closeBooking()
+  }
+  const moveTo = async (slot: Slot) => {
+    if (!moving || !selectedDoctor) return
+    const outcome = await onMoveAppointment(moving, dateAtTime(slot.day, slot.time), selectedDoctor)
+    if (!outcome.ok) return
+    setSelectedAppointmentId(moving.appointmentId)
+    setMoving(null)
   }
   const submitCancellation = async () => {
     if (!cancellingAppointment) return
@@ -257,6 +270,19 @@ export function ReceptionDashboard({
           </button>
         </div>
 
+        {moving && (
+          <div className="move-banner" role="status">
+            <span>
+              Moving <strong>{moving.patientName}</strong> from{' '}
+              {formatLongDate(new Date(moving.appointmentTime))} at {formatTime(new Date(moving.appointmentTime))}.
+              Choose an open slot; another doctor or week works too.
+            </span>
+            <button className="secondary-button" type="button" onClick={() => setMoving(null)}>
+              Stop moving
+            </button>
+          </div>
+        )}
+
         <div className="schedule-scroll">
           {/* A group, not an ARIA grid: the slots are ordinary buttons in tab
               order, and each one names its own day and time. */}
@@ -277,21 +303,26 @@ export function ReceptionDashboard({
                   {row.find((slot) => slot.time)?.time ?? ''}
                 </div>,
                 ...row.map((slot) => {
+                  const isMoveTarget = moving !== null && slot.status === 'available'
                   // Initials only: the grid is visible to anyone near the desk.
-                  const text = slot.status === 'booked' && slot.appointment
-                    ? `${initials(slot.appointment.patientName)}${attendanceLabel(slot.appointment.status)}`
-                    : slotLabel(slot.status)
+                  const text = isMoveTarget
+                    ? 'Move here'
+                    : slot.status === 'booked' && slot.appointment
+                      ? `${initials(slot.appointment.patientName)}${attendanceLabel(slot.appointment.status)}`
+                      : slotLabel(slot.status)
                   return (
                     <button
                       aria-label={`${formatLongDate(slot.day)} at ${slot.time}: ${text}`}
-                      className={`slot-cell ${slot.status} ${slot.appointment ? `appointment-${slot.appointment.status.toLowerCase()}` : ''}`}
-                      disabled={slot.status === 'empty' || slot.status === 'past' || slot.status === 'loading' || slot.status === 'off'}
+                      className={`slot-cell ${slot.status} ${slot.appointment ? `appointment-${slot.appointment.status.toLowerCase()}` : ''} ${isMoveTarget ? 'move-target' : ''}`}
+                      disabled={!slot.appointment && slot.status !== 'available'}
                       onClick={() => {
                         if (slot.appointment) {
                           setSelectedAppointmentId(slot.appointment.appointmentId)
                           return
                         }
-                        if (slot.status === 'available') setSelectedSlot(slot)
+                        if (slot.status !== 'available') return
+                        if (moving) void moveTo(slot)
+                        else setSelectedSlot(slot)
                       }}
                       type="button"
                       key={`${slot.day.toISOString()}-${slot.time}`}
@@ -358,7 +389,7 @@ export function ReceptionDashboard({
         <div className="stack">
           <button
             className="primary-button"
-            disabled={!nextAvailableSlot || isReadOnly}
+            disabled={!nextAvailableSlot || isReadOnly || moving !== null}
             title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
             type="button"
             onClick={() => setSelectedSlot(nextAvailableSlot ?? null)}
@@ -366,8 +397,21 @@ export function ReceptionDashboard({
             Book Next Available
           </button>
           <button
+            className="secondary-button"
+            disabled={!visibleAppointment || !isUpcoming(visibleAppointment) || isReadOnly}
+            title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
+            type="button"
+            onClick={() => {
+              if (!visibleAppointment) return
+              closeBooking()
+              setMoving(visibleAppointment)
+            }}
+          >
+            Move Appointment
+          </button>
+          <button
             className="secondary-button danger"
-            disabled={!visibleAppointment || !canCancelAppointment(visibleAppointment) || isReadOnly}
+            disabled={!visibleAppointment || !isUpcoming(visibleAppointment) || isReadOnly}
             title={isReadOnly ? 'Demo accounts are read-only.' : undefined}
             type="button"
             onClick={() => {
@@ -399,6 +443,8 @@ export function ReceptionDashboard({
             </>
           )}
         </div>
+
+        {visibleAppointment && <AppointmentHistory appointment={visibleAppointment} hidden={isReadOnly} />}
       </aside>
 
       {selectedSlot && selectedDoctor && (
@@ -437,7 +483,7 @@ export function ReceptionDashboard({
             <label>
               Date of Birth
               <input
-                max={toDateInputValue(selectedSlot.day)}
+                max={clinicDate(selectedSlot.day)}
                 type="date"
                 value={dateOfBirth}
                 onChange={(event) => {

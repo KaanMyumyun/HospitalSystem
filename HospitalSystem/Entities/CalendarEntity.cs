@@ -15,6 +15,13 @@ public class CalendarEntity
     // Monday first, without repeats (ScheduleDays.Normalize).
     public List<DayOfWeek> WorkingDays { get; set; } = [.. Weekdays];
 
+    // A break every working day, in minutes after midnight, clinic time: 720
+    // to 780 is 12:00 to 13:00. No booking may overlap it. Null for none.
+    public int? BreakStartMinute { get; set; }
+    public int? BreakEndMinute { get; set; }
+
+    public ICollection<TimeOffEntity> TimeOff { get; set; } = new List<TimeOffEntity>();
+
     // Working hours are times of day, kept as times on this placeholder date;
     // an end hour of 24 is midnight starting the next day. Readers take the
     // time of day relative to StartTime's own date, so rows an older release

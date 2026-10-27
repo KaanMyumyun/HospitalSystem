@@ -13,7 +13,7 @@ public class PatientRecordServiceTests : AppointmentTestBase
     private PatientRecordService CreateService(ApplicationDbContext db, bool isFrontDesk = true, bool isDemoFrontDesk = false)
     {
         var desk = CreateCurrentUser(isFrontDesk, isDemoFrontDesk);
-        return new(db, desk, new AuditLogService(db, desk));
+        return new(db, desk, new AuditLogService(db, desk), TestClinic.Utc());
     }
 
     private static UpdatePatientDto Update(int patientId = 1, string name = "Patient One", string phone = "5550001", DateOnly? dateOfBirth = null) =>

@@ -14,9 +14,9 @@ public class ChangeScheduleDto : ICancelsAffectedBookings
     // Null keeps the schedule's working days.
     public List<DayOfWeek>? WorkingDays { get; set; }
 
-    // The admin's IANA time zone, such as Europe/Sofia. Future bookings are
-    // checked against the new hours as wall-clock times in it.
-    public string? TimeZone { get; set; }
+    // The new break, in minutes after midnight; neither means no break.
+    public int? BreakStartMinute { get; set; }
+    public int? BreakEndMinute { get; set; }
 
     public bool CancelAffectedAppointments { get; set; }
     public string? CancellationReason { get; set; }

@@ -33,6 +33,17 @@ public class AuthController : ControllerBase
         return result.IsSuccess ? Ok(result) : Unauthorized(result);
     }
 
+    // A new token for the signed-in user, while their session lasts (12 hours
+    // from signing in). The frontend asks before the current one runs out.
+    [Authorize]
+    [HttpPost("refresh")]
+    public async Task<ActionResult<LoginResultDto>> Refresh(
+        [FromServices] ISessionRenewalService service, CancellationToken cancellationToken)
+    {
+        var result = await service.RenewAsync(cancellationToken);
+        return result.IsSuccess ? Ok(result) : StatusCode(StatusCodes.Status403Forbidden, result);
+    }
+
     [Authorize]
     [HttpPost("change-password")]
     [EnableRateLimiting("login")]

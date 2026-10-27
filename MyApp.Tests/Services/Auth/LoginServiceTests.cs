@@ -12,7 +12,7 @@ public class LoginServiceTests : AuthTestBase
     private LoginService CreateService(ApplicationDbContext db, bool demoEnabled = true, TimeProvider? clock = null,
         IPasswordHasher<UserEntity>? hasher = null)
         => new(db, CreateJwtOptions(), CreateDemoOptions(demoEnabled), new AuditLogService(db, Nobody()),
-            hasher ?? new PasswordHasher<UserEntity>(), clock ?? TimeProvider.System);
+            hasher ?? new PasswordHasher<UserEntity>(), clock ?? TimeProvider.System, TestClinic.Utc());
 
     private sealed class CountingPasswordHasher : IPasswordHasher<UserEntity>
     {

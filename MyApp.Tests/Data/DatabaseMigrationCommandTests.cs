@@ -47,9 +47,49 @@ public class DatabaseMigrationCommandTests
         Assert.DoesNotContain("Applying database migrations", result.Output);
     }
 
+    [Fact]
+    public async Task MigrationsConnectionString_IsUsedInsteadOfTheApis()
+    {
+        const string secret = "must-never-appear-in-logs";
+        var result = await RunCommandAsync("", environment: new()
+        {
+            ["ConnectionStrings__Migrations"] = $"Host=localhost;Password={secret};UnknownKeyword={secret}",
+        });
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("Database migration failed (", result.Error);
+        Assert.DoesNotContain("is not configured", result.Error);
+        Assert.DoesNotContain(secret, result.Output + result.Error);
+    }
+
+    // Database:RunMigrationsOnStartup runs the same migrations when the API
+    // starts. If they fail, the API stops before it listens, so a platform that
+    // waits for the new release keeps the previous one serving.
+    [Fact]
+    public async Task StartupMigrationFailure_StopsTheApiBeforeItListens()
+    {
+        const string secret = "must-never-appear-in-logs";
+        var result = await RunCommandAsync("Host=127.0.0.1;Port=1", firstArgument: null, environment: new()
+        {
+            ["ConnectionStrings__Migrations"] = $"Host=127.0.0.1;Port=1;Timeout=2;Password={secret}",
+            ["JwtSettings__SecretKey"] = Convert.ToBase64String(Guid.NewGuid().ToByteArray()) + Guid.NewGuid().ToString("N"),
+            ["JwtSettings__Issuer"] = "HospitalSystem",
+            ["JwtSettings__Audience"] = "HospitalSystemUsers",
+            ["Clinic__TimeZone"] = "Europe/Sofia",
+            ["Metrics__Port"] = "0",
+            ["ASPNETCORE_URLS"] = "http://127.0.0.1:0",
+        });
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("Database migration failed (", result.Error);
+        Assert.DoesNotContain("Now listening", result.Output);
+        Assert.DoesNotContain(secret, result.Output + result.Error);
+    }
+
+    // firstArgument null starts the API itself; environment is set last.
     private static async Task<(int ExitCode, string Output, string Error)> RunCommandAsync(
-        string connectionString, string firstArgument = "--migrate", string? secondArgument = null,
-        string timeout = "120")
+        string connectionString, string? firstArgument = "--migrate", string? secondArgument = null,
+        string timeout = "120", Dictionary<string, string>? environment = null)
     {
         var directory = Directory.CreateTempSubdirectory("hospital-migration-test-");
         try
@@ -62,7 +102,8 @@ public class DatabaseMigrationCommandTests
                 UseShellExecute = false
             };
             start.ArgumentList.Add(typeof(ApplicationDbContext).Assembly.Location);
-            start.ArgumentList.Add(firstArgument);
+            if (firstArgument is not null)
+                start.ArgumentList.Add(firstArgument);
             if (secondArgument is not null)
                 start.ArgumentList.Add(secondArgument);
             start.Environment["DOTNET_ENVIRONMENT"] = "Production";
@@ -71,6 +112,8 @@ public class DatabaseMigrationCommandTests
             start.Environment["JwtSettings__SecretKey"] = "";
             start.Environment["Database__RunMigrationsOnStartup"] = "true";
             start.Environment["Database__MigrationCommandTimeoutSeconds"] = timeout;
+            foreach (var (name, value) in environment ?? [])
+                start.Environment[name] = value;
 
             using var process = Process.Start(start)!;
             var output = process.StandardOutput.ReadToEndAsync();

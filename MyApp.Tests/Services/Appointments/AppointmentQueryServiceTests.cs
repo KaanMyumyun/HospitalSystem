@@ -165,4 +165,55 @@ public class AppointmentQueryServiceTests : AppointmentTestBase
 
         Assert.True(result.IsSuccess);
     }
+
+    [Fact]
+    public async Task GetHistoryAsync_ListsTheAppointmentsEntries_OldestFirst()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+        AuditLogEntity Entry(int id, string action, string entityType, int entityId, int hour, int? actorId, string actor) => new()
+        {
+            Id = id, Action = action, EntityType = entityType, EntityId = entityId, Details = action,
+            ActorUserId = actorId, ActorName = actor, CreatedAt = new DateTime(2025, 12, 1, hour, 0, 0, DateTimeKind.Utc)
+        };
+        db.AuditLogs.AddRange(
+            Entry(1, "MoveAppointment", "Appointment", 1, 11, 5, "Front Desk Admin"),
+            Entry(2, "CreateAppointment", "Appointment", 1, 10, 5, "Front Desk Admin"),
+            // Not this appointment's: another appointment's, and a schedule
+            // whose id happens to be the same.
+            Entry(3, "CancelAppointment", "Appointment", 2, 12, 5, "Front Desk Admin"),
+            Entry(4, "ChangeSchedule", "Calendar", 1, 13, 99, "admin"),
+            // As an older release writes it: the id in ActorName.
+            Entry(5, "CancelAppointment", "Appointment", 1, 14, null, "5"));
+        await db.SaveChangesAsync();
+
+        var result = await CreateService(db).GetHistoryAsync(1);
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(["CreateAppointment", "MoveAppointment", "CancelAppointment"], result.Data!.Select(e => e.Action));
+        Assert.All(result.Data!, entry => Assert.Equal("Front Desk Admin", entry.Actor));
+    }
+
+    [Fact]
+    public async Task GetHistoryAsync_OfAnAppointmentThatDoesNotExist_IsNotFound()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+
+        var result = await CreateService(db).GetHistoryAsync(99);
+
+        Assert.Equal(FailureKind.NotFound, result.Failure);
+    }
+
+    // The entries name staff, which demo accounts may not see.
+    [Fact]
+    public async Task GetHistoryAsync_ForDemoReception_IsForbidden()
+    {
+        using var db = CreateDbContext();
+        await SeedStandardDataAsync(db);
+
+        var result = await CreateService(db, isFrontDesk: false, isDemoFrontDesk: true).GetHistoryAsync(1);
+
+        Assert.Equal(FailureKind.Forbidden, result.Failure);
+    }
 }

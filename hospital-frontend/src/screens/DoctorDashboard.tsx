@@ -3,6 +3,7 @@ import { loadMyAppointments } from '../api'
 import type { AppointmentDto } from '../api'
 import { EmptyState, SkeletonRows, StatusBadge } from '../components/ui'
 import { useWorkspace } from '../hooks/useWorkspace'
+import { clinicDayStart } from '../lib/clinicTime'
 import { formatLongDate, formatTime, statusLabel } from '../lib/format'
 import { canMarkAppointment, dayStart } from '../lib/schedule'
 import type { ActionOutcome } from '../types'
@@ -104,10 +105,8 @@ function useDayAppointments(dayOffset: number, onError: (message: string) => voi
     const request = Symbol()
     latestRequest.current = request
     const from = new Date(fromMs)
-    const to = new Date(fromMs)
-    to.setDate(to.getDate() + 1)
 
-    return loadMyAppointments(from, to).then(
+    return loadMyAppointments(from, clinicDayStart(from, 1)).then(
       (appointments) => {
         if (request === latestRequest.current) setLoaded({ fromMs, appointments })
       },

@@ -10,11 +10,13 @@ import {
   getStoredSession,
   isDemoRole,
   loadHospitalData,
+  moveAppointment,
   PossiblePatientMatchError,
+  renewSessionIfDue,
   sessionExpiredEvent,
   updatePatient,
 } from './api'
-import type { CancelAffected, CreateAppointmentInput, UpdatePatientInput } from './api'
+import type { AppointmentDto, CancelAffected, CreateAppointmentInput, DoctorDto, UpdatePatientInput } from './api'
 import './App.css'
 import { AffectedBookingsDialog } from './components/AffectedBookingsDialog'
 import { ChangePasswordDialog } from './components/ChangePasswordDialog'
@@ -27,11 +29,10 @@ import { useUsersPage } from './hooks/useUsersPage'
 import { useWeekAppointments } from './hooks/useWeekAppointments'
 import { WorkspaceContext } from './hooks/useWorkspace'
 import type { Workspace } from './hooks/useWorkspace'
-import { adminTitle } from './lib/format'
+import { adminTitle, formatLongDate, formatTime } from './lib/format'
 import { newId } from './lib/id'
 import { canUseAdmin, canUseDoctor, canUseReception, hashFor, screenFor, usesHospitalData } from './lib/routes'
 import { defaultDoctor } from './lib/schedule'
-import { sessionAfterTokenRotation } from './lib/session'
 import { AdminDashboard } from './screens/AdminDashboard'
 import { DoctorDashboard } from './screens/DoctorDashboard'
 import { LoginScreen } from './screens/LoginScreen'
@@ -153,13 +154,13 @@ function App() {
   const sessionEpoch = useRef(0)
 
   // Kept between renders while the session and reloadAll are, so the screens'
-  // callbacks built on it keep theirs too.
-  const runAction = useCallback(async <Result,>(
-    action: () => Promise<Result>,
+  // callbacks built on it keep theirs too. A renewed token or a password
+  // change keeps the session's id, so its actions carry on.
+  const runAction = useCallback(async (
+    action: () => Promise<unknown>,
     successMessage: string,
-    rotatedToken?: (result: Result) => string | null | undefined,
   ): Promise<ActionOutcome> => {
-    if (!session || getStoredSession()?.token !== session.token) return { ok: false }
+    if (!session || getStoredSession()?.id !== session.id) return { ok: false }
     if (isDemoRole(session?.role)) {
       const message = 'Not allowed to do that. Demo accounts are read-only.'
       setError(message)
@@ -171,28 +172,14 @@ function App() {
     const request = Symbol()
     const epoch = sessionEpoch.current
     actionInFlight.current = request
-    let expectedToken = session.token
     const isCurrent = () =>
-      actionInFlight.current === request && sessionEpoch.current === epoch && getStoredSession()?.token === expectedToken
+      actionInFlight.current === request && sessionEpoch.current === epoch && getStoredSession()?.id === session.id
 
     setLoading(true)
     setError(null)
     setNotice(null)
     try {
-      const result = await action()
-      if (rotatedToken) {
-        // A password change replaces this session's token before the action
-        // returns. Accept it only for the request and account that started it.
-        const nextSession = sessionAfterTokenRotation(
-          session,
-          getStoredSession(),
-          rotatedToken(result),
-          actionInFlight.current === request && sessionEpoch.current === epoch,
-        )
-        if (!nextSession) return { ok: false }
-        expectedToken = nextSession.token
-        setSession(nextSession)
-      }
+      await action()
       if (!isCurrent()) return { ok: false }
       await reloadAll()
       if (!isCurrent()) return { ok: false }
@@ -210,7 +197,7 @@ function App() {
     } finally {
       if (actionInFlight.current === request) {
         actionInFlight.current = null
-        if (getStoredSession()?.token === expectedToken) setLoading(false)
+        if (getStoredSession()?.id === session.id) setLoading(false)
       }
     }
   }, [session, reloadAll])
@@ -224,7 +211,7 @@ function App() {
     const epoch = sessionEpoch.current
     const outcome = await runAction(() => change(), successMessage)
     if (outcome.ok || !(outcome.cause instanceof AffectedBookingsError)) return outcome
-    if (!session || sessionEpoch.current !== epoch || getStoredSession()?.token !== session.token) return { ok: false }
+    if (!session || sessionEpoch.current !== epoch || getStoredSession()?.id !== session.id) return { ok: false }
 
     const affected = outcome.cause
     return new Promise<ActionOutcome>((resolve) => {
@@ -284,6 +271,23 @@ function App() {
       runAction(() => updatePatient(patientId, input), 'Patient details saved'),
     [runAction],
   )
+  // The desk picks the new slot on the grid, then confirms here.
+  const moveBooking = useCallback(
+    async (appointment: AppointmentDto, appointmentTime: Date, doctor: DoctorDto): Promise<ActionOutcome> => {
+      const otherDoctor = doctor.doctorId !== appointment.doctorId
+      const confirmed = await confirm({
+        title: 'Move appointment',
+        message: `Move ${appointment.patientName}'s appointment to ${formatLongDate(appointmentTime)} at ${formatTime(appointmentTime)}${otherDoctor ? ` with ${doctor.name}` : ''}?`,
+        confirmLabel: 'Move appointment',
+      })
+      if (!confirmed) return { ok: false }
+      return runAction(
+        () => moveAppointment(appointment.appointmentId, appointmentTime, otherDoctor ? doctor.doctorId : undefined),
+        'Appointment moved',
+      )
+    },
+    [confirm, runAction],
+  )
 
   const isReadOnly = isDemoRole(session?.role)
   const workspace = useMemo<Workspace>(
@@ -341,6 +345,18 @@ function App() {
     return () => window.removeEventListener(sessionExpiredEvent, resetSessionState)
   }, [resetSessionState])
 
+  // Someone at the computer keeps the session going, even on a screen that
+  // sends no requests; renewSessionIfDue does nothing until it is due.
+  useEffect(() => {
+    if (!session) return
+    const renew = () => void renewSessionIfDue()
+    const events = ['pointerdown', 'keydown'] as const
+    for (const event of events) window.addEventListener(event, renew, { passive: true })
+    return () => {
+      for (const event of events) window.removeEventListener(event, renew)
+    }
+  }, [session])
+
   const handleLogin = (nextSession: Session) => {
     sessionEpoch.current++
     setSession(nextSession)
@@ -386,7 +402,7 @@ function App() {
             onChangePassword={isReadOnly ? undefined : () => setChangingPassword(true)}
             onLogout={handleLogout}
             onRefresh={reloadAll}
-            onSearchChange={setSearchQuery}
+            onSearchChange={screen === 'doctor' ? undefined : setSearchQuery}
           />
 
           {(error || notice) && (
@@ -415,6 +431,7 @@ function App() {
               onCancelAppointment={cancelBooking}
               onChangeAppointmentStatus={markAppointment}
               onCreateAppointment={bookAppointment}
+              onMoveAppointment={moveBooking}
             />
           )}
 
@@ -450,13 +467,9 @@ function App() {
         {changingPassword && (
           <ChangePasswordDialog
             loading={loading}
-            onChangePassword={async (currentPassword, newPassword) => {
-              return runAction(
-                () => changeOwnPassword(currentPassword, newPassword),
-                'Password changed',
-                (result) => result.token,
-              )
-            }}
+            onChangePassword={(currentPassword, newPassword) =>
+              runAction(() => changeOwnPassword(currentPassword, newPassword), 'Password changed')
+            }
             onClose={() => setChangingPassword(false)}
           />
         )}

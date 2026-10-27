@@ -100,6 +100,11 @@ var builder = WebApplication.CreateBuilder(args);
 
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddSingleton(TimeProvider.System);
+    // Bookings are checked against the clinic's wall clock, so a wrong zone
+    // would quietly refuse or allow the wrong hours: refuse to start instead.
+    var clinicClock = ClinicClock.For(builder.Configuration["Clinic:TimeZone"], TimeProvider.System)
+        ?? throw new InvalidOperationException("Clinic:TimeZone must be an IANA time zone, such as Europe/Sofia");
+    builder.Services.AddSingleton(clinicClock);
     builder.Services.AddSingleton<IPasswordHasher<UserEntity>, PasswordHasher<UserEntity>>();
 
     builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
@@ -110,10 +115,12 @@ var builder = WebApplication.CreateBuilder(args);
     builder.Services.AddScoped<IAppointmentQueryService, AppointmentQueryService>();
     builder.Services.AddScoped<IAppointmentCancellationService, AppointmentCancellationService>();
     builder.Services.AddScoped<IAppointmentCreationService, AppointmentCreationService>();
+    builder.Services.AddScoped<IAppointmentMoveService, AppointmentMoveService>();
     builder.Services.AddScoped<IAppointmentStatusService, AppointmentStatusService>();
     builder.Services.AddScoped<IPatientRecordService, PatientRecordService>();
 
     builder.Services.AddScoped<ILoginService, LoginService>();
+    builder.Services.AddScoped<ISessionRenewalService, SessionRenewalService>();
     builder.Services.AddSingleton<LoginAttemptLimiter>();
     builder.Services.AddScoped<LoginRateLimitFilter>();
     builder.Services.AddHostedService<SignInWarmup>();
@@ -125,6 +132,7 @@ var builder = WebApplication.CreateBuilder(args);
     builder.Services.AddScoped<IScheduleCreationService, ScheduleCreationService>();
     builder.Services.AddScoped<IScheduleModificationService, ScheduleModificationService>();
     builder.Services.AddScoped<IScheduleQueryService, ScheduleQueryService>();
+    builder.Services.AddScoped<ITimeOffService, TimeOffService>();
 
     builder.Services.AddScoped<IDepartmentQueryService, DepartmentQueryService>();
     builder.Services.AddScoped<IDepartmentCreationService, DepartmentCreationService>();
@@ -316,11 +324,14 @@ var builder = WebApplication.CreateBuilder(args);
         });
     }
 
-    if (app.Configuration.GetValue<bool>("Database:RunMigrationsOnStartup"))
+    // As --migrate does. A release whose migrations fail stops here, before it
+    // listens, so a platform that waits for the new release to answer keeps
+    // the previous one serving.
+    if (app.Configuration.GetValue<bool>("Database:RunMigrationsOnStartup")
+        && await DatabaseMigrationCommand.ApplyAsync(app.Configuration) != 0)
     {
-        using var scope = app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        db.Database.Migrate();
+        Environment.ExitCode = 1;
+        return;
     }
     if (app.Environment.IsDevelopment())
     {

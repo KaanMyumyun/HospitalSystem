@@ -816,11 +816,54 @@ textarea {
 .slot-cell.past,
 .slot-cell.empty,
 .slot-cell.loading,
-.slot-cell.off {
+.slot-cell.off,
+.slot-cell.away,
+.slot-cell.break {
   background: var(--slate-50);
   color: var(--muted);
   cursor: default;
   opacity: 0.72;
+}
+
+/* Time the doctor is not there although it is a working day. */
+.slot-cell.away,
+.slot-cell.break {
+  background: repeating-linear-gradient(135deg, var(--slate-50) 0 8px, var(--slate-100) 8px 16px);
+}
+
+/* While a booking is being moved, the open slots it can go to. */
+.slot-cell.move-target {
+  border-style: dashed;
+  border-color: var(--blue-300);
+  background: var(--blue-50);
+}
+
+.slot-cell.move-target small {
+  color: var(--blue-700);
+  font-weight: 700;
+}
+
+.move-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--blue-200);
+  border-radius: 8px;
+  background: var(--blue-50);
+  color: var(--blue-700);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.move-banner button {
+  flex: 0 0 auto;
+}
+
+.history {
+  margin-top: 18px;
 }
 
 .empty-state {
@@ -1337,6 +1380,58 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.break-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  color: var(--muted);
+}
+
+.break-picker legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.break-picker input {
+  width: 120px;
+  min-width: 0;
+}
+
+/* In a table row, one time above the other. */
+.data-table .break-picker {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.data-table .break-picker > span {
+  display: none;
+}
+
+.data-table .table-input[type='number'] {
+  min-width: 64px;
+}
+
+.time-off {
+  margin-top: 28px;
+}
+
+.time-off-form {
+  grid-template-columns: minmax(140px, 1.2fr) repeat(2, minmax(128px, 1fr)) minmax(110px, 1.4fr) auto;
+  margin-bottom: 14px;
+}
+
+.time-off-form > button {
+  white-space: nowrap;
+}
+
 .schedule-form > button {
   grid-column: -2 / -1;
 }
@@ -1494,5 +1589,94 @@ textarea {
 
   .day-row {
     grid-template-columns: 56px minmax(0, 1fr);
+  }
+}
+
+/* Phones: a doctor checks their day on one, so the shell keeps out of the way. */
+@media (max-width: 600px) {
+  .sidebar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+  }
+
+  .sidebar .brand {
+    padding: 0;
+  }
+
+  /* The mark alone; the navigation needs the room. */
+  .sidebar .brand > div:last-child {
+    display: none;
+  }
+
+  .nav-list {
+    flex: 1;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  }
+
+  .topbar {
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .topbar h1 {
+    font-size: 22px;
+  }
+
+  .topbar-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .topbar-actions > * {
+    flex: 1 1 auto;
+  }
+
+  .search-field {
+    flex-basis: 100%;
+  }
+
+  .alert-stack {
+    padding: 10px 10px 0;
+  }
+
+  .screen-grid {
+    padding: 10px;
+  }
+
+  .toolbar.calendar-toolbar {
+    flex-direction: row;
+    gap: 6px;
+  }
+
+  .calendar-toolbar > button {
+    flex: 1 1 0;
+    padding: 0 6px;
+  }
+
+  .doctor-grid .panel,
+  .doctor-panel,
+  .details-panel,
+  .schedule-panel {
+    padding: 14px;
+  }
+
+  .day-row {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 6px 10px;
+    padding: 10px;
+  }
+
+  /* Under the patient, lined up with the name. */
+  .day-row > .status-badge,
+  .day-row > .button-pair {
+    grid-column: 2;
+  }
+
+  .move-banner {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

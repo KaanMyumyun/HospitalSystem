@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import type { ScheduleDto } from '../api'
-import { clockLabel, scheduleWindow, toLocalIsoString } from './time'
+import { clockLabel, scheduleWindow } from './time'
 
 function schedule(startTime: string, endTime: string): ScheduleDto {
-  return { scheduleId: 1, doctorId: 1, startTime, endTime, slotDurationMin: 30, workingDays: ['Monday'] }
+  return {
+    scheduleId: 1,
+    doctorId: 1,
+    startTime,
+    endTime,
+    slotDurationMin: 30,
+    workingDays: ['Monday'],
+    breakStartMinute: null,
+    breakEndMinute: null,
+    timeOff: [],
+  }
 }
 
 describe('scheduleWindow', () => {
@@ -36,11 +46,5 @@ describe('clockLabel', () => {
     [1440, '24:00'],
   ])('formats %i minutes as %s', (minutes, label) => {
     expect(clockLabel(minutes)).toBe(label)
-  })
-})
-
-describe('toLocalIsoString', () => {
-  it('writes the local time with a +00:00 offset in UTC', () => {
-    expect(toLocalIsoString(new Date(2026, 8, 22, 9, 0))).toBe('2026-09-22T09:00:00+00:00')
   })
 })

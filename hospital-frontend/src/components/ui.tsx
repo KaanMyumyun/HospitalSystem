@@ -64,7 +64,7 @@ export function PageHint({ section }: { section: AdminSection }) {
   const copy: Record<AdminSection, string> = {
     departments: 'Create departments, activate service lines, and inspect coverage.',
     doctors: 'Assign doctors to departments and control active status.',
-    schedules: 'Create and edit working hours and slot duration.',
+    schedules: 'Working hours, slots, breaks and time off.',
     users: 'Create staff accounts, change roles, and reset passwords.',
     audit: 'Who changed what, newest first. Search finds actions and details.',
   }

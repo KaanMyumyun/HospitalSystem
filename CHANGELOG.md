@@ -60,6 +60,31 @@ tagged releases yet, so everything is listed under Unreleased.
 - `dotnet HospitalSystem.dll --create-admin <username>` creates an admin,
   reading the password from standard input, so a new database no longer needs
   a hand-made password hash and an SQL insert.
+- Staff are no longer signed out every hour. While someone uses the app, the
+  frontend swaps the token for a new one (`POST /api/auth/refresh`) once it
+  is ten minutes old, for up to 12 hours after signing in. A session left
+  alone still ends after about an hour, revoking tokens works as before, and
+  demo sessions are not renewed.
+- Bookings can be moved to another time or doctor in one step
+  (`POST /api/appointments/{appointmentId}/move`), keeping the appointment's
+  id, patient and history. The reception screen's Move Appointment button
+  lets the desk pick an open slot of any doctor or week.
+- Schedules can have a daily break, and admins can give a doctor time off
+  (`POST` and `DELETE /api/schedules/{scheduleId}/time-off`). Neither can be
+  booked; time off over existing bookings lists them, as other schedule
+  changes do. The reception calendar shows breaks and days away. Migration
+  `AddBreaksAndTimeOff` adds two nullable columns and a `TimeOff` table.
+- The reception screen shows who booked, moved, cancelled or marked the
+  selected booking, and when (`GET /api/appointments/{appointmentId}/history`,
+  front desk only).
+- "My day" fits a phone screen: the navigation and top bar take less room,
+  and each appointment's status and buttons sit under the patient's name.
+- Startup migrations (`Database:RunMigrationsOnStartup`) run as `--migrate`
+  does: with its timeout and safe output, and through
+  `ConnectionStrings:Migrations` when it is set (on Neon, the direct host).
+  An API whose migrations fail exits before it listens, and a start with
+  nothing to apply skips the migration lock. Turned on for Render, every
+  merge brings Neon up to date as the new release starts.
 
 ### Changed
 
@@ -137,10 +162,12 @@ tagged releases yet, so everything is listed under Unreleased.
   index on `Users.Name` with one on `lower("Name")`. If existing usernames
   differ only in case, it stops with PostgreSQL error `P0001` and changes
   nothing; the README shows how to find them.
-- Schedules take `workingDays`, and `POST /api/schedule/change-schedule`
-  requires `timeZone`, the IANA time zone of whoever makes the change. The
-  frontend sends the browser's. The backend image includes `tzdata`, so the
+- Schedules take `workingDays`. The backend image includes `tzdata`, so the
   API can look time zones up.
+- Dates and times follow the clinic's time zone, `Clinic:TimeZone`
+  (`Europe/Sofia` by default), on every screen and in every check, whatever
+  zone a desk computer is set to. Sign-in returns it as `timeZone`, and
+  changing a schedule no longer takes a `timeZone` of its own.
 - `GET /api/Users/ListDoctors` returns `departmentId` instead of the misspelt
   `deparmentId`.
 - The backend build treats warnings as errors, and its 42 nullable-reference

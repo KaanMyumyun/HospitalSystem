@@ -1,10 +1,6 @@
-using System.Security.Claims;
-using System.Text;
-using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 using HospitalSystem.Interfaces;
 using HospitalSystem.Interfaces.Auth;
 
@@ -16,7 +12,8 @@ public class LoginService(
     IOptions<DemoSettings> demoOptions,
     IAuditLogService auditLog,
     IPasswordHasher<UserEntity> hasher,
-    TimeProvider clock) : ILoginService
+    TimeProvider clock,
+    ClinicClock clinic) : ILoginService
 {
     private readonly JwtSettings _jwtSettings = jwtOptions.Value;
     private readonly DemoSettings _demoSettings = demoOptions.Value;
@@ -87,9 +84,9 @@ public class LoginService(
             return await RefuseAsync(
                 user, $"Sign-in refused for user {user.Name}: account awaiting approval", "Account awaiting approval", cancellationToken);
 
-        var token = GenerateToken(user, _jwtSettings);
+        var token = SessionTokens.Issue(user, _jwtSettings, clock.GetUtcNow());
 
-        return LoginResultDto.Success(token, user.Role);
+        return LoginResultDto.Success(token, user.Role, clinic.TimeZoneId);
     }
 
     public async Task<LoginResultDto> DemoLoginAsync(UserRole role, CancellationToken cancellationToken = default)
@@ -114,9 +111,9 @@ public class LoginService(
         if (user == null)
             return LoginResultDto.Fail("Invalid credentials");
 
-        var token = GenerateToken(user, _jwtSettings);
+        var token = SessionTokens.Issue(user, _jwtSettings, clock.GetUtcNow());
 
-        return LoginResultDto.Success(token, user.Role);
+        return LoginResultDto.Success(token, user.Role, clinic.TimeZoneId);
     }
 
     // Every refused password sign-in is audited. The typed username is kept
@@ -130,31 +127,5 @@ public class LoginService(
         await auditLog.LogAsync("SignInFailed", "User", user?.Id ?? 0, details, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
         return LoginResultDto.Fail(error);
-    }
-
-    // Static so the startup warm-up can sign a throwaway token the same way.
-    internal static string GenerateToken(UserEntity user, JwtSettings jwtSettings)
-    {
-        var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            // For the audit log, which records who made a change by name.
-            new Claim(ClaimTypes.Name, user.Name),
-            new Claim(ClaimTypes.Role, user.Role.ToString()),
-            new Claim(SecurityStampClaims.ClaimType, user.SecurityStamp)
-        };
-
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var token = new JwtSecurityToken(
-            issuer: jwtSettings.Issuer,
-            audience: jwtSettings.Audience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddHours(1),
-            signingCredentials: creds
-        );
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }

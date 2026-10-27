@@ -22,6 +22,8 @@ public class ScheduleCreationService(
             dto.EndHour,
             dto.SlotDurationMin,
             dto.WorkingDays,
+            dto.BreakStartMinute,
+            dto.BreakEndMinute,
             cancellationToken);
 
         if (validationError is not null)
@@ -33,7 +35,9 @@ public class ScheduleCreationService(
         {
             DoctorId = dto.DoctorId,
             SlotDurationMin = dto.SlotDurationMin,
-            WorkingDays = ScheduleDays.Normalize(dto.WorkingDays ?? CalendarEntity.Weekdays)
+            WorkingDays = ScheduleDays.Normalize(dto.WorkingDays ?? CalendarEntity.Weekdays),
+            BreakStartMinute = dto.BreakStartMinute,
+            BreakEndMinute = dto.BreakEndMinute
         };
         calendar.SetHours(dto.StartHour, dto.EndHour);
         context.Calendars.Add(calendar);
