@@ -1,26 +1,18 @@
-import type { DepartmentDto, DoctorDto } from '../../api'
+import type { DoctorDto } from '../../api'
 import { GuardedButton, StatusBadge, TableStatus } from '../../components/ui'
+import { useWorkspace } from '../../hooks/useWorkspace'
 import { guarded } from '../../lib/readOnly'
 import { departmentName } from '../../lib/format'
 import type { ActionOutcome } from '../../types'
 
 export function DoctorsTab({
-  departments,
-  doctors,
-  loading,
-  searchQuery,
-  isReadOnly,
   onAssignDoctor,
   onChangeDoctorStatus,
 }: {
-  departments: DepartmentDto[]
-  doctors: DoctorDto[]
-  loading: boolean
-  searchQuery: string
-  isReadOnly: boolean
   onAssignDoctor: (doctor: DoctorDto, departmentId: number) => Promise<ActionOutcome>
   onChangeDoctorStatus: (doctor: DoctorDto, isActive: boolean) => Promise<ActionOutcome>
 }) {
+  const { departments, doctors, loading, searchQuery, isReadOnly } = useWorkspace()
   const normalizedSearch = searchQuery.trim().toLowerCase()
   const visibleDoctors = doctors.filter(
     (doctor) =>

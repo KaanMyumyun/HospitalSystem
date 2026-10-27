@@ -1,38 +1,32 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AffectedBookingsError,
   canListUsers,
   cancelAppointment,
   changeAppointmentStatus,
-  changeDepartmentStatus,
-  changeDoctorDepartment,
-  changeDoctorStatus,
   changeOwnPassword,
-  changeSchedule,
-  changeUserRole,
   clearSession,
   createAppointment,
-  createDepartment,
-  createSchedule,
-  createUser,
   getStoredSession,
   isDemoRole,
   loadHospitalData,
   PossiblePatientMatchError,
-  resetPassword,
   sessionExpiredEvent,
   updatePatient,
 } from './api'
-import type { CancelAffected } from './api'
+import type { CancelAffected, CreateAppointmentInput, UpdatePatientInput } from './api'
 import './App.css'
 import { AffectedBookingsDialog } from './components/AffectedBookingsDialog'
 import { ChangePasswordDialog } from './components/ChangePasswordDialog'
 import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
+import { useAdminActions } from './hooks/useAdminActions'
 import { useDialogs } from './hooks/useDialogs'
 import { useHash } from './hooks/useHash'
 import { useUsersPage } from './hooks/useUsersPage'
 import { useWeekAppointments } from './hooks/useWeekAppointments'
+import { WorkspaceContext } from './hooks/useWorkspace'
+import type { Workspace } from './hooks/useWorkspace'
 import { adminTitle } from './lib/format'
 import { newId } from './lib/id'
 import { canUseAdmin, canUseDoctor, canUseReception, hashFor, screenFor, usesHospitalData } from './lib/routes'
@@ -158,7 +152,9 @@ function App() {
   const pendingChangeCancel = useRef<(() => void) | null>(null)
   const sessionEpoch = useRef(0)
 
-  const runAction = async <Result,>(
+  // Kept between renders while the session and reloadAll are, so the screens'
+  // callbacks built on it keep theirs too.
+  const runAction = useCallback(async <Result,>(
     action: () => Promise<Result>,
     successMessage: string,
     rotatedToken?: (result: Result) => string | null | undefined,
@@ -217,11 +213,11 @@ function App() {
         if (getStoredSession()?.token === expectedToken) setLoading(false)
       }
     }
-  }
+  }, [session, reloadAll])
 
   // A change that can strand future bookings. When the API refuses it, the
   // admin sees the bookings and decides; the outcome is that decision's.
-  const runBookingChange = async (
+  const runBookingChange = useCallback(async (
     change: (cancel?: CancelAffected) => Promise<unknown>,
     successMessage: string,
   ): Promise<ActionOutcome> => {
@@ -263,7 +259,45 @@ function App() {
         dismiss,
       })
     })
-  }
+  }, [runAction, session])
+
+  const adminActions = useAdminActions(data.departments, runAction, runBookingChange, { confirm, chooseDepartment })
+  const markAppointment = useCallback(
+    (appointmentId: number, status: 'Completed' | 'NoShow') =>
+      runAction(
+        () => changeAppointmentStatus(appointmentId, status),
+        status === 'Completed' ? 'Appointment marked completed' : 'Appointment marked no-show',
+      ),
+    [runAction],
+  )
+  const bookAppointment = useCallback(
+    (input: CreateAppointmentInput) => runAction(() => createAppointment(input), 'Appointment booked'),
+    [runAction],
+  )
+  const cancelBooking = useCallback(
+    (appointmentId: number, reason: string) =>
+      runAction(() => cancelAppointment(appointmentId, reason), 'Appointment cancelled'),
+    [runAction],
+  )
+  const savePatient = useCallback(
+    (patientId: number, input: UpdatePatientInput) =>
+      runAction(() => updatePatient(patientId, input), 'Patient details saved'),
+    [runAction],
+  )
+
+  const isReadOnly = isDemoRole(session?.role)
+  const workspace = useMemo<Workspace>(
+    () => ({
+      departments: data.departments,
+      doctors: data.doctors,
+      schedules: data.schedules,
+      loading,
+      isReadOnly,
+      searchQuery,
+      onError: setError,
+    }),
+    [data, loading, isReadOnly, searchQuery],
+  )
 
   useEffect(() => {
     localStorage.setItem(activityStorageKey, JSON.stringify(activity))
@@ -333,207 +367,103 @@ function App() {
     return <NoAccessScreen role={session.role} onLogout={handleLogout} />
   }
 
-  const isReadOnly = isDemoRole(session.role)
-  const selectedDepartment =
-    data.departments.find((department) => department.id === selectedDepartmentId) ?? data.departments[0] ?? null
-  const markAppointment = (appointmentId: number, status: 'Completed' | 'NoShow') =>
-    runAction(
-      () => changeAppointmentStatus(appointmentId, status),
-      status === 'Completed' ? 'Appointment marked completed' : 'Appointment marked no-show',
-    )
-
   return (
-    <div className="app-shell">
-      <Sidebar
-        canUseAdmin={canUseAdmin(session.role)}
-        canUseReception={canUseReception(session.role)}
-        canUseDoctor={canUseDoctor(session.role)}
-        screen={screen}
-        onChange={setScreen}
-      />
-      <main className="workspace">
-        <TopBar
-          loading={loading}
-          role={screenTitle(screen)}
-          userRole={session.role}
-          searchQuery={searchQuery}
-          onChangePassword={isReadOnly ? undefined : () => setChangingPassword(true)}
-          onLogout={handleLogout}
-          onRefresh={reloadAll}
-          onSearchChange={setSearchQuery}
+    <WorkspaceContext value={workspace}>
+      <div className="app-shell">
+        <Sidebar
+          canUseAdmin={canUseAdmin(session.role)}
+          canUseReception={canUseReception(session.role)}
+          canUseDoctor={canUseDoctor(session.role)}
+          screen={screen}
+          onChange={setScreen}
         />
-
-        {(error || notice) && (
-          <div className="alert-stack">
-            {error && (
-              <div className="app-alert" role="alert">
-                {error}
-              </div>
-            )}
-            {notice && (
-              <div className="app-alert success" role="status">
-                {notice}
-              </div>
-            )}
-          </div>
-        )}
-
-        {screen === 'reception' && (
-          <ReceptionDashboard
-            appointments={appointments}
-            departments={data.departments}
-            doctors={data.doctors}
+        <main className="workspace">
+          <TopBar
             loading={loading}
-            schedules={data.schedules}
-            selectedDoctor={selectedDoctor}
-            selectedDoctorId={selectedDoctorId}
+            role={screenTitle(screen)}
+            userRole={session.role}
             searchQuery={searchQuery}
-            weekOffset={weekOffset}
-            isReadOnly={isReadOnly}
-            onSelectDoctor={setSelectedDoctorId}
-            onWeekOffsetChange={setWeekOffset}
-            onCancelAppointment={(appointmentId, reason) =>
-              runAction(() => cancelAppointment(appointmentId, reason), 'Appointment cancelled')
-            }
-            onChangeAppointmentStatus={markAppointment}
-            onCreateAppointment={(input) => runAction(() => createAppointment(input), 'Appointment booked')}
+            onChangePassword={isReadOnly ? undefined : () => setChangingPassword(true)}
+            onLogout={handleLogout}
+            onRefresh={reloadAll}
+            onSearchChange={setSearchQuery}
+          />
+
+          {(error || notice) && (
+            <div className="alert-stack">
+              {error && (
+                <div className="app-alert" role="alert">
+                  {error}
+                </div>
+              )}
+              {notice && (
+                <div className="app-alert success" role="status">
+                  {notice}
+                </div>
+              )}
+            </div>
+          )}
+
+          {screen === 'reception' && (
+            <ReceptionDashboard
+              appointments={appointments}
+              selectedDoctor={selectedDoctor}
+              selectedDoctorId={selectedDoctorId}
+              weekOffset={weekOffset}
+              onSelectDoctor={setSelectedDoctorId}
+              onWeekOffsetChange={setWeekOffset}
+              onCancelAppointment={cancelBooking}
+              onChangeAppointmentStatus={markAppointment}
+              onCreateAppointment={bookAppointment}
+            />
+          )}
+
+          {screen === 'patients' && <PatientsScreen onUpdatePatient={savePatient} />}
+
+          {screen === 'doctor' && <DoctorDashboard onChangeAppointmentStatus={markAppointment} />}
+
+          {canUseAdmin(session.role) && screen !== 'reception' && screen !== 'patients' && screen !== 'doctor' && (
+            <AdminDashboard
+              section={screen}
+              selectedDepartmentId={selectedDepartmentId}
+              activity={activity}
+              usersPage={usersPage}
+              usersLoading={usersLoading}
+              canReadAuditLog={session.role === 'Admin'}
+              actions={adminActions}
+              onNavigate={setScreen}
+              onSelectDepartment={setSelectedDepartmentId}
+              onUsersPageChange={setUsersPage}
+            />
+          )}
+        </main>
+
+        {pendingChange && (
+          <AffectedBookingsDialog
+            affected={pendingChange.affected}
+            loading={loading}
+            onCancelBookings={pendingChange.confirm}
+            onClose={pendingChange.dismiss}
           />
         )}
 
-        {screen === 'patients' && (
-          <PatientsScreen
-            searchQuery={searchQuery}
-            isReadOnly={isReadOnly}
+        {changingPassword && (
+          <ChangePasswordDialog
             loading={loading}
-            onError={setError}
-            onUpdatePatient={(patientId, input) => runAction(() => updatePatient(patientId, input), 'Patient details saved')}
-          />
-        )}
-
-        {screen === 'doctor' && (
-          <DoctorDashboard loading={loading} onError={setError} onChangeAppointmentStatus={markAppointment} />
-        )}
-
-        {canUseAdmin(session.role) && screen !== 'reception' && screen !== 'patients' && screen !== 'doctor' && (
-          <AdminDashboard
-            departments={data.departments}
-            doctors={data.doctors}
-            loading={loading}
-            schedules={data.schedules}
-            selectedDepartment={selectedDepartment}
-            selectedDepartmentId={selectedDepartmentId}
-            section={screen}
-            searchQuery={searchQuery}
-            isReadOnly={isReadOnly}
-            activity={activity}
-            usersPage={usersPage}
-            usersLoading={usersLoading}
-            canReadAuditLog={session.role === 'Admin'}
-            onError={setError}
-            onNavigate={setScreen}
-            onUsersPageChange={setUsersPage}
-            onSelectDepartment={setSelectedDepartmentId}
-            onAssignDoctor={async (doctor, departmentId) => {
-              const department = data.departments.find((candidate) => candidate.id === departmentId)
-              const confirmed = await confirm({
-                title: 'Move doctor',
-                message: `Move ${doctor.name} to ${department?.name ?? 'this department'}?`,
-                confirmLabel: 'Move doctor',
-              })
-              if (!confirmed) return { ok: false }
-              return runAction(() => changeDoctorDepartment(doctor.doctorId, departmentId), 'Doctor department updated')
-            }}
-            onChangeDepartmentStatus={async (department, isActive) => {
-              const confirmed = await confirm({
-                title: isActive ? 'Activate department' : 'Deactivate department',
-                message: isActive
-                  ? `Activate ${department.name}? Its doctors can be booked again.`
-                  : `Deactivate ${department.name}? Its doctors can no longer be booked.`,
-                confirmLabel: isActive ? 'Activate' : 'Deactivate',
-                tone: isActive ? undefined : 'danger',
-              })
-              if (!confirmed) return { ok: false }
-              return runBookingChange(
-                (cancel) => changeDepartmentStatus(department.id, isActive, cancel),
-                'Department status updated',
+            onChangePassword={async (currentPassword, newPassword) => {
+              return runAction(
+                () => changeOwnPassword(currentPassword, newPassword),
+                'Password changed',
+                (result) => result.token,
               )
             }}
-            onChangeDoctorStatus={async (doctor, isActive) => {
-              const confirmed = await confirm({
-                title: isActive ? 'Activate doctor' : 'Deactivate doctor',
-                message: isActive
-                  ? `Activate ${doctor.name}? They can be booked again.`
-                  : `Deactivate ${doctor.name}? They can no longer be booked or sign in.`,
-                confirmLabel: isActive ? 'Activate' : 'Deactivate',
-                tone: isActive ? undefined : 'danger',
-              })
-              if (!confirmed) return { ok: false }
-              return runBookingChange((cancel) => changeDoctorStatus(doctor, isActive, cancel), 'Doctor status updated')
-            }}
-            onChangeSchedule={(scheduleId, input) =>
-              runBookingChange((cancel) => changeSchedule(scheduleId, input, cancel), 'Schedule updated')
-            }
-            onChangeUserRole={async (user, role) => {
-              // A new doctor needs a department; choosing one is the confirmation.
-              let departmentId: number | undefined
-              if (role === 'Doctor') {
-                const chosen = await chooseDepartment(user.userName, data.departments)
-                if (chosen === null) return { ok: false }
-                departmentId = chosen
-              } else {
-                const confirmed = await confirm({
-                  title: 'Change role',
-                  message: `Change ${user.userName}'s role from ${user.role} to ${role}? They are signed out everywhere.`,
-                  confirmLabel: 'Change role',
-                })
-                if (!confirmed) return { ok: false }
-              }
-              return runBookingChange(
-                (cancel) => changeUserRole(user.userId, role, departmentId, cancel),
-                'User role updated',
-              )
-            }}
-            onCreateDepartment={(name) => runAction(() => createDepartment(name), 'Department created')}
-            onCreateSchedule={(input) => runAction(() => createSchedule(input), 'Schedule created')}
-            onCreateUser={(name, password) => runAction(() => createUser(name, password), 'User created')}
-            onResetPassword={async (user, password) => {
-              const confirmed = await confirm({
-                title: 'Reset password',
-                message: `Set a new password for ${user.userName}? They are signed out everywhere, and a sign-in lock is lifted.`,
-                confirmLabel: 'Reset password',
-              })
-              if (!confirmed) return { ok: false }
-              return runAction(() => resetPassword(user.userId, password), 'Password reset')
-            }}
+            onClose={() => setChangingPassword(false)}
           />
         )}
-      </main>
 
-      {pendingChange && (
-        <AffectedBookingsDialog
-          affected={pendingChange.affected}
-          loading={loading}
-          onCancelBookings={pendingChange.confirm}
-          onClose={pendingChange.dismiss}
-        />
-      )}
-
-      {changingPassword && (
-        <ChangePasswordDialog
-          loading={loading}
-          onChangePassword={async (currentPassword, newPassword) => {
-            return runAction(
-              () => changeOwnPassword(currentPassword, newPassword),
-              'Password changed',
-              (result) => result.token,
-            )
-          }}
-          onClose={() => setChangingPassword(false)}
-        />
-      )}
-
-      {dialog}
-    </div>
+        {dialog}
+      </div>
+    </WorkspaceContext>
   )
 }
 

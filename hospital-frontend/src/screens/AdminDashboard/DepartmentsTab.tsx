@@ -1,33 +1,23 @@
 import { useState } from 'react'
-import type { DepartmentDto, DoctorDto, ScheduleDto } from '../../api'
+import type { DepartmentDto } from '../../api'
 import { GuardedButton, StatusBadge, TableStatus } from '../../components/ui'
+import { useWorkspace } from '../../hooks/useWorkspace'
 import { coverageForDepartment } from '../../lib/schedule'
 import type { ActionOutcome } from '../../types'
 
 // The top bar's search filters this table.
 export function DepartmentsTab({
-  departments,
-  doctors,
-  schedules,
-  loading,
-  searchQuery,
   selectedDepartmentId,
-  isReadOnly,
   onChangeDepartmentStatus,
   onCreateDepartment,
   onSelectDepartment,
 }: {
-  departments: DepartmentDto[]
-  doctors: DoctorDto[]
-  schedules: ScheduleDto[]
-  loading: boolean
-  searchQuery: string
   selectedDepartmentId: number | null
-  isReadOnly: boolean
   onChangeDepartmentStatus: (department: DepartmentDto, isActive: boolean) => Promise<ActionOutcome>
   onCreateDepartment: (name: string) => Promise<ActionOutcome>
   onSelectDepartment: (departmentId: number) => void
 }) {
+  const { departments, doctors, schedules, loading, searchQuery, isReadOnly } = useWorkspace()
   const [departmentNameInput, setDepartmentNameInput] = useState('')
   const normalizedSearch = searchQuery.trim().toLowerCase()
   const visibleDepartments = departments.filter(
@@ -40,6 +30,7 @@ export function DepartmentsTab({
         <div className="inline-form">
           <input
             aria-label="New department name"
+            maxLength={100}
             placeholder="New department"
             value={departmentNameInput}
             onChange={(event) => setDepartmentNameInput(event.target.value)}

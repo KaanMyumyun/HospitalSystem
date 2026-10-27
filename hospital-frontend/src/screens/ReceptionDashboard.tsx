@@ -1,15 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { PossiblePatientMatchError } from '../api'
-import type {
-  AppointmentDto,
-  CreateAppointmentInput,
-  DepartmentDto,
-  DoctorDto,
-  PatientMatchDto,
-  ScheduleDto,
-} from '../api'
+import type { AppointmentDto, CreateAppointmentInput, DoctorDto, PatientMatchDto } from '../api'
 import { EmptyState, Metric, Modal, StatusBadge } from '../components/ui'
+import { useWorkspace } from '../hooks/useWorkspace'
 import {
   departmentName,
   formatDay,
@@ -38,15 +32,9 @@ import type { ActionOutcome, Slot } from '../types'
 
 export function ReceptionDashboard({
   appointments,
-  departments,
-  doctors,
-  loading,
-  schedules,
   selectedDoctor,
   selectedDoctorId,
-  searchQuery,
   weekOffset,
-  isReadOnly,
   onCancelAppointment,
   onChangeAppointmentStatus,
   onCreateAppointment,
@@ -55,21 +43,16 @@ export function ReceptionDashboard({
 }: {
   // The selected doctor's appointments for the week shown; null while loading.
   appointments: AppointmentDto[] | null
-  departments: DepartmentDto[]
-  doctors: DoctorDto[]
-  loading: boolean
-  schedules: ScheduleDto[]
   selectedDoctor: DoctorDto | null
   selectedDoctorId: number | null
-  searchQuery: string
   weekOffset: number
-  isReadOnly: boolean
   onCancelAppointment: (appointmentId: number, reason: string) => Promise<ActionOutcome>
   onChangeAppointmentStatus: (appointmentId: number, status: 'Completed' | 'NoShow') => Promise<ActionOutcome>
   onCreateAppointment: (input: CreateAppointmentInput) => Promise<ActionOutcome>
   onSelectDoctor: (doctorId: number) => void
   onWeekOffsetChange: Dispatch<SetStateAction<number>>
 }) {
+  const { departments, doctors, schedules, loading, searchQuery, isReadOnly } = useWorkspace()
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<number | null>(null)
   const [cancellingAppointmentId, setCancellingAppointmentId] = useState<number | null>(null)

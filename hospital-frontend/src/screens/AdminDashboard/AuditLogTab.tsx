@@ -2,18 +2,12 @@ import { loadAuditLogs } from '../../api'
 import { Pager } from '../../components/Pager'
 import { EmptyState, SkeletonRows } from '../../components/ui'
 import { usePagedList } from '../../hooks/usePagedList'
+import { useWorkspace } from '../../hooks/useWorkspace'
 import { formatLongDate, formatTime } from '../../lib/format'
 
 // Who changed what, newest first. The API searches actions and details.
-export function AuditLogTab({
-  enabled,
-  searchQuery,
-  onError,
-}: {
-  enabled: boolean
-  searchQuery: string
-  onError: (message: string) => void
-}) {
+export function AuditLogTab({ enabled }: { enabled: boolean }) {
+  const { searchQuery, onError } = useWorkspace()
   const { result: page, isLoading, setPage } = usePagedList(
     enabled,
     searchQuery,

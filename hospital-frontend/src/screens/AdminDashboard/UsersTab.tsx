@@ -3,6 +3,7 @@ import { isDemoRole } from '../../api'
 import type { UserDto, UserRole, UsersPage } from '../../api'
 import { Pager } from '../../components/Pager'
 import { GuardedButton, StatusBadge, TableStatus } from '../../components/ui'
+import { useWorkspace } from '../../hooks/useWorkspace'
 import { guarded } from '../../lib/readOnly'
 import { formatTime } from '../../lib/format'
 import type { ActionOutcome } from '../../types'
@@ -14,20 +15,20 @@ const assignableRoles: UserRole[] = ['Admin', 'Doctor', 'FrontDesk']
 export function UsersTab({
   usersPage,
   loading,
-  isReadOnly,
   onChangeUserRole,
   onCreateUser,
   onPageChange,
   onResetPassword,
 }: {
   usersPage: UsersPage | null
+  // The shared loading flag, or the users page loading.
   loading: boolean
-  isReadOnly: boolean
   onChangeUserRole: (user: UserDto, role: UserRole) => Promise<ActionOutcome>
   onCreateUser: (name: string, password: string) => Promise<ActionOutcome>
   onPageChange: (page: number) => void
   onResetPassword: (user: UserDto, password: string) => Promise<ActionOutcome>
 }) {
+  const { isReadOnly } = useWorkspace()
   const [newUserName, setNewUserName] = useState('')
   const [newUserPassword, setNewUserPassword] = useState('')
   const [resetUserId, setResetUserId] = useState<number | null>(null)
