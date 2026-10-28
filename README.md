@@ -257,6 +257,7 @@ The system is divided into two independent layers:
 │   └── dependabot.yml
 │
 ├── hospital-frontend/              # Frontend (React + TypeScript + Vite)
+│   ├── e2e/                        # Playwright end-to-end tests (npm run e2e)
 │   ├── public/
 │   ├── scripts/                    # generate-api-types.mjs (+ test)
 │   ├── src/
@@ -276,6 +277,7 @@ The system is divided into two independent layers:
 │   ├── index.html
 │   ├── openapi.json                # The API's OpenAPI document (API contract)
 │   ├── vite.config.ts              # 404 page and Content-Security-Policy
+│   ├── playwright.config.ts        # Starts the API and app for npm run e2e
 │   └── package.json
 │
 ├── HospitalSystem/                 # Backend (ASP.NET Core Web API)
@@ -975,7 +977,53 @@ cover schedule slots and working days, formatting, form validation, time
 handling, HTTP error messages, the API client's booking errors and the API
 type generator.
 
-Frontend components and screens still have no direct component tests.
+The screens are covered by end-to-end tests instead of component tests.
+
+### End-to-end tests
+
+`hospital-frontend/e2e` holds Playwright tests that drive the app in Chromium
+against the real API and a PostgreSQL database. They cover:
+
+- **Sign-in:** a wrong password, then signing in and out.
+- **Reception:** the week in clinic time, with the break and a day away.
+  Booking an open slot, then cancelling it. Moving a booking to another
+  doctor and time. The booking's history. Session renewal.
+- **Admin:** editing a schedule's break. Adding and removing time off,
+  including over a booking. Making a new user a doctor in a new department.
+- **Phone:** "My day" and reception without sideways scrolling.
+
+`npm run e2e` starts what the tests need on ports of their own (API on 5290,
+app on 5190), so a dev server you have running is not touched:
+
+- the API, built with `dotnet run`, on a new database `hs_e2e_<random>`,
+  which it creates and migrates as it starts;
+- the first admin, made with `--create-admin`;
+- the production build of the app, with its content security policy.
+
+The database is dropped when the run ends. Each test adds the departments,
+doctors and bookings it needs through the API, under names no other test
+uses, so tests can run in parallel. The browser runs in Asia/Tokyo, so every
+date and time the tests look for also shows that the app keeps to the
+clinic's zone. A test fails on any error in the browser console, which
+catches requests the content security policy blocks.
+
+Requirements:
+
+- the .NET SDK;
+- Chromium for Playwright, installed once with `npx playwright install chromium`
+  (again after a Playwright update);
+- `HOSPITALSYSTEM_TEST_POSTGRES`, as for the backend's PostgreSQL tests: a
+  server where the tests can create databases, on PostgreSQL 13 or later.
+
+```bash
+cd hospital-frontend
+HOSPITALSYSTEM_TEST_POSTGRES='Host=localhost;Port=5432;Username=hospitaluser;Password=strongpassword;Database=postgres' npm run e2e
+```
+
+A run takes about 40 seconds. For a failed test, `test-results/` keeps a
+screenshot and a trace (`npx playwright show-trace <path>`), and
+`npx playwright show-report` opens the HTML report. CI does not run these
+tests: they need a database server and the API.
 
 ### API contract
 
