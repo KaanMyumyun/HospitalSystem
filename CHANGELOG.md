@@ -85,6 +85,13 @@ tagged releases yet, so everything is listed under Unreleased.
   An API whose migrations fail exits before it listens, and a start with
   nothing to apply skips the migration lock. Turned on for Render, every
   merge brings Neon up to date as the new release starts.
+- End-to-end tests with Playwright (`npm run e2e` in `hospital-frontend`). They
+  start the API on a database of their own and the production build of the
+  app, then drive Chromium through sign-in, the reception grid (booking,
+  cancelling, moving, history, session renewal), schedule breaks and time
+  off, making a doctor, and the phone layouts. The browser runs in another
+  time zone than the clinic, and any console error fails a test. They need
+  `HOSPITALSYSTEM_TEST_POSTGRES`, so CI does not run them.
 
 ### Changed
 

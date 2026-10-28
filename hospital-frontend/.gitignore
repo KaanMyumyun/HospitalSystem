@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# npm run e2e
+dist-e2e
+test-results
+playwright-report
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

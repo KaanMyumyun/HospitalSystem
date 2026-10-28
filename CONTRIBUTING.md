@@ -48,6 +48,13 @@ VITE_API_URL=http://localhost:5272/api npm run build
 
 A production build needs `VITE_API_URL`, the API it will call.
 
+For a change to a screen, also run the end-to-end tests. CI does not run
+them. They need a PostgreSQL server; see End-to-end tests in the README:
+
+```bash
+HOSPITALSYSTEM_TEST_POSTGRES='Host=localhost;Port=5432;Username=hospitaluser;Password=strongpassword;Database=postgres' npm run e2e
+```
+
 ## Pull requests
 
 - `main` is protected: CI must pass, and a pull request needs one approving
