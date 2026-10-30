@@ -1,4 +1,5 @@
 using HospitalSystem.Interfaces.Calendar;
+using HospitalSystem.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,20 +9,20 @@ namespace HospitalSystem.Controllers;
 [Route("api/schedules")]
 public class SchedulesController : ControllerBase
 {
-    [Authorize(Roles = "FrontDesk,Admin,DemoAdmin,DemoFrontDesk")]
+    [Authorize(Policy = Access.ReferenceData)]
     [HttpGet]
     public async Task<ActionResult<ServiceResult<List<ViewSchedule>>>> ListSchedules(
         [FromServices] IScheduleQueryService service, CancellationToken cancellationToken)
         => this.ToActionResult(await service.ViewScheduleAsync(cancellationToken));
 
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Access.Admin)]
     [HttpPost]
     public async Task<ActionResult<CalendarActionResult>> CreateSchedule(
         [FromBody] CreateSchedule dto, [FromServices] IScheduleCreationService service, CancellationToken cancellationToken)
         => this.ToActionResult(await service.CreateScheduleAsync(dto, cancellationToken));
 
     // Replaces the hours, slot length, break and working days.
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Access.Admin)]
     [HttpPut("{scheduleId:int}")]
     public async Task<ActionResult<CalendarActionResult>> ChangeSchedule(
         int scheduleId, [FromBody] ChangeScheduleDto dto, [FromServices] IScheduleModificationService service,
@@ -32,7 +33,7 @@ public class SchedulesController : ControllerBase
     }
 
     // Days the doctor is away, such as a holiday; nobody can book them then.
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Access.Admin)]
     [HttpPost("{scheduleId:int}/time-off")]
     public async Task<ActionResult<CalendarActionResult>> AddTimeOff(
         int scheduleId, [FromBody] AddTimeOffDto dto, [FromServices] ITimeOffService service,
@@ -42,7 +43,7 @@ public class SchedulesController : ControllerBase
         return this.ToActionResult(await service.AddTimeOffAsync(dto, cancellationToken));
     }
 
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Access.Admin)]
     [HttpDelete("{scheduleId:int}/time-off/{timeOffId:int}")]
     public async Task<ActionResult<CalendarActionResult>> RemoveTimeOff(
         int scheduleId, int timeOffId, [FromServices] ITimeOffService service, CancellationToken cancellationToken)

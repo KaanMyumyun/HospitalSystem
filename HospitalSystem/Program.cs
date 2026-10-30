@@ -88,7 +88,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
     Predicate = check => check.Tags.Contains("ready")
 }).AllowAnonymous();
 // Every controller endpoint also requires DemoReadOnly, on top of its own
-// roles; sign-in, which allows anonymous callers, needs no policy at all.
+// policy; sign-in, which allows anonymous callers, needs no policy at all.
 app.MapControllers().RequireAuthorization(DemoReadOnly.Policy);
 // The explicit pattern also covers paths with a file extension, such as
 // /favicon.ico, which MapFallback's default pattern leaves out.

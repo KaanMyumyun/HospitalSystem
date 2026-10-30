@@ -1,4 +1,5 @@
 using HospitalSystem.Interfaces.Appointments;
+using HospitalSystem.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,20 +9,20 @@ namespace HospitalSystem.Controllers;
 [Route("api/patients")]
 public class PatientsController : ControllerBase
 {
-    [Authorize(Roles = "FrontDesk,DemoFrontDesk")]
+    [Authorize(Policy = Access.DeskReads)]
     [HttpGet]
     public async Task<ActionResult<ServiceResult<PagedResult<PatientSummaryDto>>>> ListPatients(
         [FromQuery] PatientQueryDto query, [FromServices] IPatientRecordService service, CancellationToken cancellationToken)
         => this.ToActionResult(await service.ListPatientsAsync(query, cancellationToken));
 
-    [Authorize(Roles = "FrontDesk,DemoFrontDesk")]
+    [Authorize(Policy = Access.DeskReads)]
     [HttpGet("{patientId:int}")]
     public async Task<ActionResult<ServiceResult<PatientDetailsDto>>> GetPatient(
         int patientId, [FromServices] IPatientRecordService service, CancellationToken cancellationToken)
         => this.ToActionResult(await service.GetPatientAsync(patientId, cancellationToken));
 
     // Replaces the name, phone number and date of birth.
-    [Authorize(Roles = "FrontDesk")]
+    [Authorize(Policy = Access.Desk)]
     [HttpPut("{patientId:int}")]
     public async Task<ActionResult<PatientActionResultDto>> UpdatePatient(
         int patientId, [FromBody] UpdatePatientDto dto, [FromServices] IPatientRecordService service,

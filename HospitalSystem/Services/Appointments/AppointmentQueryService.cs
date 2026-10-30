@@ -15,7 +15,7 @@ public class AppointmentQueryService(
     public async Task<ServiceResult<List<ViewAppointmentDto>>> GetAppointmentsAsync(
         AppointmentQueryDto query, CancellationToken cancellationToken = default)
     {
-        if (!currentUser.IsDesk() && !currentUser.IsInRole(UserRole.DemoFrontDesk))
+        if (!currentUser.Allows(Access.DeskReads))
             return ServiceResult<List<ViewAppointmentDto>>.Forbidden("Not allowed to list appointments");
 
         if (query.DoctorId is not int doctorId || query.From is not DateTimeOffset from || query.To is not DateTimeOffset to)
@@ -33,7 +33,7 @@ public class AppointmentQueryService(
     public async Task<ServiceResult<List<ViewAppointmentDto>>> GetMyAppointmentsAsync(
         MyAppointmentsQueryDto query, CancellationToken cancellationToken = default)
     {
-        if (!currentUser.IsInRole(UserRole.Doctor) || !int.TryParse(currentUser.UserId, out var userId))
+        if (!currentUser.Allows(Access.Doctor) || !int.TryParse(currentUser.UserId, out var userId))
             return ServiceResult<List<ViewAppointmentDto>>.Forbidden("Only doctors have their own appointments");
 
         if (query.From is not DateTimeOffset from || query.To is not DateTimeOffset to)

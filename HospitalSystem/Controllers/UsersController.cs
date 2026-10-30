@@ -1,5 +1,6 @@
 using HospitalSystem.Interfaces.Auth;
 using HospitalSystem.Interfaces.User;
+using HospitalSystem.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,7 +8,7 @@ namespace HospitalSystem.Controllers;
 
 [ApiController]
 [Route("api/users")]
-[Authorize(Roles = "Admin")]
+[Authorize(Policy = Access.Admin)]
 public class UsersController : ControllerBase
 {
     [HttpGet]

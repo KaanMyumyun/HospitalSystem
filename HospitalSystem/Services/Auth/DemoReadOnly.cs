@@ -12,7 +12,7 @@ public sealed class DemoReadOnly : AuthorizationHandler<DemoReadOnly>, IAuthoriz
 
     protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, DemoReadOnly requirement)
     {
-        var isDemo = context.User.IsInRole(nameof(UserRole.DemoAdmin)) || context.User.IsInRole(nameof(UserRole.DemoFrontDesk));
+        var isDemo = Access.DemoRoles.Any(role => context.User.IsInRole(role.ToString()));
         var method = (context.Resource as HttpContext)?.Request.Method;
         if (!isDemo || method is not null && (HttpMethods.IsGet(method) || HttpMethods.IsHead(method)))
             context.Succeed(requirement);

@@ -14,8 +14,7 @@ public class AppointmentStatusService(
     public async Task<AppointmentStatusResultDto> ChangeStatusAsync(
         ChangeAppointmentStatusDto dto, CancellationToken cancellationToken = default)
     {
-        var isDesk = currentUser.IsDesk();
-        if (!isDesk && !currentUser.IsInRole(UserRole.Doctor))
+        if (!currentUser.Allows(Access.DeskOrDoctor))
             return AppointmentStatusResultDto.Forbidden("You are not allowed to change an appointment's status");
 
         if (dto.Status is not AppointmentStatus status)
@@ -30,7 +29,7 @@ public class AppointmentStatusService(
         if (appointment == null)
             return AppointmentStatusResultDto.NotFound("Appointment not found");
 
-        if (!isDesk && appointment.Doctor.UserId.ToString() != currentUser.UserId)
+        if (!currentUser.IsDesk() && appointment.Doctor.UserId.ToString() != currentUser.UserId)
             return AppointmentStatusResultDto.Forbidden("Doctors can only mark their own appointments");
 
         if (appointment.Status == AppointmentStatus.Cancelled)

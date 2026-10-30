@@ -15,8 +15,7 @@ public class PatientRecordService(
     // A patient's newest appointments, up to this many, come with them.
     private const int MaxAppointments = 200;
 
-    private bool CanRead() =>
-        currentUser.IsDesk() || currentUser.IsInRole(UserRole.DemoFrontDesk);
+    private bool CanRead() => currentUser.Allows(Access.DeskReads);
 
     public async Task<ServiceResult<PagedResult<PatientSummaryDto>>> ListPatientsAsync(
         PatientQueryDto query, CancellationToken cancellationToken = default)
