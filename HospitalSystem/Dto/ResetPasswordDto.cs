@@ -5,7 +5,6 @@ namespace HospitalSystem.Dto;
 
 public class ResetPasswordDto
 {
-    // From the route, never the body.
     [JsonIgnore]
     public int UserId { get; set; }
     [Required]

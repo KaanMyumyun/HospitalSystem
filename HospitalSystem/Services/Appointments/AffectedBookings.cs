@@ -4,16 +4,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HospitalSystem.Services.Appointments;
 
-// The future bookings a schedule, status or role change would strand. The
-// change is refused with them listed; sent again with a reason, it cancels
-// them the way the desk cancels a booking, in the caller's save.
 internal static class AffectedBookings
 {
-    // The refusal lists the soonest this many; its count covers them all.
     public const int MaxListed = 100;
 
-    // Scheduled bookings that have not started yet, soonest first, with the
-    // patient and doctor needed to describe them.
     public static Task<List<AppointmentEntity>> LoadFutureAsync(
         ApplicationDbContext context,
         Expression<Func<AppointmentEntity, bool>> filter,
@@ -30,8 +24,6 @@ internal static class AffectedBookings
             .ToListAsync(cancellationToken);
     }
 
-    // Null when the change can go ahead: nothing is stranded, or the request
-    // asked to cancel what is and gave a reason. Otherwise the refusal.
     public static async Task<TResult?> ResolveAsync<TResult>(
         IReadOnlyList<AppointmentEntity> stranded,
         ICancelsAffectedBookings request,
@@ -80,7 +72,6 @@ internal static class AffectedBookings
         PatientInitials = Initials(appointment.Patient.Name)
     };
 
-    // "Maria Ivanova" is "MI", as on the reception grid.
     private static string Initials(string name) =>
         string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(part => char.ToUpperInvariant(part[0])));
 }

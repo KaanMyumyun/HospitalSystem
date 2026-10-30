@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { tokenExpiry } from './session'
 
-// A token with these claims; the API's signature does not matter here.
 function fakeToken(claims: Record<string, unknown>) {
   const base64url = (value: string) => btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   return `${base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${base64url(JSON.stringify(claims))}.signature`
@@ -13,7 +12,6 @@ describe('tokenExpiry', () => {
   })
 
   it('reads a payload that needs base64url characters and padding', () => {
-    // "~~~" encodes to "fn5-": a "-" where base64 has "+".
     expect(tokenExpiry(fakeToken({ exp: 1_800_000_123, name: '~~~?' }))).toBe(1_800_000_123_000)
   })
 

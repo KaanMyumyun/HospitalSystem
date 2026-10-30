@@ -1,5 +1,3 @@
-// A dialog request has one answer. Closing it, replacing it, or unmounting
-// the owner gives the caller its cancel value; a late click cannot answer twice.
 export function createDialogRequests() {
   let pendingDismiss: (() => void) | null = null
 

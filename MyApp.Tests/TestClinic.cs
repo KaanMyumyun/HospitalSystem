@@ -2,7 +2,6 @@ using HospitalSystem.Services;
 
 namespace HospitalSystem.Tests;
 
-// A clinic clock for tests: UTC unless a test is about the clinic's zone.
 public static class TestClinic
 {
     public static ClinicClock Utc(TimeProvider? time = null) => In("UTC", time);

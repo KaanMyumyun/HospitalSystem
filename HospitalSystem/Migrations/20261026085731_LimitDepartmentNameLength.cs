@@ -10,9 +10,6 @@ namespace HospitalSystem.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Department names get a length limit, as user and patient names
-            // have. A longer name has to be shortened by hand first; the
-            // migration stops rather than cut it.
             migrationBuilder.Sql("""
                 DO $$
                 BEGIN

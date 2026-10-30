@@ -8,8 +8,6 @@ services:
     environment:
       POSTGRES_DB: HospitalSystemDb
       POSTGRES_USER: hospitaluser
-      # From .env, with a local-only default. PostgreSQL keeps the password
-      # its volume was created with; see .env.example.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-strongpassword}
     volumes:
       - postgres_data:/var/lib/postgresql/data

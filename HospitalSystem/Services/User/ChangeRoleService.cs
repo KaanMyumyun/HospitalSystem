@@ -17,7 +17,6 @@ public class ChangeRoleService(
         if (currentUser.RequireAdmin<ChangeRoleResultDto>("change a user's role") is { } refusal)
             return refusal;
 
-        // With the doctor row, if the user has one: one query instead of two.
         var user = await context.Users
             .Include(u => u.Doctor)
             .FirstOrDefaultAsync(u => u.Id == dto.UserId, cancellationToken);
@@ -26,8 +25,6 @@ public class ChangeRoleService(
 
         var doctor = user.Doctor;
 
-        // A new doctor needs a department; a former doctor goes back to theirs
-        // unless another one is given.
         if (dto.NewRole == UserRole.Doctor)
         {
             if (dto.DepartmentId is int departmentId)
@@ -52,7 +49,6 @@ public class ChangeRoleService(
         if (roleError is not null)
             return ChangeRoleResultDto.Fail(roleError);
 
-        // Taking the role away deactivates the doctor below.
         if (dto.NewRole != UserRole.Doctor && doctor is { IsActive: true })
         {
             var stranded = await AffectedBookings.LoadFutureAsync(context, a => a.DoctorId == doctor.Id, cancellationToken);

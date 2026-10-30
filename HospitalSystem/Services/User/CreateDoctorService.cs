@@ -16,8 +16,6 @@ public class CreateDoctorService(
         if (currentUser.RequireAdmin<CreateDoctorResultDto>("create a doctor") is { } refusal)
             return refusal;
 
-        // The user's doctor row, if any, and the department come with the user:
-        // one query instead of three.
         var found = await context.Users
             .Where(u => u.Id == dto.UserId)
             .Select(u => new

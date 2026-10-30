@@ -5,16 +5,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HospitalSystem.Services.Calendar;
 
-// Days a doctor is away, such as a holiday. Adding them is refused while
-// future bookings fall on them, until sent again with a reason to cancel
-// those bookings, as a schedule change is.
 public class TimeOffService(
     ApplicationDbContext context,
     ICurrentUserService currentUser,
     IAuditLogService auditLog,
     ClinicClock clinic) : ITimeOffService
 {
-    // Longer than a year is more likely a mistyped date than leave.
     private const int MaxDays = 366;
 
     public async Task<CalendarActionResult> AddTimeOffAsync(AddTimeOffDto dto, CancellationToken cancellationToken = default)
@@ -34,7 +30,6 @@ public class TimeOffService(
         if (lastDay.DayNumber - firstDay.DayNumber >= MaxDays)
             return CalendarActionResult.Fail("Time off can be at most a year long");
 
-        // The schedule and any time off it overlaps come in one query.
         var found = await context.Calendars
             .Where(c => c.Id == dto.ScheduleId)
             .Select(c => new
@@ -53,7 +48,6 @@ public class TimeOffService(
             return CalendarActionResult.Conflict(
                 $"This overlaps time off from {other.FirstDay:yyyy-MM-dd} to {other.LastDay:yyyy-MM-dd}");
 
-        // From the first day's clinic midnight to the midnight after the last.
         var calendar = found.Calendar;
         var from = clinic.ToUtc(firstDay.ToDateTime(TimeOnly.MinValue));
         var to = clinic.ToUtc(lastDay.AddDays(1).ToDateTime(TimeOnly.MinValue));

@@ -12,7 +12,6 @@ dist
 dist-ssr
 *.local
 
-# npm run e2e
 dist-e2e
 test-results
 playwright-report

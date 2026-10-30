@@ -4,7 +4,6 @@ public class CreateAppointmentResultDto : OperationResult<CreateAppointmentResul
 {
     public bool IsConflict => Failure == FailureKind.Conflict;
 
-    // Set, with a conflict, when the details partly match patients on file.
     public List<PatientMatchDto>? PossibleMatches { get; set; }
 
     public static CreateAppointmentResultDto PossibleMatch(string error, List<PatientMatchDto> possibleMatches) =>

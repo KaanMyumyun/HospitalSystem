@@ -6,8 +6,6 @@ import { formatLongDate, formatTime, initials, statusLabel } from '../../lib/for
 import { canMarkAppointment, isUpcoming } from '../../lib/schedule'
 import type { Slot } from '../../types'
 
-// The right panel: the chosen booking, what the desk can do with it, and its
-// history. Booking the next open slot works without one.
 export function AppointmentPanel({
   appointment,
   doctor,

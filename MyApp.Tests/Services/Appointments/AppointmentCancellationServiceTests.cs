@@ -30,7 +30,6 @@ public class AppointmentCancellationServiceTests : AppointmentTestBase
         Assert.Equal(AppointmentStatus.Cancelled, updated!.Status);
         Assert.Equal("Patient requested cancellation", updated.CancellationReason);
         Assert.NotNull(updated.CancelledAt);
-        // Audited as the desk user who cancelled it.
         var entry = Assert.Single(db.AuditLogs, a => a.Action == "CancelAppointment");
         Assert.Equal(1, entry.EntityId);
         Assert.Equal(5, entry.ActorUserId);
@@ -121,7 +120,6 @@ public class AppointmentCancellationServiceTests : AppointmentTestBase
         await SeedStandardDataAsync(db);
         var service = CreateService(db);
 
-        // Seeded appointment 1 is Scheduled on 2026-01-01, which is in the past.
         var result = await service.CancelAppointmentAsync(new CancelAppointmentDto { AppointmentId = 1, Reason = "Valid reason" });
 
         Assert.False(result.IsSuccess);

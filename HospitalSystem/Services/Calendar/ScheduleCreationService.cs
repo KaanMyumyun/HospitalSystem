@@ -42,8 +42,6 @@ public class ScheduleCreationService(
         calendar.SetHours(dto.StartHour, dto.EndHour);
         context.Calendars.Add(calendar);
 
-        // ValidateAsync refused a doctor who has a schedule; the unique index on
-        // Calendars.DoctorId refuses the second of two made at the same time.
         try
         {
             await context.SaveChangesAsync(cancellationToken);

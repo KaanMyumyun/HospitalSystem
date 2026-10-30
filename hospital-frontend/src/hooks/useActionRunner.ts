@@ -10,16 +10,12 @@ export type RunBookingChange = (
   successMessage: string,
 ) => Promise<ActionOutcome>
 
-// A change the API refused because it strands future bookings, waiting for
-// the admin to cancel them with a reason or keep things as they are.
 export type PendingChange = {
   affected: AffectedBookingsError
   confirm: (reason: string) => Promise<ActionOutcome>
   dismiss: () => void
 }
 
-// Where an action's progress and outcome show. All must keep the same
-// identity except reloadAll, which reloads everything on screen.
 type Reporting = {
   reloadAll: () => Promise<void>
   setLoading: (loading: boolean) => void
@@ -28,9 +24,6 @@ type Reporting = {
   onSuccess: (message: string) => void
 }
 
-// Every change the screens make runs through runAction: one at a time, for
-// the signed-in session, then the screen reloads and the outcome shows. An
-// action that finishes after its session ended changes nothing on screen.
 export function useActionRunner(
   session: Session | null,
   sessionEpoch: RefObject<number>,
@@ -40,9 +33,6 @@ export function useActionRunner(
   const actionInFlight = useRef<symbol | null>(null)
   const pendingChangeCancel = useRef<(() => void) | null>(null)
 
-  // Kept between renders while the session and reloadAll are, so the screens'
-  // callbacks built on it keep theirs too. A renewed token or a password
-  // change keeps the session's id, so its actions carry on.
   const runAction = useCallback<RunAction>(async (action, successMessage) => {
     if (!session || getStoredSession()?.id !== session.id) return { ok: false }
     if (isDemoRole(session?.role)) {
@@ -73,7 +63,6 @@ export function useActionRunner(
     } catch (actionError) {
       if (!isCurrent()) return { ok: false }
       const message = actionError instanceof Error ? actionError.message : 'Operation failed'
-      // These open a dialog of their own instead.
       if (!(actionError instanceof PossiblePatientMatchError || actionError instanceof AffectedBookingsError)) {
         setError(message)
       }
@@ -86,8 +75,6 @@ export function useActionRunner(
     }
   }, [session, sessionEpoch, reloadAll, setLoading, setError, setNotice, onSuccess])
 
-  // A change that can strand future bookings. When the API refuses it, the
-  // admin sees the bookings and decides; the outcome is that decision's.
   const runBookingChange = useCallback<RunBookingChange>(async (change, successMessage) => {
     const epoch = sessionEpoch.current
     const outcome = await runAction(() => change(), successMessage)
@@ -118,7 +105,6 @@ export function useActionRunner(
           )
           if (retried.ok) finish(retried)
           else if (!settled && retried.cause instanceof AffectedBookingsError) {
-            // More bookings were made meanwhile; show the new list.
             const latest = retried.cause
             setPendingChange((current) => current && { ...current, affected: latest })
           }
@@ -129,8 +115,6 @@ export function useActionRunner(
     })
   }, [runAction, session, sessionEpoch])
 
-  // When a session ends: the action in flight and the change waiting for an
-  // answer come to nothing.
   const reset = useCallback(() => {
     actionInFlight.current = null
     pendingChangeCancel.current?.()

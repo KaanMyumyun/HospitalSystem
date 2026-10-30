@@ -25,8 +25,6 @@ public class UserQueryService(
         var search = query.Search?.Trim().ToLowerInvariant();
         if (!string.IsNullOrEmpty(search))
         {
-            // Roles are stored by name, so pick the matching ones here and let
-            // the database compare whole values.
             var matchingRoles = Enum.GetValues<UserRole>()
                 .Where(role => role.ToString().Contains(search, StringComparison.OrdinalIgnoreCase))
                 .ToList();
@@ -47,14 +45,10 @@ public class UserQueryService(
                     Role = u.Role,
                     LockedUntil = u.LockedUntil > now ? u.LockedUntil : null
                 },
-                // Counted by the same statement, so a page and its total cost
-                // one round trip.
                 TotalCount = users.Count()
             })
             .ToListAsync(cancellationToken);
 
-        // An empty page carries no total. On page 1 there is nothing to
-        // count; a later page is past the last match and needs its own count.
         var totalCount = rows.Count > 0 ? rows[0].TotalCount
             : query.Page == 1 ? 0
             : await users.CountAsync(cancellationToken);

@@ -19,8 +19,6 @@ public class DepartmentCreationService(
         if (name.Length == 0)
             return DepartmentActionResultDto.Fail("Department name is required");
 
-        // Names ignore case, like usernames: "Cardiology" and "cardiology" are
-        // the same department. IX_Departments_LowerDepartment backs this up.
         var nameKey = name.ToLowerInvariant();
         if (await context.Departments.AnyAsync(d => d.Name.ToLower() == nameKey, cancellationToken))
             return DepartmentActionResultDto.Conflict("Department already exists");

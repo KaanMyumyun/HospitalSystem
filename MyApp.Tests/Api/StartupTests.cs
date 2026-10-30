@@ -14,8 +14,6 @@ public class StartupTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    // Bookings are checked against the clinic's wall clock, so a zone that is
-    // missing or wrong must not start the API.
     [Theory]
     [InlineData("")]
     [InlineData("Mars/Olympus_Mons")]
@@ -28,8 +26,6 @@ public class StartupTests
         Assert.Contains("Clinic:TimeZone", error.Message);
     }
 
-    // HS256 needs a 256-bit key. A shorter one used to pass startup and fail
-    // every sign-in with a 500.
     [Fact]
     public async Task RefusesToStartWithAShorterSigningKey()
     {
@@ -40,8 +36,6 @@ public class StartupTests
         Assert.Contains("at least 32 bytes", error.Message);
     }
 
-    // Anyone can read these: the placeholder once committed to
-    // appsettings.json, and the templates' example value.
     [Theory]
     [InlineData("THIS_SHOULD_BE_LONG_AND_SECRET_123456789")]
     [InlineData("replace-with-a-random-string-of-at-least-32-characters")]

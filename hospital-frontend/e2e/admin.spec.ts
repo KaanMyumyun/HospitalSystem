@@ -11,8 +11,6 @@ async function open(page: Page, screen: string) {
 
 async function addTimeOff(page: Page, doctor: Doctor, firstDay: string, lastDay: string, reason: string) {
   const timeOff = page.getByRole('region', { name: 'Time off' })
-  // By role: other tests' time off adds Remove buttons whose labels name
-  // their doctors, and the select's label text takes in its options.
   await timeOff.getByRole('combobox', { name: 'Doctor' }).selectOption({ label: doctor.name })
   await timeOff.getByLabel('First day', { exact: true }).fill(firstDay)
   await timeOff.getByLabel('Last day', { exact: true }).fill(lastDay)
@@ -31,7 +29,6 @@ test("edits a schedule's break", async ({ page, seed }) => {
   await row.getByLabel(`Break for ${doctor.name} starts`).fill('12:30')
   await row.getByLabel(`Break for ${doctor.name} ends`).fill('13:30')
   const save = row.getByRole('button', { name: 'Save', exact: true })
-  // The edit row once grew too wide and pushed Save off the screen.
   await expect(save).toBeInViewport()
   await save.click()
   await expect(notice(page, 'Schedule updated')).toBeVisible()
@@ -76,7 +73,6 @@ test('lists the bookings time off would strand, and cancels them only when told 
   await expect(affected).toBeHidden()
   await expect(timeOff.getByRole('row').filter({ hasText: doctor.name })).toHaveCount(0)
 
-  // The form still holds the time off; this time the booking goes.
   await timeOff.getByRole('button', { name: 'Add Time Off' }).click()
   await affected.getByLabel('Reason for cancelling them').fill('The doctor is at a conference')
   await affected.getByRole('button', { name: 'Cancel the booking and save' }).click()
@@ -108,7 +104,6 @@ test('makes a new user a doctor in a new department', async ({ page }) => {
   await expect(notice(page, 'User role updated')).toBeVisible()
   await expect(page.getByLabel(`Role of ${name}`)).toHaveValue('Doctor')
 
-  // The search stays, so the doctors list shows just this one.
   await open(page, 'Doctors')
   await expect(page.getByLabel(`Department of ${name}`).locator('option:checked')).toHaveText(department)
 })

@@ -3,10 +3,6 @@ import { join } from 'node:path'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Cloudflare Pages answers every unknown path with index.html and a 200 unless
-// the build has a top-level 404.html. With this copy of the app shell, unknown
-// paths get a real 404 and the app shows its not-found screen, as nginx.conf
-// does for the Docker image.
 function notFoundPage(): Plugin {
   return {
     name: 'not-found-page',
@@ -17,10 +13,6 @@ function notFoundPage(): Plugin {
   }
 }
 
-// The page may run scripts and load styles only from its own origin, and send
-// requests only to itself and the API this build calls. It is a meta tag, so
-// every host serves it, and the build knows the API's origin (VITE_API_URL).
-// frame-ancestors cannot go in a meta tag; X-Frame-Options covers framing.
 function contentSecurityPolicy(apiUrl: string | undefined): Plugin {
   const apiOrigin = originOf(apiUrl?.trim() || 'http://localhost:5272/api')
   const policy = [
@@ -43,7 +35,6 @@ function contentSecurityPolicy(apiUrl: string | undefined): Plugin {
   }
 }
 
-// Null for a relative URL such as /api, which is the page's own origin.
 function originOf(url: string) {
   try {
     return new URL(url).origin
@@ -52,11 +43,6 @@ function originOf(url: string) {
   }
 }
 
-// The API's address is built into the bundle. Without VITE_API_URL a
-// production build would send every visitor's requests to localhost, so it
-// stops instead. CI builds only to check that the app compiles; there a
-// warning is enough. A Docker build does not see CI, so a missing build
-// argument fails the image.
 function requireApiUrl(apiUrl: string | undefined) {
   if (apiUrl?.trim()) return
   const message =
@@ -72,8 +58,6 @@ export default defineConfig(({ command, mode }) => {
 
   return {
     plugins: [react(), notFoundPage(), contentSecurityPolicy(apiUrl)],
-    // Production stack traces point at the source. The code is public anyway,
-    // and browsers fetch the maps only with developer tools open.
     build: { sourcemap: true },
   }
 })

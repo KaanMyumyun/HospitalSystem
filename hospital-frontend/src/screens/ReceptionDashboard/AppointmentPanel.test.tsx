@@ -7,7 +7,6 @@ import { appointment, doctor, renderInWorkspace } from '../../test/render'
 import type { Slot } from '../../types'
 import { AppointmentPanel } from './AppointmentPanel'
 
-// The history loads from the API; here it only shows whether it is there.
 vi.mock('../../components/AppointmentHistory', () => ({
   AppointmentHistory: ({ hidden }: { hidden: boolean }) => (hidden ? null : <p>Booking history</p>),
 }))

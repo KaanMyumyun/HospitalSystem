@@ -34,7 +34,6 @@ function respondWith(status: number, body: unknown) {
   return fetchMock
 }
 
-// The tests run in Node, which has no web storage.
 let stored: Record<string, string> = {}
 let legacy: Record<string, string> = {}
 
@@ -63,8 +62,6 @@ afterEach(() => {
   setClinicTimeZone('UTC')
 })
 
-// A token that runs out in minutesLeft minutes; the signature does not matter
-// here. tag keeps tokens apart between tests.
 function tokenExpiringIn(minutesLeft: number, tag: string) {
   const base64url = (value: string) => btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   const claims = { exp: Math.floor(Date.now() / 1000) + minutesLeft * 60, tag }
@@ -403,7 +400,6 @@ describe('renewSessionIfDue', () => {
   })
 
   it('tries again a minute after a network error', async () => {
-    // Long ago, so the wait it leaves behind is over for the other tests.
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2020-01-01T09:00:00Z'))
     storeSession(tokenExpiringIn(30, 'offline'), 'FrontDesk')

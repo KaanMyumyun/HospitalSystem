@@ -4,8 +4,6 @@ import { EmptyState, StatusBadge } from '../../components/ui'
 import { useWorkspace } from '../../hooks/useWorkspace'
 import { departmentName, initials } from '../../lib/format'
 
-// The left panel: a department filter, then the active doctors that match it
-// and the top bar's search.
 export function DoctorPicker({
   activeDepartments,
   departmentFilter,

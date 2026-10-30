@@ -6,8 +6,6 @@ using Moq;
 
 namespace HospitalSystem.Tests;
 
-// The seeded appointment 1 (Scheduled) and 2 (Completed) were on 1 January
-// 2026, appointment 3 is cancelled; all belong to doctor 1, whose user is 1.
 public class AppointmentStatusServiceTests : AppointmentTestBase
 {
     private static ICurrentUserService User(UserRole role, int userId)

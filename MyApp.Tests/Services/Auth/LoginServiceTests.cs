@@ -201,7 +201,6 @@ public class LoginServiceTests : AuthTestBase
         Assert.Equal(user.SecurityStamp, principal.FindFirst(SecurityStampClaims.ClaimType)?.Value);
     }
 
-    // The username as stored, not as typed: the audit log records it.
     [Fact]
     public async Task LoginAsync_Token_CarriesUserIdNameAndRole()
     {
@@ -283,8 +282,6 @@ public class LoginServiceTests : AuthTestBase
         Assert.Contains("wrong password", entry.Details);
     }
 
-    // People sometimes type their password into the username field, so an
-    // unknown username is not written to the audit log.
     [Fact]
     public async Task LoginAsync_UnknownName_IsAuditedWithoutTheTypedName()
     {

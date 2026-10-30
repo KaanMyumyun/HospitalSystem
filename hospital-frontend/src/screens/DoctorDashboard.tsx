@@ -8,7 +8,6 @@ import { formatLongDate, formatTime, statusLabel } from '../lib/format'
 import { canMarkAppointment, dayStart } from '../lib/schedule'
 import type { ActionOutcome } from '../types'
 
-// A doctor's own appointments, one day at a time, marked as they happen.
 export function DoctorDashboard({
   onChangeAppointmentStatus,
 }: {
@@ -92,10 +91,7 @@ export function DoctorDashboard({
 
 type LoadedDay = { fromMs: number; appointments: AppointmentDto[] }
 
-// The day dayOffset days from today, and the signed-in doctor's appointments
-// in it; null until they load. onError must keep the same identity.
 function useDayAppointments(dayOffset: number, onError: (message: string) => void) {
-  // From the clock each render, so a page left open past midnight moves on.
   const day = dayStart(dayOffset)
   const fromMs = day.getTime()
   const [loaded, setLoaded] = useState<LoadedDay | null>(null)

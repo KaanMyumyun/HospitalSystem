@@ -16,7 +16,6 @@ public class DoctorsController : ControllerBase
         [FromServices] IUserQueryService service, CancellationToken cancellationToken)
         => this.ToActionResult(await service.ListDoctorsAsync(cancellationToken));
 
-    // Makes a pending user, or a former doctor, a doctor in a department.
     [Authorize(Policy = Access.Admin)]
     [HttpPost]
     public async Task<ActionResult<CreateDoctorResultDto>> CreateDoctor(

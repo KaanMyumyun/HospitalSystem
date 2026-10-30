@@ -30,7 +30,6 @@ describe('DoctorPicker', () => {
   it("counts each active department's active doctors, and filters by one", async () => {
     const { onDepartmentFilterChange } = show([ada, alan])
 
-    // Without the app's styles, nothing separates a pill's name from its count.
     const pill = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}`) })
     expect(pill('All').textContent).toBe('All2 doctors')
     expect(pill('Cardiology').textContent).toBe('Cardiology1 doctors')

@@ -6,7 +6,6 @@ import { coverageForDepartment } from '../../lib/schedule'
 import { filterBySearch } from '../../lib/search'
 import type { ActionOutcome } from '../../types'
 
-// The top bar's search filters this table.
 export function DepartmentsTab({
   selectedDepartmentId,
   onChangeDepartmentStatus,

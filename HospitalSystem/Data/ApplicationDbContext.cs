@@ -7,11 +7,6 @@ public class ApplicationDbContext : DbContext
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
     {
-        // Inside a transaction a service started, EF would set a savepoint
-        // before every SaveChanges and release it after: two extra round trips
-        // per save. A savepoint only helps code that keeps using a transaction
-        // after a failed save, and no service does; a failed save ends the
-        // request and the whole transaction rolls back.
         Database.AutoSavepointsEnabled = false;
     }
     public DbSet<UserEntity> Users { get; set; }
@@ -31,10 +26,6 @@ public class ApplicationDbContext : DbContext
             builder.Property(s => s.Role).IsRequired().HasConversion<string>();
             builder.Property(s => s.Name).IsRequired().HasMaxLength(50);
             builder.Property(s => s.SecurityStamp).IsRequired().HasMaxLength(64);
-            // Usernames are unique ignoring case, through the unique index
-            // IX_Users_LowerName on lower("Name") that migration
-            // CaseInsensitiveUserNames creates in SQL: EF cannot describe an
-            // index on an expression.
         });
 
         modelBuilder.Entity<PatientEntity>(builder =>
@@ -42,23 +33,12 @@ public class ApplicationDbContext : DbContext
             builder.Property(s => s.PhoneNumber).IsRequired().HasMaxLength(20);
             builder.Property(s => s.Name).IsRequired().HasMaxLength(50);
             builder.Property(s => s.DateOfBirth).IsRequired();
-            // Not unique: relatives often share a phone. Booking looks patients
-            // up by phone number, or by name and date of birth. The second
-            // lookup ignores case and uses IX_Patients_LowerName_DateOfBirth
-            // on (lower("Name"), "DateOfBirth"), which migration
-            // IndexPatientsByNameAndBirthDate creates in SQL: EF cannot
-            // describe an index on an expression.
             builder.HasIndex(s => s.PhoneNumber);
         });
 
         modelBuilder.Entity<DepartmentEntity>(builder =>
         {
-            // The column keeps its first name, "Department", which older
-            // releases still read and write.
             builder.Property(s => s.Name).HasColumnName("Department").IsRequired().HasMaxLength(100);
-            // Names are unique ignoring case, through the unique index
-            // IX_Departments_LowerDepartment on lower("Department") that
-            // migration CaseInsensitiveDepartmentNames creates in SQL.
         });
 
         modelBuilder.Entity<DoctorEntity>(builder =>
@@ -75,19 +55,15 @@ public class ApplicationDbContext : DbContext
             builder.Property(s => s.Status).HasConversion<string>();
             builder.Property(a => a.CancellationReason).HasMaxLength(500).IsRequired(false);
             builder.Property(a => a.CancelledAt).IsRequired(false);
-            // No two scheduled appointments for a doctor at one time. Booking
-            // also reads the nearest scheduled appointments from it.
             builder.HasIndex(a => new { a.DoctorId, a.TimeOfAppointment })
                 .IsUnique()
                 .HasFilter("\"Status\" = 'Scheduled'");
-            // One doctor's appointments in a time range, in every status.
             builder.HasIndex(a => new { a.DoctorId, a.TimeOfAppointment }, "IX_Appointments_DoctorId_TimeOfAppointment_AllStatuses");
         });
 
         modelBuilder.Entity<CalendarEntity>(builder =>
         {
             builder.HasOne(c => c.Doctor).WithMany(d => d.Calendars).HasForeignKey(c => c.DoctorId).OnDelete(DeleteBehavior.Restrict);
-            // One schedule per doctor. Booking reads the doctor's schedule from it.
             builder.HasIndex(c => c.DoctorId).IsUnique();
         });
 
@@ -95,7 +71,6 @@ public class ApplicationDbContext : DbContext
         {
             builder.HasOne(t => t.Calendar).WithMany(c => c.TimeOff).HasForeignKey(t => t.CalendarId).OnDelete(DeleteBehavior.Restrict);
             builder.Property(t => t.Reason).HasMaxLength(200);
-            // Booking and the schedule list read time off that has not ended yet.
             builder.HasIndex(t => new { t.CalendarId, t.LastDay });
         });
 
@@ -106,7 +81,6 @@ public class ApplicationDbContext : DbContext
             builder.Property(a => a.Details).IsRequired().HasMaxLength(1000);
             builder.Property(a => a.ActorName).IsRequired().HasMaxLength(80);
             builder.HasIndex(a => new { a.EntityType, a.EntityId, a.CreatedAt });
-            // The audit screen pages through entries newest first.
             builder.HasIndex(a => new { a.CreatedAt, a.Id });
         });
 

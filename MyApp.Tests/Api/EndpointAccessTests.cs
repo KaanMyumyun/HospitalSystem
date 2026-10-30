@@ -10,10 +10,6 @@ using Moq;
 
 namespace HospitalSystem.Tests;
 
-// Who may call each endpoint, in one table. Controllers name a policy from
-// Access and services ask Access the same question, so changing who may do
-// what changes a row here. Demo accounts are kept to reads on top of this
-// (DemoReadOnly).
 public class EndpointAccessTests
 {
     private static readonly string[] Expected =
@@ -57,8 +53,6 @@ public class EndpointAccessTests
     private static IEnumerable<RouteEndpoint> Endpoints(WebApplicationFactory<Program> app) =>
         app.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>();
 
-    // "GET api/users => Admin": the roles every policy on the endpoint lets
-    // in, worked out the way the authorization middleware does.
     private static async Task<List<string>> AccessTableAsync(WebApplicationFactory<Program> app)
     {
         var provider = app.Services.GetRequiredService<IAuthorizationPolicyProvider>();
@@ -93,8 +87,6 @@ public class EndpointAccessTests
         Assert.Equal(Expected, await AccessTableAsync(app));
     }
 
-    // Role lists written on an endpoint would be a second copy of the rules,
-    // free to drift from what its service checks.
     [Fact]
     public async Task NoEndpoint_ListsRolesOfItsOwn()
     {

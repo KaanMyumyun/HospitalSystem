@@ -12,11 +12,6 @@ import {
 import { formatHourRange, formatLongDate, formatTime, isSameDay } from './format'
 import { buildWeekSlots, dateAtTime, dayStart, weekDays, weekRange } from './schedule'
 
-// The suite runs in UTC (vitest.config.ts), where the clinic's hours and
-// UTC's coincide and hide any mix-up between the two. These tests set the
-// clinic's zone, and some the computer's as well, to show that only the
-// clinic's counts.
-
 const nineToFive: ScheduleDto = {
   scheduleId: 1,
   doctorId: 7,
@@ -82,14 +77,12 @@ describe('fromWallClock', () => {
   it('moves a time the clocks skip on to the end of the gap', () => {
     setClinicTimeZone('Europe/Sofia')
 
-    // 2026-03-29: 03:00 becomes 04:00, at 01:00 UTC.
     expect(fromWallClock(Date.UTC(2026, 2, 29, 3, 30)).toISOString()).toBe('2026-03-29T01:00:00.000Z')
   })
 
   it('reads a time the clocks show twice as the second', () => {
     setClinicTimeZone('Europe/Sofia')
 
-    // 2026-10-25: 04:00 becomes 03:00 again, at 01:00 UTC.
     expect(fromWallClock(Date.UTC(2026, 9, 25, 3, 30)).toISOString()).toBe('2026-10-25T01:30:00.000Z')
   })
 
@@ -119,7 +112,7 @@ describe('clinic days', () => {
   })
 
   it('puts an instant on the clinic date, not the UTC one', () => {
-    setClinicTimeZone('Pacific/Kiritimati') // UTC+14
+    setClinicTimeZone('Pacific/Kiritimati')
     const late = new Date('2026-09-21T22:30:00Z')
 
     expect(clinicDate(late)).toBe('2026-09-22')

@@ -9,8 +9,6 @@ import { formatLongDate, formatTime, initials, statusLabel } from '../lib/format
 import { todayInputValue } from '../lib/validation'
 import type { ActionOutcome } from '../types'
 
-// The front desk finds a patient by name or phone number, sees their
-// appointments, and corrects their details, such as a changed phone number.
 export function PatientsScreen({
   onUpdatePatient,
 }: {
@@ -73,7 +71,6 @@ export function PatientsScreen({
       <aside className="panel details-panel">
         {patient ? (
           <PatientDetails
-            // A fresh form for each patient, and after each save.
             key={`${patient.patientId}-${patient.name}-${patient.phoneNumber}-${patient.dateOfBirth}`}
             patient={patient}
             isReadOnly={isReadOnly}
@@ -191,7 +188,6 @@ function PatientDetails({
   )
 }
 
-// The chosen patient with their appointments; onError must keep the same identity.
 function usePatient(patientId: number | null, onError: (message: string) => void) {
   const [loaded, setLoaded] = useState<PatientDetailsDto | null>(null)
   const latestRequest = useRef<symbol | null>(null)

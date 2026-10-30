@@ -6,11 +6,8 @@ import { EmptyState, SkeletonRows } from './ui'
 
 type Loaded = { version: string; entries: AppointmentHistoryEntryDto[] } | { version: string; error: string }
 
-// Who booked, moved, cancelled or marked the booking, and when. It names the
-// staff who did, so demo accounts do not get it.
 export function AppointmentHistory({ appointment, hidden }: { appointment: AppointmentDto; hidden: boolean }) {
   const { appointmentId } = appointment
-  // Changes with the booking, so a move or a mark loads the history again.
   const version = `${appointmentId} ${appointment.status} ${appointment.appointmentTime} ${appointment.doctorId}`
   const [loaded, setLoaded] = useState<Loaded | null>(null)
 

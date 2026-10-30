@@ -110,8 +110,6 @@ public class ScheduleModificationServiceTests
         Assert.Equal("Cannot schedule a doctor in an inactive department", result.Error);
     }
 
-    // The schedule starts out on the day it was last changed, as an older
-    // release stored it; a change stores it on the date new schedules use.
     [Fact]
     public async Task ChangeSchedule_HappyPaths()
     {

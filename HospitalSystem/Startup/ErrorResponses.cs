@@ -6,9 +6,6 @@ namespace HospitalSystem.Startup;
 
 public static class ErrorResponses
 {
-    // An exception no service handled answers with JSON the frontend can show,
-    // never the exception itself. A unique violation is a change that raced
-    // another one, so it answers 409; anything else is logged and answers 500.
     public static WebApplication UseJsonErrors(this WebApplication app)
     {
         app.UseExceptionHandler(errorApp =>

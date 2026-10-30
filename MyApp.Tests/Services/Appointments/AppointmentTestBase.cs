@@ -9,8 +9,6 @@ namespace HospitalSystem.Tests;
 
 public abstract class AppointmentTestBase
 {
-    // "Now" for booking: before the January 2026 times the tests book, so
-    // they do not depend on today's date.
     protected static readonly DateTimeOffset Now = new(2025, 12, 1, 9, 0, 0, TimeSpan.Zero);
 
     protected static FixedClock CreateClock() => new(Now);

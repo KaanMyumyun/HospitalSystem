@@ -6,9 +6,6 @@ namespace HospitalSystem.Startup;
 
 public static class AccessPolicies
 {
-    // A request must be signed in unless its endpoint allows anonymous
-    // callers. Each policy in Access lets in only the roles it lists, and
-    // DemoReadOnly keeps demo accounts to reads.
     public static IServiceCollection AddAccessPolicies(this IServiceCollection services) =>
         services.AddAuthorization(options =>
         {

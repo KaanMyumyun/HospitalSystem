@@ -2,8 +2,6 @@ using System.Text.Json.Serialization;
 
 namespace HospitalSystem.Dto;
 
-// Why a request failed. The controller turns it into the status code:
-// 400, 403, 404 or 409.
 public enum FailureKind
 {
     Invalid,
@@ -18,8 +16,6 @@ public interface IOperationResult
     FailureKind Failure { get; }
 }
 
-// Success, or an error message and the kind of failure. TSelf is the concrete
-// result type, so Fail and the other factories return it.
 public abstract class OperationResult<TSelf> : IOperationResult
     where TSelf : OperationResult<TSelf>, new()
 {

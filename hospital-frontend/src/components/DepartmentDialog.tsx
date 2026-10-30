@@ -2,7 +2,6 @@ import { useState } from 'react'
 import type { DepartmentDto } from '../api'
 import { Modal } from './ui'
 
-// A doctor works in a department, so making someone a doctor asks which.
 export function DepartmentDialog({
   userName,
   departments,

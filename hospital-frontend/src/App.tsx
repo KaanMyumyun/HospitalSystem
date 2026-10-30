@@ -26,8 +26,6 @@ import { NoAccessScreen } from './screens/NoAccessScreen'
 import { NotFoundScreen } from './screens/NotFoundScreen'
 import type { HospitalData, Screen, Session } from './types'
 
-// Each role's screens load the first time they are shown, so an account
-// downloads only the code it uses.
 const AdminDashboard = lazy(() => import('./screens/AdminDashboard').then((screen) => ({ default: screen.AdminDashboard })))
 const DoctorDashboard = lazy(() => import('./screens/DoctorDashboard').then((screen) => ({ default: screen.DoctorDashboard })))
 const PatientsScreen = lazy(() => import('./screens/PatientsScreen').then((screen) => ({ default: screen.PatientsScreen })))
@@ -56,7 +54,6 @@ function App() {
   const { dialog, confirm, chooseDepartment, dismiss: dismissDialog } = useDialogs()
   const { activity, record: recordActivity, clear: clearActivity } = useActivity()
 
-  // The first lists of a session pick the doctor and department on screen.
   const pickDefaults = useCallback((loaded: HospitalData) => {
     setSelectedDoctorId((current) => current ?? defaultDoctor(loaded.doctors, loaded.schedules)?.doctorId ?? null)
     setSelectedDepartmentId((current) => current ?? loaded.departments[0]?.id ?? null)
@@ -81,13 +78,10 @@ function App() {
 
   const setScreen = useCallback((next: Screen) => navigate(hashFor(next)), [navigate])
 
-  // The address names no screen this user can see: show the one they get
-  // instead, without adding a step to the browser history.
   useEffect(() => {
     if (session && hash !== hashFor(screen)) navigate(hashFor(screen), true)
   }, [session, hash, screen, navigate])
 
-  // Everything on screen: the shared lists, plus the visible week or users page.
   const reloadAll = useCallback(async () => {
     if (!session || !usesHospitalData(session.role)) return
 

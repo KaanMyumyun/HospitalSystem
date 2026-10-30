@@ -9,9 +9,6 @@ const emptyData: HospitalData = {
   schedules: [],
 }
 
-// The departments, doctors and schedules every screen but My day shares, and
-// whether anything is loading or running. onLoaded and onError must keep the
-// same identity.
 export function useHospitalData(
   session: Session | null,
   onLoaded: (data: HospitalData) => void,
@@ -19,8 +16,6 @@ export function useHospitalData(
 ) {
   const [data, setData] = useState<HospitalData>(emptyData)
   const [loading, setLoading] = useState(() => session !== null && usesHospitalData(session.role))
-  // A newer refresh replaces an older one still on its way, so a slow
-  // answer can never overwrite a fresher one.
   const refreshRequest = useRef<AbortController | null>(null)
 
   const refresh = useCallback(() => {
@@ -45,7 +40,6 @@ export function useHospitalData(
       })
   }, [session, onLoaded, onError])
 
-  // When a session ends: nothing of it stays on screen.
   const clear = useCallback(() => {
     refreshRequest.current?.abort()
     setData(emptyData)

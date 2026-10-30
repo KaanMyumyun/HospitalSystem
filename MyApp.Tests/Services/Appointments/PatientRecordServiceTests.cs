@@ -6,8 +6,6 @@ using Moq;
 
 namespace HospitalSystem.Tests;
 
-// Seeded patients: Patient One (5550001), Patient Two (5550002) and Patient
-// Three (5550003); appointments 1-3 belong to patients 1-3.
 public class PatientRecordServiceTests : AppointmentTestBase
 {
     private PatientRecordService CreateService(ApplicationDbContext db, bool isFrontDesk = true, bool isDemoFrontDesk = false)

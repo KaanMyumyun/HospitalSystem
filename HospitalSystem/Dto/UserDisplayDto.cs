@@ -5,6 +5,5 @@ public class UserDisplayDto
     public int UserId { get; set; }
     public string UserName { get; set; } = "";
     public UserRole Role { get; set; }
-    // Set while too many wrong passwords keep the account locked.
     public DateTime? LockedUntil { get; set; }
 }

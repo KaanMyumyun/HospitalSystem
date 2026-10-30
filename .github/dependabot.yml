@@ -20,8 +20,6 @@ updates:
     cooldown:
       default-days: 7
     ignore:
-      # Swashbuckle is built against Microsoft.OpenApi 2.x. With 3.x the API
-      # still builds, but generating the Swagger document fails at run time.
       - dependency-name: "Microsoft.OpenApi"
         update-types: ["version-update:semver-major"]
     groups:

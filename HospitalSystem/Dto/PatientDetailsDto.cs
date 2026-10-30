@@ -1,6 +1,5 @@
 namespace HospitalSystem.Dto;
 
-// A patient and their appointments, newest first.
 public class PatientDetailsDto
 {
     public int PatientId { get; set; }

@@ -1,11 +1,9 @@
 import { clinicDate } from './clinicTime'
 
-// Today's clinic date, as a date input's value.
 export function todayInputValue() {
   return clinicDate(new Date())
 }
 
-// A date input's value names a real day: 2026-02-30 does not.
 export function isDateInput(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
   if (!match) return false
@@ -30,7 +28,6 @@ export function validateAppointmentInput(
   if (!dateOfBirth) return 'Date of birth is required'
 
   if (!isDateInput(dateOfBirth)) return 'Date of birth is invalid'
-  // Dates in this form compare in order as text.
   if (dateOfBirth > clinicDate(appointmentTime)) {
     return 'Date of birth cannot be after the appointment date'
   }

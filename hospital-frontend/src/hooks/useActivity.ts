@@ -14,8 +14,6 @@ function storedActivity(): ActivityEntry[] {
   }
 }
 
-// Recent activity on the admin screens: the last eight changes made in this
-// browser, kept across reloads. App clears it when someone signs in or out.
 export function useActivity() {
   const [activity, setActivity] = useState<ActivityEntry[]>(storedActivity)
 

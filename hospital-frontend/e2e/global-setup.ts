@@ -3,9 +3,6 @@ import { resolve } from 'node:path'
 import { databaseConnection } from './database.ts'
 import { admin } from './settings.ts'
 
-// The first admin, made as the README says, with --create-admin and the
-// password on standard input. Playwright starts the web servers before the
-// global setup, so the API has migrated the database by now.
 export default async function globalSetup() {
   const command = spawn('dotnet', ['run', '--no-build', '--no-launch-profile', '--', '--create-admin', admin.name], {
     cwd: resolve(import.meta.dirname, '../../HospitalSystem'),

@@ -4,8 +4,6 @@ type LoadedPage<P> = { search: string; page: number; result: P }
 
 const searchDelayMs = 300
 
-// One page of a list the API searches as the user types. Nothing loads while
-// disabled; load and onError must keep the same identity.
 export function usePagedList<P>(
   enabled: boolean,
   searchQuery: string,
@@ -15,13 +13,11 @@ export function usePagedList<P>(
 ) {
   const search = useDebouncedValue(searchQuery.trim(), searchDelayMs)
   const [requested, setRequested] = useState({ search: '', page: 1 })
-  // A new search starts again from its first page.
   const page = requested.search === search ? requested.page : 1
   const [loaded, setLoaded] = useState<LoadedPage<P> | null>(null)
   const [wasEnabled, setWasEnabled] = useState(enabled)
   const latestRequest = useRef<symbol | null>(null)
 
-  // Discard the cached page before rendering a disabled or newly enabled view.
   if (wasEnabled !== enabled) {
     setWasEnabled(enabled)
     setLoaded(null)
@@ -52,7 +48,6 @@ export function usePagedList<P>(
   const setPage = useCallback((next: number) => setRequested({ search, page: next }), [search])
   const isShownPage = loaded !== null && loaded.search === search && loaded.page === page
 
-  // The previous page stays on screen while the next one loads.
   return { result: enabled ? loaded?.result ?? null : null, isLoading: enabled && !isShownPage, setPage, reload }
 }
 

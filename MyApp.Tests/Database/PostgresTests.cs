@@ -15,7 +15,6 @@ using Npgsql;
 
 namespace HospitalSystem.Tests;
 
-// The same code against real PostgreSQL, with the real migrations applied.
 public class PostgresTests : AuthTestBase
 {
     private static readonly DateTimeOffset LockoutTime = new(2026, 10, 23, 12, 0, 0, TimeSpan.Zero);
@@ -33,8 +32,6 @@ public class PostgresTests : AuthTestBase
         return user.Id;
     }
 
-    // Pauses the first request after it has read the user. Without row locking,
-    // the second request can then save against that same old account state.
     private sealed class PausedWrongPasswordHasher : IPasswordHasher<UserEntity>
     {
         private readonly TaskCompletionSource<bool> _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -122,16 +119,12 @@ public class PostgresTests : AuthTestBase
         Assert.False(db.Database.HasPendingModelChanges());
     }
 
-    // What --migrate and an API with Database:RunMigrationsOnStartup run. The
-    // migrations go through ConnectionStrings:Migrations when it is set, and a
-    // second run finds nothing to do.
     [PostgresFact]
     public async Task ApplyingMigrations_UsesTheMigrationsConnection_ThenHasNothingToDo()
     {
         await using var database = await PostgresDatabase.CreateAsync();
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            // Nothing listens on port 1, so the API's own connection would fail.
             ["ConnectionStrings:DefaultConnection"] = "Host=127.0.0.1;Port=1;Timeout=2",
             ["ConnectionStrings:Migrations"] = database.ConnectionString,
         }).Build();
@@ -143,8 +136,6 @@ public class PostgresTests : AuthTestBase
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
     }
 
-    // Three migrations that did nothing were deleted. A database that applied
-    // them keeps their history rows, which EF leaves alone.
     [PostgresFact]
     public async Task ADatabaseThatAppliedTheDeletedEmptyMigrations_StillMigrates()
     {
@@ -196,8 +187,6 @@ public class PostgresTests : AuthTestBase
         Assert.Equal("IX_Departments_LowerDepartment", UniqueViolation(error).ConstraintName);
     }
 
-    // The migration cannot choose which of two such departments to keep, so it
-    // stops, changes nothing, and runs once they are renamed.
     [PostgresFact]
     public async Task CaseInsensitiveDepartmentNames_StopsWhileNamesDifferOnlyInCase()
     {
@@ -281,9 +270,6 @@ public class PostgresTests : AuthTestBase
         Assert.Equal("IX_Calendars_DoctorId", UniqueViolation(error).ConstraintName);
     }
 
-    // Two admins create a schedule for one doctor at the same time: both pass
-    // the check, and the database refuses the second, which gets the message
-    // the check gives.
     [PostgresFact]
     public async Task CreatingTwoSchedulesForADoctorAtOnce_TheSecondIsAConflict()
     {
@@ -312,8 +298,6 @@ public class PostgresTests : AuthTestBase
         Assert.Equal(0L, await database.ScalarAsync<long>("""SELECT count(*) FROM "AuditLogs" """));
     }
 
-    // Inserts another schedule for the doctor just before the service saves
-    // its own, as a request from another admin would.
     private sealed class CompetingScheduleInterceptor(PostgresDatabase database, int doctorId) : SaveChangesInterceptor
     {
         public bool Inserted { get; private set; }
@@ -333,8 +317,6 @@ public class PostgresTests : AuthTestBase
         }
     }
 
-    // The migration cannot choose which of a doctor's schedules to keep, so it
-    // stops, changes nothing, and runs once all but one are deleted.
     [PostgresFact]
     public async Task OneSchedulePerDoctor_StopsWhileADoctorHasTwo()
     {
@@ -361,9 +343,6 @@ public class PostgresTests : AuthTestBase
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
     }
 
-    // Changing a schedule used to store it on the day of the change, and
-    // schedules older than slot lengths have none. The repair keeps the times
-    // of day, an end at midnight, and the 30 minutes the calendar showed.
     [PostgresFact]
     public async Task RepairScheduleRows_MovesHoursToOneDate_AndFillsMissingSlotLengths()
     {
@@ -390,8 +369,6 @@ public class PostgresTests : AuthTestBase
         Assert.Equal(30, schedules[1].SlotDurationMin);
     }
 
-    // The queries behind time off, breaks, moves and history, as PostgreSQL
-    // runs them: the in-memory provider would accept queries it cannot.
     [PostgresFact]
     public async Task TimeOffBreaksMovesAndHistory_WorkInTheDatabase()
     {
@@ -466,8 +443,6 @@ public class PostgresTests : AuthTestBase
         Assert.Equal(PostgresErrorCodes.StringDataRightTruncation, Assert.IsType<PostgresException>(error.InnerException).SqlState);
     }
 
-    // The migration cannot shorten a name well, so it stops, changes nothing,
-    // and runs once the name is shortened by hand.
     [PostgresFact]
     public async Task LimitDepartmentNameLength_StopsWhileANameIsTooLong()
     {
@@ -487,9 +462,6 @@ public class PostgresTests : AuthTestBase
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
     }
 
-    // Entries named their actor by user id. The migration keeps the id in
-    // ActorUserId and puts the username in ActorName; "Unknown" and the id of
-    // no user stay as they were.
     [PostgresFact]
     public async Task AddAuditLogActorUserId_NamesTheActorsOfEarlierEntries()
     {
@@ -513,8 +485,6 @@ public class PostgresTests : AuthTestBase
         Assert.Equal(["alice", "Unknown", "999"], entries.Select(e => e.ActorName));
     }
 
-    // During a deploy or after a rollback, an image without the newest
-    // columns still inserts rows: each new column has a default.
     [PostgresFact]
     public async Task AnOlderImage_CanStillInsertUsersAndSchedules()
     {
@@ -540,7 +510,6 @@ public class PostgresTests : AuthTestBase
         await SeedLoginUserAsync(database, failedCount: 8);
         await using var firstDb = database.CreateContext();
         await using var secondDb = database.CreateContext();
-        // A tracked entity must be refreshed after the second request gets the lock.
         await secondDb.Users.SingleAsync();
         var paused = new PausedWrongPasswordHasher();
         var wrong = new LoginDto { Name = "lockout", Password = "wrong-password" };
@@ -612,8 +581,6 @@ public class PostgresTests : AuthTestBase
             new PasswordHasher<UserEntity>().VerifyHashedPassword(user, user.PasswordHash, "replacement-password"));
     }
 
-    // With real foreign keys: a role change no longer files a new doctor under
-    // a department that may not exist.
     [PostgresFact]
     public async Task MakingADoctor_NeedsADepartmentThatExists()
     {

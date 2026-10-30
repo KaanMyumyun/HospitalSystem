@@ -4,13 +4,10 @@ namespace HospitalSystem.Services.Calendar;
 
 public static class ScheduleValidation
 {
-    // What the checks need to know about the schedule's doctor.
     public sealed record DoctorState(bool IsActive, bool DepartmentIsActive);
 
-    // A doctor has one schedule; changes edit it.
     public const string AlreadyScheduled = "Doctor already has a schedule. Edit the existing schedule instead";
 
-    // For a new schedule. Null when it can be created.
     public static async Task<CalendarActionResult?> ValidateAsync(
         ApplicationDbContext context,
         int doctorId,
@@ -50,7 +47,6 @@ public static class ScheduleValidation
         return null;
     }
 
-    // For a change to an existing schedule, whose own query reads the doctor.
     public static CalendarActionResult? Validate(
         DoctorState doctor,
         int startHour,
@@ -87,7 +83,6 @@ public static class ScheduleValidation
         return null;
     }
 
-    // Both ends or neither, inside the working hours.
     private static string? ValidateBreak(int startHour, int endHour, int? breakStartMinute, int? breakEndMinute)
     {
         if (breakStartMinute is null && breakEndMinute is null)

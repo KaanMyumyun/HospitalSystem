@@ -7,7 +7,6 @@ public class UserQueryDto
     public const int MaxPage = 100_000;
     public const int MaxPageSize = 100;
 
-    // Part of a username or a role name, in any case.
     [MaxLength(50)]
     public string? Search { get; set; }
 

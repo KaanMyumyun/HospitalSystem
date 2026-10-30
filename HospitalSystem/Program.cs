@@ -26,8 +26,6 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("ReactPolicy", policy =>
     {
-        // Browsers may reuse a preflight answer for up to two hours (Chrome's
-        // cap), so cross-origin calls skip the extra OPTIONS round trip.
         policy
             .WithOrigins(corsAllowedOrigins)
             .AllowAnyHeader()
@@ -58,9 +56,6 @@ var app = builder.Build();
 
 app.UseClientAddresses();
 
-// As --migrate does. A release whose migrations fail stops here, before it
-// listens, so a platform that waits for the new release to answer keeps
-// the previous one serving.
 if (app.Configuration.GetValue<bool>("Database:RunMigrationsOnStartup")
     && await DatabaseMigrationCommand.ApplyAsync(app.Configuration) != 0)
 {
@@ -87,11 +82,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
 }).AllowAnonymous();
-// Every controller endpoint also requires DemoReadOnly, on top of its own
-// policy; sign-in, which allows anonymous callers, needs no policy at all.
 app.MapControllers().RequireAuthorization(DemoReadOnly.Policy);
-// The explicit pattern also covers paths with a file extension, such as
-// /favicon.ico, which MapFallback's default pattern leaves out.
 app.MapFallback("{*path}", context =>
 {
     context.Response.StatusCode = StatusCodes.Status404NotFound;

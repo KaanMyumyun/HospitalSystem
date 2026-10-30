@@ -10,9 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace HospitalSystem.Tests;
 
-// The real API in memory. Without a database it covers what needs none, such
-// as startup checks and the OpenAPI document; with an in-memory one it serves
-// whole requests: authentication, rate limits and status codes.
 public static class TestApp
 {
     public const string JwtKey = "test-signing-key-that-is-32-bytes!";
@@ -33,7 +30,6 @@ public static class TestApp
 
             builder.ConfigureServices(services =>
             {
-                // The sign-in warm-up would only log that there is no database.
                 services.Remove(services.Single(s => s.ImplementationType == typeof(SignInWarmup)));
                 services.AddTransient<IStartupFilter, ProxyAddress>();
             });
@@ -42,7 +38,6 @@ public static class TestApp
             {
                 if (database is not null)
                 {
-                    // Npgsql's registration goes, so only the in-memory provider is left.
                     services.RemoveAll(typeof(IDbContextOptionsConfiguration<ApplicationDbContext>));
                     services.RemoveAll(typeof(DbContextOptions<ApplicationDbContext>));
                     services.AddDbContext<ApplicationDbContext>(options => options
@@ -53,9 +48,6 @@ public static class TestApp
             });
         });
 
-    // The test server leaves the caller's address empty, which ASP.NET treats
-    // as a server that cannot tell, and then believes X-Forwarded-For from
-    // anyone. Kestrel always knows it; behind a proxy it is the proxy's.
     public static readonly IPAddress ProxyIp = IPAddress.Parse("10.0.0.5");
 
     private sealed class ProxyAddress : IStartupFilter

@@ -23,12 +23,10 @@ export function AdminDashboard({
   onUsersPageChange,
 }: {
   section: AdminSection
-  // Null until one is chosen; the inspector shows the first department then.
   selectedDepartmentId: number | null
   activity: ActivityEntry[]
   usersPage: UsersPage | null
   usersLoading: boolean
-  // Admins only: entries name users, which demo admins may not see.
   canReadAuditLog: boolean
   actions: AdminActions
   onNavigate: (screen: Screen) => void

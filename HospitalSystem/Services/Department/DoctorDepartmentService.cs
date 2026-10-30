@@ -15,7 +15,6 @@ public class DoctorDepartmentService(
         if (currentUser.RequireAdmin<DepartmentActionResultDto>("change a doctor's department") is { } refusal)
             return refusal;
 
-        // The department's state comes with the doctor: one query instead of two.
         var found = await context.Doctors
             .Where(d => d.Id == dto.DoctorId)
             .Select(d => new

@@ -17,8 +17,6 @@ public class ScheduleModificationService(
         if (currentUser.RequireAdmin<CalendarActionResult>("change a schedule") is { } refusal)
             return refusal;
 
-        // The doctor comes with the schedule: one query instead of two. A
-        // doctor has no other schedule to overlap (IX_Calendars_DoctorId).
         var found = await context.Calendars
             .Where(c => c.Id == dto.ScheduleId)
             .Select(c => new
@@ -45,9 +43,6 @@ public class ScheduleModificationService(
         var calendar = found.Calendar;
         var workingDays = ScheduleDays.Normalize(dto.WorkingDays ?? calendar.WorkingDays);
 
-        // Bookings already made must still be bookable under the new hours: on
-        // a working day, inside the hours, on the slot grid and clear of the
-        // break, as clinic times.
         var newHours = new BookingRules.WorkingHours(
             CalendarEntity.HoursDate.AddHours(dto.StartHour),
             CalendarEntity.HoursDate.AddHours(dto.EndHour),

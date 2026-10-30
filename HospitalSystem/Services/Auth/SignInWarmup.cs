@@ -3,12 +3,6 @@ using Microsoft.Extensions.Options;
 
 namespace HospitalSystem.Services.Auth;
 
-// Runs the one-time parts of signing in at startup, before the server takes
-// requests: opening the database connection, compiling the demo sign-in and
-// token-check queries, and setting up token signing. Without it the first
-// sign-ins after every start pay for them. The password check is left out on
-// purpose: it costs the same on every sign-in, so running it here would only
-// slow startup.
 public sealed class SignInWarmup(
     IServiceScopeFactory scopeFactory,
     IOptions<JwtSettings> jwtOptions,
@@ -23,18 +17,15 @@ public sealed class SignInWarmup(
             await using var scope = scopeFactory.CreateAsyncScope();
             var services = scope.ServiceProvider;
 
-            // Does nothing unless demo sign-in is enabled.
             await services.GetRequiredService<ILoginService>().DemoLoginAsync(UserRole.DemoFrontDesk, cancellationToken);
             await SecurityStampClaims.CurrentStampAsync(
                 services.GetRequiredService<ApplicationDbContext>(), 0, cancellationToken);
 
-            // A token for no real user, thrown away; it would fail the stamp check anyway.
             SessionTokens.Issue(
                 new UserEntity { Name = "warm-up", Role = UserRole.Pending, SecurityStamp = "warm-up" }, _jwtSettings, DateTimeOffset.UtcNow);
         }
         catch (Exception exception)
         {
-            // A slower first sign-in is better than not starting at all.
             logger.LogWarning(exception, "Sign-in warm-up failed; the first sign-in will be slower");
         }
     }

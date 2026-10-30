@@ -4,8 +4,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HospitalSystem.Services.Appointments;
 
-// Records how an appointment went: completed, or the patient did not come.
-// The desk can mark any appointment, a doctor only their own.
 public class AppointmentStatusService(
     ApplicationDbContext context,
     ICurrentUserService currentUser,

@@ -3,7 +3,6 @@ import type { AdminSection, SlotStatus } from '../types'
 import { clinicDate, clinicTimeZone } from './clinicTime'
 import { clockLabel, scheduleWindow } from './time'
 
-// Dates and times show on the clinic's clock (clinicTime.ts).
 export function formatDay(day: Date) {
   return day.toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', timeZone: clinicTimeZone() })
 }
@@ -12,7 +11,6 @@ export function isSameDay(left: Date, right: Date) {
   return clinicDate(left) === clinicDate(right)
 }
 
-// Reads the clock, so screens call this instead of new Date() while they render.
 export function isToday(day: Date) {
   return isSameDay(day, new Date())
 }
@@ -25,7 +23,6 @@ export function formatTime(day: Date) {
   return day.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: clinicTimeZone() })
 }
 
-// A clinic date such as 2026-09-21, from a date input or the API: "Mon, Sep 21".
 export function formatClinicDate(date: string) {
   const [year = 0, month = 1, day = 1] = date.split('-').map(Number)
   return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-US', {
@@ -36,14 +33,12 @@ export function formatClinicDate(date: string) {
   })
 }
 
-// "Mon, Sep 21" for one day, "Mon, Sep 21 - Fri, Sep 25" for several.
 export function formatTimeOff(timeOff: Pick<TimeOffDto, 'firstDay' | 'lastDay'>) {
   return timeOff.firstDay === timeOff.lastDay
     ? formatClinicDate(timeOff.firstDay)
     : `${formatClinicDate(timeOff.firstDay)} - ${formatClinicDate(timeOff.lastDay)}`
 }
 
-// The schedule's break as "12:00-13:00", or null for none.
 export function formatBreak(schedule: Pick<ScheduleDto, 'breakStartMinute' | 'breakEndMinute'>) {
   return schedule.breakStartMinute != null && schedule.breakEndMinute != null
     ? `${clockLabel(schedule.breakStartMinute)}-${clockLabel(schedule.breakEndMinute)}`
@@ -96,7 +91,6 @@ export function statusLabel(status: AppointmentStatus) {
   return status === 'NoShow' ? 'No-show' : status
 }
 
-// What happened to a booking, from its audit log action.
 export function historyActionLabel(action: string) {
   const labels: Record<string, string> = {
     CreateAppointment: 'Booked',
@@ -107,7 +101,6 @@ export function historyActionLabel(action: string) {
   return labels[action] ?? action
 }
 
-// "Mon-Fri" for a run of days in a row, otherwise "Mon, Wed, Sat".
 export function formatWorkingDays(days: DayOfWeek[]) {
   const order: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
   const indexes = days.map((day) => order.indexOf(day)).sort((left, right) => left - right)

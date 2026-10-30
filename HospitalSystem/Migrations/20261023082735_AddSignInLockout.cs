@@ -11,9 +11,6 @@ namespace HospitalSystem.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Both columns can be left out of an insert (0 and null), so an
-            // older image can still create users during a deploy or after a
-            // rollback.
             migrationBuilder.AddColumn<int>(
                 name: "FailedSignInCount",
                 table: "Users",

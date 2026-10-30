@@ -9,9 +9,6 @@ import { dateAtTime } from '../../lib/schedule'
 import { validateAppointmentInput } from '../../lib/validation'
 import type { ActionOutcome, Slot } from '../../types'
 
-// Booking an open slot. When the details partly match patients on file, the
-// API lists them, and the desk books for one of them or registers a new
-// patient. The form starts empty each time the dialog opens.
 export function BookingDialog({
   doctor,
   slot,
@@ -28,15 +25,12 @@ export function BookingDialog({
   const [phoneNumber, setPhoneNumber] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
   const [bookingError, setBookingError] = useState<string | null>(null)
-  // Patients on file who share some of the entered details, as the API listed them.
   const [possibleMatches, setPossibleMatches] = useState<PatientMatchDto[] | null>(null)
 
-  // An edit makes an error or the listed matches out of date.
   const clearFeedback = () => {
     setBookingError(null)
     setPossibleMatches(null)
   }
-  // patient is set when booking again after the API listed possible matches.
   const submit = async (patient?: Pick<CreateAppointmentInput, 'patientId' | 'createNewPatient'>) => {
     const appointmentTime = dateAtTime(slot.day, slot.time)
     const validationError = validateAppointmentInput(patientName, phoneNumber, dateOfBirth, appointmentTime)

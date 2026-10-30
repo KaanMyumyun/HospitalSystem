@@ -231,17 +231,13 @@ export function SchedulesTab({
   )
 }
 
-// A daily break as two time inputs' values, "12:00" and "13:00"; both empty
-// for none.
 type BreakInput = { start: string; end: string }
 const noBreak: BreakInput = { start: '', end: '' }
 
-// Both times or neither; the API checks that the break fits the hours.
 function isBreakComplete({ start, end }: BreakInput) {
   return start === '' ? end === '' : end !== '' && start < end
 }
 
-// "12:30" is 750 minutes after midnight; no break is null for both.
 function breakMinutes({ start, end }: BreakInput) {
   const minutes = (value: string) => {
     if (!value) return null
@@ -286,8 +282,6 @@ function BreakPicker({
   )
 }
 
-// Days doctors are away, clinic dates with both ends included: a form to add
-// some, and the time off that has not ended yet, soonest first.
 function TimeOff({
   schedules,
   doctorName,
@@ -308,7 +302,6 @@ function TimeOff({
   const [firstDay, setFirstDay] = useState(today)
   const [lastDay, setLastDay] = useState(today)
   const [reason, setReason] = useState('')
-  // An API older than this build sends no time off. Dates sort as text.
   const upcoming = schedules
     .flatMap((schedule) => (schedule.timeOff ?? []).map((timeOff) => ({ schedule, timeOff })))
     .sort((left, right) => (left.timeOff.firstDay < right.timeOff.firstDay ? -1 : 1))
@@ -399,7 +392,6 @@ function TimeOff({
   )
 }
 
-// One checkbox per day, Monday first.
 function DayPicker({ label, days, onChange }: { label: string; days: DayOfWeek[]; onChange: (days: DayOfWeek[]) => void }) {
   return (
     <fieldset className="day-picker">

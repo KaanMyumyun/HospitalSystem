@@ -4,9 +4,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HospitalSystem.Tests;
 
-// The seeded scheduled appointment 1 is with doctor 1 at 10:00 on Thursday
-// 1 January 2026; the doctor works 08:00-18:00 UTC, Monday to Friday, in
-// 15-minute slots. Appointments 2 and 3 are completed and cancelled.
 public class AppointmentMoveServiceTests : AppointmentTestBase
 {
     private static readonly DateTime FridayEleven = new(2026, 1, 2, 11, 0, 0, DateTimeKind.Utc);
@@ -70,8 +67,6 @@ public class AppointmentMoveServiceTests : AppointmentTestBase
         Assert.EndsWith(", from Dr. Test to Dr. Two", db.AuditLogs.Single(a => a.Action == "MoveAppointment").Details);
     }
 
-    // The appointment moves out of its own way: a quarter of an hour later
-    // overlaps where it is now, which does not count.
     [Fact]
     public async Task Move_OverlappingItsOwnSlot_IsAllowed()
     {

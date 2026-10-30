@@ -6,7 +6,6 @@ using HospitalSystem.Interfaces;
 
 namespace HospitalSystem.Tests;
 
-// Schedule 1 is doctor 1's; "today" is 1 December 2025 (AppointmentTestBase).
 public class TimeOffServiceTests : AppointmentTestBase
 {
     private TimeOffService CreateService(ApplicationDbContext db, bool isAdmin = true)
@@ -49,7 +48,6 @@ public class TimeOffServiceTests : AppointmentTestBase
         Assert.Empty(db.TimeOff);
     }
 
-    // Days off that began yesterday can still be recorded, as for sick leave.
     [Fact]
     public async Task Add_DaysThatBeganEarlier_AreAccepted()
     {

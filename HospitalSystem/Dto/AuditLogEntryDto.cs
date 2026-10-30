@@ -9,7 +9,5 @@ public class AuditLogEntryDto
     public int EntityId { get; set; }
     public string Details { get; set; } = "";
 
-    // The username of whoever made the change, or "Unknown" when nobody was
-    // signed in, as for a failed sign-in.
     public string Actor { get; set; } = "";
 }
