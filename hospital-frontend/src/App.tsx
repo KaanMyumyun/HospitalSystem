@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { canListUsers, changeOwnPassword, clearSession, isDemoRole, sessionExpiredEvent } from './api'
 import './App.css'
 import { AffectedBookingsDialog } from './components/AffectedBookingsDialog'
 import { ChangePasswordDialog } from './components/ChangePasswordDialog'
 import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
+import { SkeletonRows } from './components/ui'
 import { useActionRunner } from './hooks/useActionRunner'
 import { useActivity } from './hooks/useActivity'
 import { useAdminActions } from './hooks/useAdminActions'
@@ -20,14 +21,19 @@ import type { Workspace } from './hooks/useWorkspace'
 import { adminTitle } from './lib/format'
 import { canUseAdmin, canUseDoctor, canUseReception, hashFor, screenFor, usesHospitalData } from './lib/routes'
 import { defaultDoctor } from './lib/schedule'
-import { AdminDashboard } from './screens/AdminDashboard'
-import { DoctorDashboard } from './screens/DoctorDashboard'
 import { LoginScreen } from './screens/LoginScreen'
 import { NoAccessScreen } from './screens/NoAccessScreen'
 import { NotFoundScreen } from './screens/NotFoundScreen'
-import { PatientsScreen } from './screens/PatientsScreen'
-import { ReceptionDashboard } from './screens/ReceptionDashboard'
 import type { HospitalData, Screen, Session } from './types'
+
+// Each role's screens load the first time they are shown, so an account
+// downloads only the code it uses.
+const AdminDashboard = lazy(() => import('./screens/AdminDashboard').then((screen) => ({ default: screen.AdminDashboard })))
+const DoctorDashboard = lazy(() => import('./screens/DoctorDashboard').then((screen) => ({ default: screen.DoctorDashboard })))
+const PatientsScreen = lazy(() => import('./screens/PatientsScreen').then((screen) => ({ default: screen.PatientsScreen })))
+const ReceptionDashboard = lazy(() =>
+  import('./screens/ReceptionDashboard').then((screen) => ({ default: screen.ReceptionDashboard })),
+)
 
 function screenTitle(screen: Screen) {
   if (screen === 'reception') return 'Reception'
@@ -205,39 +211,47 @@ function App() {
             </div>
           )}
 
-          {screen === 'reception' && (
-            <ReceptionDashboard
-              appointments={appointments}
-              selectedDoctor={selectedDoctor}
-              selectedDoctorId={selectedDoctorId}
-              weekOffset={weekOffset}
-              onSelectDoctor={setSelectedDoctorId}
-              onWeekOffsetChange={setWeekOffset}
-              onCancelAppointment={deskActions.cancelAppointment}
-              onChangeAppointmentStatus={deskActions.markAppointment}
-              onCreateAppointment={deskActions.bookAppointment}
-              onMoveAppointment={deskActions.moveAppointment}
-            />
-          )}
+          <Suspense
+            fallback={
+              <section className="panel" aria-busy="true">
+                <SkeletonRows count={6} />
+              </section>
+            }
+          >
+            {screen === 'reception' && (
+              <ReceptionDashboard
+                appointments={appointments}
+                selectedDoctor={selectedDoctor}
+                selectedDoctorId={selectedDoctorId}
+                weekOffset={weekOffset}
+                onSelectDoctor={setSelectedDoctorId}
+                onWeekOffsetChange={setWeekOffset}
+                onCancelAppointment={deskActions.cancelAppointment}
+                onChangeAppointmentStatus={deskActions.markAppointment}
+                onCreateAppointment={deskActions.bookAppointment}
+                onMoveAppointment={deskActions.moveAppointment}
+              />
+            )}
 
-          {screen === 'patients' && <PatientsScreen onUpdatePatient={deskActions.updatePatient} />}
+            {screen === 'patients' && <PatientsScreen onUpdatePatient={deskActions.updatePatient} />}
 
-          {screen === 'doctor' && <DoctorDashboard onChangeAppointmentStatus={deskActions.markAppointment} />}
+            {screen === 'doctor' && <DoctorDashboard onChangeAppointmentStatus={deskActions.markAppointment} />}
 
-          {canUseAdmin(session.role) && screen !== 'reception' && screen !== 'patients' && screen !== 'doctor' && (
-            <AdminDashboard
-              section={screen}
-              selectedDepartmentId={selectedDepartmentId}
-              activity={activity}
-              usersPage={usersPage}
-              usersLoading={usersLoading}
-              canReadAuditLog={session.role === 'Admin'}
-              actions={adminActions}
-              onNavigate={setScreen}
-              onSelectDepartment={setSelectedDepartmentId}
-              onUsersPageChange={setUsersPage}
-            />
-          )}
+            {canUseAdmin(session.role) && screen !== 'reception' && screen !== 'patients' && screen !== 'doctor' && (
+              <AdminDashboard
+                section={screen}
+                selectedDepartmentId={selectedDepartmentId}
+                activity={activity}
+                usersPage={usersPage}
+                usersLoading={usersLoading}
+                canReadAuditLog={session.role === 'Admin'}
+                actions={adminActions}
+                onNavigate={setScreen}
+                onSelectDepartment={setSelectedDepartmentId}
+                onUsersPageChange={setUsersPage}
+              />
+            )}
+          </Suspense>
         </main>
 
         {pendingChange && (
