@@ -249,6 +249,15 @@ tagged releases yet, so everything is listed under Unreleased.
   image's Alpine packages.
 - The frontend image runs as nginx's own user from right after its
   `apk upgrade`, before anything is copied in.
+- Both images build on the build machine's own platform and target the
+  image's, so an arm64 image built on an amd64 machine no longer runs the
+  .NET or npm build under emulation. The app's files in both images belong to
+  root, so the server can read them but not change them. The backend image
+  runs as a numeric user (100:101, as before) that Kubernetes can check
+  against `runAsNonRoot`, no longer ships the unused native launcher, and no
+  longer logs "Overriding HTTP_PORTS" on every start: it listens on 8080
+  through the base image's `ASPNETCORE_HTTP_PORTS`. The frontend build skips
+  npm's audit, which CI already runs.
 - `docker compose` restarts the backend and frontend unless they were stopped,
   as it does the database, and binds their ports to `127.0.0.1` only. The
   database password can come from `.env` (`POSTGRES_PASSWORD`); without it,

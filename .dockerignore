@@ -13,6 +13,9 @@
 *.user
 **/appsettings.Development.json
 **/appsettings.Local.json
+**/appsettings.Development.example.json
+**/Properties/launchSettings.json
+**/*.http
 **/*.md
 Dockerfile*
 docker-compose*
