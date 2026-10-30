@@ -11,22 +11,16 @@ export type Account = { name: string; password: string }
 export type Doctor = Account & { doctorId: number; scheduleId: number; department: string }
 export type Patient = { name: string; phoneNumber: string; dateOfBirth: string }
 
-// The API limits requests per client address: 60 a minute, and five sign-ins
-// a minute per username. It reads the address from X-Forwarded-For in these
-// runs, so each test gets one of its own, for its browser and its seeding.
 let testsInWorker = 0
 function clientAddress(workerIndex: number) {
   testsInWorker++
   return `10.${workerIndex % 256}.${Math.floor(testsInWorker / 250) % 256}.${(testsInWorker % 250) + 1}`
 }
 
-// Names no other test uses: tests share the run's database.
 export function uniqueName(prefix: string) {
   return `${prefix}-${randomBytes(3).toString('hex')}`
 }
 
-// Someone new to the clinic. Patients who share a phone number, or a name
-// and date of birth, would make the API ask whether they are the same person.
 export function newPatient(name: string): Patient {
   return {
     name,
@@ -35,7 +29,6 @@ export function newPatient(name: string): Patient {
   }
 }
 
-// Sets up what a test needs through the API, as the admin and the front desk.
 export class Seed {
   private readonly headers: Record<string, string>
   private adminToken: string | null = null
@@ -44,8 +37,6 @@ export class Seed {
     this.headers = headers
   }
 
-  // A doctor in a department of their own, working 09:00-17:00 every day in
-  // 30-minute slots, with a break from 12:00 to 13:00.
   async doctor(): Promise<Doctor> {
     const token = await this.admin()
     const department = uniqueName('Cardiology')
@@ -103,7 +94,6 @@ export class Seed {
     } satisfies Api.AddTimeOffDto)
   }
 
-  // An account with no role yet.
   async account(prefix: string): Promise<Account> {
     const account = { name: uniqueName(prefix), password: `${prefix}-password` }
     await this.call('POST', '/users', await this.admin(), account satisfies Api.CreateUserDto)
@@ -152,9 +142,6 @@ export const test = base.extend<{ seed: Seed; browserErrors: void }>({
   seed: async ({ extraHTTPHeaders }, use) => {
     await use(new Seed(extraHTTPHeaders ?? {}))
   },
-  // Every test fails on an uncaught error or a console error in the page,
-  // such as a request the content security policy blocks. Responses with an
-  // error status are logged as failed loads; tests check how those show.
   browserErrors: [
     async ({ page }, use) => {
       const errors: string[] = []
@@ -179,7 +166,6 @@ export async function signIn(page: Page, account: Account) {
   await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible()
 }
 
-// The notice a change shows once it is saved.
 export function notice(page: Page, text: string) {
   return page.getByRole('status').filter({ hasText: text })
 }

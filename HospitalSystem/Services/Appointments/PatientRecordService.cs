@@ -4,15 +4,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HospitalSystem.Services.Appointments;
 
-// The front desk's view of patients: finding one, their appointments, and
-// correcting their details, such as a phone number that changed.
 public class PatientRecordService(
     ApplicationDbContext context,
     ICurrentUserService currentUser,
     IAuditLogService auditLog,
     ClinicClock clinic) : IPatientRecordService
 {
-    // A patient's newest appointments, up to this many, come with them.
     private const int MaxAppointments = 200;
 
     private bool CanRead() => currentUser.Allows(Access.DeskReads);
@@ -34,8 +31,6 @@ public class PatientRecordService(
         if (!string.IsNullOrEmpty(search))
         {
             var nameKey = search.ToLowerInvariant();
-            // Phone numbers are stored as digits, so the search's digits are
-            // compared; fewer than three would match nearly everyone.
             var digits = string.Concat(search.Where(char.IsAsciiDigit));
             patients = digits.Length >= 3
                 ? patients.Where(p => p.Name.ToLower().Contains(nameKey) || p.PhoneNumber.Contains(digits))
@@ -56,14 +51,10 @@ public class PatientRecordService(
                     DateOfBirth = p.DateOfBirth,
                     PhoneNumber = p.PhoneNumber
                 },
-                // Counted by the same statement, so a page and its total cost
-                // one round trip.
                 TotalCount = patients.Count()
             })
             .ToListAsync(cancellationToken);
 
-        // An empty page carries no total. On page 1 there is nothing to
-        // count; a later page is past the last match and needs its own count.
         var totalCount = rows.Count > 0 ? rows[0].TotalCount
             : query.Page == 1 ? 0
             : await patients.CountAsync(cancellationToken);

@@ -31,8 +31,6 @@ export function SkeletonRows({ count }: { count: number }) {
   )
 }
 
-// What a table shows below its rows: placeholder rows while it loads, and a
-// note when it has none.
 export function TableStatus({
   loading,
   empty,
@@ -48,7 +46,6 @@ export function TableStatus({
   return empty ? <EmptyState text={emptyText} /> : null
 }
 
-// A button that demo accounts see but cannot use (see lib/readOnly).
 export function GuardedButton({
   readOnly,
   disabled,
@@ -72,9 +69,6 @@ export function PageHint({ section }: { section: AdminSection }) {
   return <p className="page-hint">{copy[section]}</p>
 }
 
-// A native <dialog> opened as a modal: the browser keeps focus inside it,
-// leaves the page behind it inert and reports Escape. Focus starts on the
-// first field or button and goes back to where it was when the dialog closes.
 export function Modal({
   children,
   title,
@@ -107,7 +101,6 @@ export function Modal({
       className={`modal ${tone ?? ''}`}
       aria-labelledby={titleId}
       onCancel={(event) => {
-        // Escape: the app closes the dialog, so its state stays in step.
         event.preventDefault()
         onClose()
       }}
@@ -130,8 +123,6 @@ export type ConfirmOptions = {
   tone?: 'danger'
 }
 
-// In place of window.confirm, which cannot be styled, blocks the page and can
-// be switched off by the browser.
 export function ConfirmDialog({
   title,
   message,

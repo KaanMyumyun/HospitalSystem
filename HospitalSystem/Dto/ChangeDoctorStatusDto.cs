@@ -5,7 +5,6 @@ namespace HospitalSystem.Dto;
 
 public class ChangeDoctorStatusDto : ICancelsAffectedBookings
 {
-    // From the route, never the body.
     [JsonIgnore]
     public int DoctorId { get; set; }
 

@@ -17,8 +17,6 @@ import type { Slot } from '../../types'
 
 export type WeekCounts = { booked: number; available: number; cancelled: number }
 
-// The middle panel: the doctor's week, one button per slot. While a booking
-// is being moved, the open slots say where it can go.
 export function WeekCalendar({
   counts,
   days,
@@ -87,8 +85,6 @@ export function WeekCalendar({
       )}
 
       <div className="schedule-scroll">
-        {/* A group, not an ARIA grid: the slots are ordinary buttons in tab
-            order, and each one names its own day and time. */}
         <div className={`schedule-grid days-${days.length}`} role="group" aria-label="Weekly appointment schedule">
           <div className="grid-corner" aria-hidden="true">Time</div>
           {days.map((day) => {
@@ -130,8 +126,6 @@ export function WeekCalendar({
   )
 }
 
-// What a slot says. A booking shows the patient's initials only: the grid is
-// visible to anyone near the desk.
 function slotText(slot: Slot, isMoveTarget: boolean) {
   if (isMoveTarget) return 'Move here'
   if (slot.status === 'booked' && slot.appointment) {
@@ -140,7 +134,6 @@ function slotText(slot: Slot, isMoveTarget: boolean) {
   return slotLabel(slot.status)
 }
 
-// After a booked slot's initials: how the appointment went, once marked.
 function attendanceLabel(status: AppointmentDto['status']) {
   if (status === 'Completed') return ' · done'
   if (status === 'NoShow') return ' · no-show'

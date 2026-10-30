@@ -3,7 +3,6 @@ using Npgsql;
 
 namespace HospitalSystem.Data;
 
-/// <summary>Runs the migrations compiled into this release without starting the API.</summary>
 public static class DatabaseMigrationCommand
 {
     public static async Task<int> RunAsync(string[] args, CancellationToken cancellationToken = default)
@@ -27,9 +26,6 @@ public static class DatabaseMigrationCommand
         return await ApplyAsync(configuration, cancellationToken);
     }
 
-    // Applies the migrations the database does not have yet, for --migrate and
-    // for an API that starts with Database:RunMigrationsOnStartup: 0 on success,
-    // 1 on failure. Only migration ids and safe status reach the console.
     public static async Task<int> ApplyAsync(IConfiguration configuration, CancellationToken cancellationToken = default)
     {
         try
@@ -53,13 +49,10 @@ public static class DatabaseMigrationCommand
                 .Options;
             await using var db = new ApplicationDbContext(options);
 
-            // Do not attach the host logger: failed SQL and provider exception messages
-            // may contain sensitive data. Emit only release migration IDs and safe status.
             Console.WriteLine("Applying database migrations.");
             var pending = (await db.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
             if (pending.Length == 0)
             {
-                // Most API starts, so they skip taking the migration lock.
                 Console.WriteLine("No pending migrations: the database is up to date.");
                 return 0;
             }
@@ -67,9 +60,6 @@ public static class DatabaseMigrationCommand
             foreach (var migration in pending)
                 Console.WriteLine($"Pending migration: {migration}");
 
-            // EF Core 9+ and Npgsql serialize migration execution using a database lock
-            // (LOCK TABLE on the history table, held for a transaction).
-            // This applies only Up migrations; image rollback must not downgrade schema.
             await db.Database.MigrateAsync(cancellationToken);
             Console.WriteLine("Database migrations completed successfully.");
             return 0;
@@ -92,17 +82,12 @@ public static class DatabaseMigrationCommand
         return 1;
     }
 
-    // Migrations can have a connection of their own, ConnectionStrings:Migrations,
-    // such as Neon's direct host where the API uses the pooled one, as Neon
-    // advises for schema changes. Without it, the API's.
     private static string? MigrationConnectionString(IConfiguration configuration)
     {
         var migrations = configuration.GetConnectionString("Migrations");
         return string.IsNullOrWhiteSpace(migrations) ? configuration.GetConnectionString("DefaultConnection") : migrations;
     }
 
-    // The same appsettings, user-secrets and environment sources as the API,
-    // without constructing a web host or registering application services.
     internal static IConfiguration LoadConfiguration() =>
         Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
         {

@@ -3,6 +3,7 @@ using HospitalSystem.Services;
 using HospitalSystem.Services.Appointments;
 using HospitalSystem.Services.Auth;
 using HospitalSystem.Services.Calendar;
+using HospitalSystem.Services.Department;
 using HospitalSystem.Services.User;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +16,6 @@ using Npgsql;
 
 namespace HospitalSystem.Tests;
 
-// The same code against real PostgreSQL, with the real migrations applied.
 public class PostgresTests : AuthTestBase
 {
     private static readonly DateTimeOffset LockoutTime = new(2026, 10, 23, 12, 0, 0, TimeSpan.Zero);
@@ -33,8 +33,6 @@ public class PostgresTests : AuthTestBase
         return user.Id;
     }
 
-    // Pauses the first request after it has read the user. Without row locking,
-    // the second request can then save against that same old account state.
     private sealed class PausedWrongPasswordHasher : IPasswordHasher<UserEntity>
     {
         private readonly TaskCompletionSource<bool> _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -122,16 +120,12 @@ public class PostgresTests : AuthTestBase
         Assert.False(db.Database.HasPendingModelChanges());
     }
 
-    // What --migrate and an API with Database:RunMigrationsOnStartup run. The
-    // migrations go through ConnectionStrings:Migrations when it is set, and a
-    // second run finds nothing to do.
     [PostgresFact]
     public async Task ApplyingMigrations_UsesTheMigrationsConnection_ThenHasNothingToDo()
     {
         await using var database = await PostgresDatabase.CreateAsync();
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            // Nothing listens on port 1, so the API's own connection would fail.
             ["ConnectionStrings:DefaultConnection"] = "Host=127.0.0.1;Port=1;Timeout=2",
             ["ConnectionStrings:Migrations"] = database.ConnectionString,
         }).Build();
@@ -143,8 +137,6 @@ public class PostgresTests : AuthTestBase
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
     }
 
-    // Three migrations that did nothing were deleted. A database that applied
-    // them keeps their history rows, which EF leaves alone.
     [PostgresFact]
     public async Task ADatabaseThatAppliedTheDeletedEmptyMigrations_StillMigrates()
     {
@@ -196,8 +188,6 @@ public class PostgresTests : AuthTestBase
         Assert.Equal("IX_Departments_LowerDepartment", UniqueViolation(error).ConstraintName);
     }
 
-    // The migration cannot choose which of two such departments to keep, so it
-    // stops, changes nothing, and runs once they are renamed.
     [PostgresFact]
     public async Task CaseInsensitiveDepartmentNames_StopsWhileNamesDifferOnlyInCase()
     {
@@ -281,9 +271,6 @@ public class PostgresTests : AuthTestBase
         Assert.Equal("IX_Calendars_DoctorId", UniqueViolation(error).ConstraintName);
     }
 
-    // Two admins create a schedule for one doctor at the same time: both pass
-    // the check, and the database refuses the second, which gets the message
-    // the check gives.
     [PostgresFact]
     public async Task CreatingTwoSchedulesForADoctorAtOnce_TheSecondIsAConflict()
     {
@@ -312,8 +299,6 @@ public class PostgresTests : AuthTestBase
         Assert.Equal(0L, await database.ScalarAsync<long>("""SELECT count(*) FROM "AuditLogs" """));
     }
 
-    // Inserts another schedule for the doctor just before the service saves
-    // its own, as a request from another admin would.
     private sealed class CompetingScheduleInterceptor(PostgresDatabase database, int doctorId) : SaveChangesInterceptor
     {
         public bool Inserted { get; private set; }
@@ -333,8 +318,6 @@ public class PostgresTests : AuthTestBase
         }
     }
 
-    // The migration cannot choose which of a doctor's schedules to keep, so it
-    // stops, changes nothing, and runs once all but one are deleted.
     [PostgresFact]
     public async Task OneSchedulePerDoctor_StopsWhileADoctorHasTwo()
     {
@@ -361,9 +344,6 @@ public class PostgresTests : AuthTestBase
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
     }
 
-    // Changing a schedule used to store it on the day of the change, and
-    // schedules older than slot lengths have none. The repair keeps the times
-    // of day, an end at midnight, and the 30 minutes the calendar showed.
     [PostgresFact]
     public async Task RepairScheduleRows_MovesHoursToOneDate_AndFillsMissingSlotLengths()
     {
@@ -390,8 +370,6 @@ public class PostgresTests : AuthTestBase
         Assert.Equal(30, schedules[1].SlotDurationMin);
     }
 
-    // The queries behind time off, breaks, moves and history, as PostgreSQL
-    // runs them: the in-memory provider would accept queries it cannot.
     [PostgresFact]
     public async Task TimeOffBreaksMovesAndHistory_WorkInTheDatabase()
     {
@@ -466,8 +444,6 @@ public class PostgresTests : AuthTestBase
         Assert.Equal(PostgresErrorCodes.StringDataRightTruncation, Assert.IsType<PostgresException>(error.InnerException).SqlState);
     }
 
-    // The migration cannot shorten a name well, so it stops, changes nothing,
-    // and runs once the name is shortened by hand.
     [PostgresFact]
     public async Task LimitDepartmentNameLength_StopsWhileANameIsTooLong()
     {
@@ -487,9 +463,6 @@ public class PostgresTests : AuthTestBase
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
     }
 
-    // Entries named their actor by user id. The migration keeps the id in
-    // ActorUserId and puts the username in ActorName; "Unknown" and the id of
-    // no user stay as they were.
     [PostgresFact]
     public async Task AddAuditLogActorUserId_NamesTheActorsOfEarlierEntries()
     {
@@ -513,8 +486,6 @@ public class PostgresTests : AuthTestBase
         Assert.Equal(["alice", "Unknown", "999"], entries.Select(e => e.ActorName));
     }
 
-    // During a deploy or after a rollback, an image without the newest
-    // columns still inserts rows: each new column has a default.
     [PostgresFact]
     public async Task AnOlderImage_CanStillInsertUsersAndSchedules()
     {
@@ -540,7 +511,6 @@ public class PostgresTests : AuthTestBase
         await SeedLoginUserAsync(database, failedCount: 8);
         await using var firstDb = database.CreateContext();
         await using var secondDb = database.CreateContext();
-        // A tracked entity must be refreshed after the second request gets the lock.
         await secondDb.Users.SingleAsync();
         var paused = new PausedWrongPasswordHasher();
         var wrong = new LoginDto { Name = "lockout", Password = "wrong-password" };
@@ -612,8 +582,6 @@ public class PostgresTests : AuthTestBase
             new PasswordHasher<UserEntity>().VerifyHashedPassword(user, user.PasswordHash, "replacement-password"));
     }
 
-    // With real foreign keys: a role change no longer files a new doctor under
-    // a department that may not exist.
     [PostgresFact]
     public async Task MakingADoctor_NeedsADepartmentThatExists()
     {
@@ -635,5 +603,55 @@ public class PostgresTests : AuthTestBase
         Assert.Equal(FailureKind.NotFound, missing.Failure);
         Assert.True(made.IsSuccess, made.Error);
         Assert.Equal(department.Id, (await db.Doctors.SingleAsync()).DepartmentId);
+    }
+
+    [PostgresFact]
+    public async Task DeactivatingADepartment_ListsItsFutureBookings_ThenCancelsThemWithAReason()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = await database.CreateMigratedContextAsync();
+        var (doctorId, deskId, patientId) = await SeedBookableDoctorAsync(db);
+        var today = DateTime.UtcNow.Date;
+        AppointmentEntity Booked(DateTime time) => new()
+        {
+            DoctorId = doctorId,
+            PatientId = patientId,
+            CreatedByTheFrontDeskId = deskId,
+            TimeOfAppointment = time,
+            CreatedAt = today.AddDays(-10),
+            Status = AppointmentStatus.Scheduled
+        };
+        var later = Booked(today.AddDays(3).AddHours(9));
+        var sooner = Booked(today.AddDays(2).AddHours(9));
+        var past = Booked(today.AddDays(-2).AddHours(9));
+        db.Appointments.AddRange(later, sooner, past);
+        await db.SaveChangesAsync();
+        var departmentId = await db.Departments.Select(d => d.Id).SingleAsync();
+        var admin = new Mock<ICurrentUserService>();
+        admin.Setup(x => x.IsInRole(UserRole.Admin)).Returns(true);
+        var service = new DepartmentStatusService(db, admin.Object, new AuditLogService(db, admin.Object));
+
+        var preview = await service.ChangeDepartmentStatusAsync(new ChangeDepartmentStatusDto { DepartmentId = departmentId, IsActive = false });
+        var cancelled = await service.ChangeDepartmentStatusAsync(new ChangeDepartmentStatusDto
+        {
+            DepartmentId = departmentId,
+            IsActive = false,
+            CancelAffectedAppointments = true,
+            CancellationReason = "Department closed"
+        });
+
+        Assert.Equal(FailureKind.Conflict, preview.Failure);
+        Assert.Equal(2, preview.AffectedAppointmentCount);
+        Assert.Equal([sooner.Id, later.Id], preview.AffectedAppointments!.Select(a => a.AppointmentId));
+        Assert.All(preview.AffectedAppointments!, a => Assert.Equal(("drhouse", "MI"), (a.DoctorName, a.PatientInitials)));
+        Assert.True(cancelled.IsSuccess, cancelled.Error);
+        var appointments = await db.Appointments.AsNoTracking().OrderBy(a => a.TimeOfAppointment).ToListAsync();
+        Assert.Equal(
+            [(past.Id, AppointmentStatus.Scheduled, null), (sooner.Id, AppointmentStatus.Cancelled, "Department closed"), (later.Id, AppointmentStatus.Cancelled, "Department closed")],
+            appointments.Select(a => (a.Id, a.Status, a.CancellationReason)));
+        Assert.False((await db.Departments.AsNoTracking().SingleAsync()).IsActive);
+        Assert.Equal(
+            [sooner.Id, later.Id],
+            await db.AuditLogs.Where(l => l.Action == "CancelAppointment").OrderBy(l => l.Id).Select(l => l.EntityId).ToListAsync());
     }
 }

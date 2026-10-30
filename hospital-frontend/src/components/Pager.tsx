@@ -1,7 +1,5 @@
 type Page = { items: unknown[]; page: number; pageSize: number; totalCount: number }
 
-// Previous and Next for a list the API pages; shown only when there is more
-// than one page.
 export function Pager({
   page,
   loading,

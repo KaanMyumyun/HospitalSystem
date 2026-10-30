@@ -3,8 +3,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HospitalSystem.Services;
 
-// The audit log for admins, newest first. Entries name users, so demo admins
-// cannot read it.
 public class AuditLogQueryService(
     ApplicationDbContext context,
     ICurrentUserService currentUser) : IAuditLogQueryService
@@ -41,9 +39,6 @@ public class AuditLogQueryService(
                     EntityType = a.EntityType,
                     EntityId = a.EntityId,
                     Details = a.Details,
-                    // An entry names its actor. One that an older release
-                    // wrote during a deploy has no ActorUserId and holds the
-                    // actor's id in ActorName, which is resolved here.
                     Actor = a.ActorUserId != null
                         ? a.ActorName
                         : context.Users
@@ -51,14 +46,10 @@ public class AuditLogQueryService(
                             .Select(u => u.Name)
                             .FirstOrDefault() ?? a.ActorName
                 },
-                // Counted by the same statement, so a page and its total cost
-                // one round trip.
                 TotalCount = entries.Count()
             })
             .ToListAsync(cancellationToken);
 
-        // An empty page carries no total. On page 1 there is nothing to
-        // count; a later page is past the last match and needs its own count.
         var totalCount = rows.Count > 0 ? rows[0].TotalCount
             : query.Page == 1 ? 0
             : await entries.CountAsync(cancellationToken);

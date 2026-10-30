@@ -10,11 +10,8 @@ using Moq;
 
 namespace HospitalSystem.Tests;
 
-// A schedule change, or a doctor or department going inactive, must not
-// strand future bookings without telling the admin.
 public class AffectedBookingsTests
 {
-    // Monday 3 June 2030. Sofia is at UTC+3 then, so 06:00 UTC is 09:00 there.
     private static readonly DateTime MondayNineInSofia = new(2030, 6, 3, 6, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime MondayHalfPastNineInSofia = new(2030, 6, 3, 6, 30, 0, DateTimeKind.Utc);
     private static readonly DateTime TuesdayFourPmInSofia = new(2030, 6, 4, 13, 0, 0, DateTimeKind.Utc);
@@ -33,8 +30,6 @@ public class AffectedBookingsTests
         return mock.Object;
     }
 
-    // Doctor 1 works 08:00-18:00 Sofia time in 30-minute slots, Monday to
-    // Friday, with three future bookings, one past one and one cancelled.
     private static async Task SeedAsync(ApplicationDbContext db)
     {
         db.Departments.Add(new DepartmentEntity { Id = 1, Name = "Cardiology", IsActive = true });
@@ -75,7 +70,6 @@ public class AffectedBookingsTests
     private static ChangeScheduleDto Hours(int start, int end, int slot = 30) =>
         new() { ScheduleId = 1, StartHour = start, EndHour = end, SlotDurationMin = slot };
 
-    // The bookings above are Sofia times, so the clinic is there too.
     private static ScheduleModificationService ScheduleService(ApplicationDbContext db, string clinicTimeZone = "Europe/Sofia")
     {
         var admin = Admin();
@@ -140,8 +134,6 @@ public class AffectedBookingsTests
         Assert.Equal(8, (await db.Calendars.AsNoTracking().SingleAsync()).StartTime.Hour);
     }
 
-    // Bookings are compared as clinic times: 06:00 UTC is 09:00 in Sofia,
-    // inside 09:00-17:00 there but not in UTC.
     [Theory]
     [InlineData("Europe/Sofia", true)]
     [InlineData("UTC", false)]
@@ -155,7 +147,6 @@ public class AffectedBookingsTests
         Assert.Equal(fits, result.IsSuccess);
     }
 
-    // A new break strands the bookings inside it, and only those.
     [Fact]
     public async Task ANewBreak_StrandsTheBookingsInsideIt()
     {
@@ -199,7 +190,6 @@ public class AffectedBookingsTests
         Assert.Equal(monday, (await db.TimeOff.SingleAsync()).FirstDay);
     }
 
-    // The days are the clinic's: 21:30 UTC on Monday is already Tuesday in Sofia.
     [Fact]
     public async Task TimeOff_DaysAreTheClinics()
     {
@@ -228,7 +218,6 @@ public class AffectedBookingsTests
         Assert.Equal([10, 14], result.AffectedAppointments!.Select(a => a.AppointmentId));
     }
 
-    // With hour-long slots from 08:00, 09:30 is no longer the start of a slot.
     [Fact]
     public async Task LongerSlots_StrandBookingsOffTheNewGrid()
     {

@@ -98,7 +98,6 @@ public class LoginRateLimitTests
         Assert.Equal(HttpStatusCode.TooManyRequests,
             (await client.PostAsJsonAsync("/api/auth/demo-login", new { role = "DemoAdmin" })).StatusCode);
 
-        // Exhausting demo sign-ins does not prevent a real user's password sign-in.
         Assert.Equal(HttpStatusCode.Unauthorized, (await LoginAsync(client, "someone-else")).StatusCode);
     }
 
@@ -138,8 +137,6 @@ public class LoginRateLimitTests
             })).StatusCode);
     }
 
-    // The per-username limit alone would let one address try a password on
-    // every account; the address has its own limit across usernames.
     [Fact]
     public async Task OneAddress_GetsTwentySignInsAMinuteAcrossUsernames()
     {

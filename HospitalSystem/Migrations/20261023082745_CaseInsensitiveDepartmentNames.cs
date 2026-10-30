@@ -10,12 +10,6 @@ namespace HospitalSystem.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Creating a department compares names ignoring case, so
-            // "Cardiology" and "cardiology" must not both exist. Departments
-            // that already differ only in case have to be renamed by hand
-            // first; the migration stops rather than pick one. EF cannot
-            // describe an index on an expression, so it is created here in SQL
-            // and the model snapshot does not list it.
             migrationBuilder.Sql("""
                 DO $$
                 BEGIN

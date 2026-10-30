@@ -64,8 +64,6 @@ public class ScheduleQueryServiceTests
         Assert.Equal(FailureKind.Forbidden, result.Failure);
     }
 
-    // Time off that has ended is history; the list carries what is still to
-    // come or under way, soonest first.
     [Fact]
     public async Task ViewScheduleAsync_IncludesTheBreakAndTimeOffNotYetOver()
     {

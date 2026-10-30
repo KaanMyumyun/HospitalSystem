@@ -14,9 +14,6 @@ export type DeskActions = {
   updatePatient: (patientId: number, input: UpdatePatientInput) => Promise<ActionOutcome>
 }
 
-// What the front desk changes, and doctors mark: bookings and patients, each
-// through App's runAction. The same object comes back until runAction or
-// confirm changes, so the screens do not get new callbacks on every render.
 export function useDeskActions(
   runAction: RunAction,
   confirm: (options: ConfirmOptions) => Promise<boolean>,
@@ -31,7 +28,6 @@ export function useDeskActions(
           () => api.changeAppointmentStatus(appointmentId, status),
           status === 'Completed' ? 'Appointment marked completed' : 'Appointment marked no-show',
         ),
-      // The desk picks the new slot on the grid, then confirms here.
       moveAppointment: async (appointment, appointmentTime, doctor) => {
         const otherDoctor = doctor.doctorId !== appointment.doctorId
         const confirmed = await confirm({

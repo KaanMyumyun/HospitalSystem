@@ -3,8 +3,6 @@ import { longDate, nextWeek } from './clinic.ts'
 import { expect, newPatient, notice, signIn, test } from './fixtures.ts'
 import type { Doctor } from './fixtures.ts'
 
-// The browser runs in Tokyo (playwright.config.ts), so each slot found by its
-// date and time also shows the grid keeps to the clinic's clock.
 const [monday = '', tuesday = '', wednesday = ''] = nextWeek()
 
 async function showNextWeek(page: Page, doctor: Doctor) {
@@ -95,8 +93,6 @@ test('renews the session once its token is ten minutes old', async ({ page, seed
       token: sessionStorage.getItem('hospital-frontend-token'),
     }))
   const before = await stored()
-  // A token's times are whole seconds, so one renewed within the second it
-  // was issued would be the same token.
   await page.waitForTimeout(1_100)
 
   await page.clock.install()
@@ -111,7 +107,6 @@ test('renews the session once its token is ten minutes old', async ({ page, seed
   const after = await stored()
   expect(after.id).toBe(before.id)
 
-  // The API takes the new token.
   const reload = page.waitForResponse((response) => response.url().endsWith('/api/departments'))
   await page.getByRole('button', { name: 'Refresh' }).click()
   const response = await reload

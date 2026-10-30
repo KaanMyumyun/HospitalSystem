@@ -7,8 +7,6 @@ public class LoginResultDto
     public UserRole? Role { get; set; }
     public string? Error { get; set; }
 
-    // The clinic's IANA time zone, such as Europe/Sofia, in which the app shows
-    // and enters every date and time.
     public string? TimeZone { get; set; }
 
     public static LoginResultDto Fail(string error)

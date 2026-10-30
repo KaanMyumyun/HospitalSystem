@@ -65,7 +65,6 @@ public class AppointmentQueryServiceTests : AppointmentTestBase
         var result = await CreateService(db).GetAppointmentsAsync(SeedDayFor(1));
 
         Assert.True(result.IsSuccess);
-        // From is inclusive and To exclusive; same-time rows come in id order.
         Assert.NotNull(result.Data);
         Assert.Equal(new[] { 7, 1, 2, 3 }, result.Data.Select(a => a.AppointmentId));
     }
@@ -78,14 +77,12 @@ public class AppointmentQueryServiceTests : AppointmentTestBase
         var service = CreateService(db);
         var utcPlus3 = TimeSpan.FromHours(3);
 
-        // 12:00-14:00 at UTC+3 is 09:00-11:00 UTC, around the 10:00 UTC appointments.
         var around = await service.GetAppointmentsAsync(new AppointmentQueryDto
         {
             DoctorId = 1,
             From = new DateTimeOffset(2026, 1, 1, 12, 0, 0, utcPlus3),
             To = new DateTimeOffset(2026, 1, 1, 14, 0, 0, utcPlus3)
         });
-        // 09:00-11:00 at UTC+3 would contain 10:00 only if the offset were ignored.
         var wallClockOnly = await service.GetAppointmentsAsync(new AppointmentQueryDto
         {
             DoctorId = 1,
@@ -179,11 +176,8 @@ public class AppointmentQueryServiceTests : AppointmentTestBase
         db.AuditLogs.AddRange(
             Entry(1, "MoveAppointment", "Appointment", 1, 11, 5, "Front Desk Admin"),
             Entry(2, "CreateAppointment", "Appointment", 1, 10, 5, "Front Desk Admin"),
-            // Not this appointment's: another appointment's, and a schedule
-            // whose id happens to be the same.
             Entry(3, "CancelAppointment", "Appointment", 2, 12, 5, "Front Desk Admin"),
             Entry(4, "ChangeSchedule", "Calendar", 1, 13, 99, "admin"),
-            // As an older release writes it: the id in ActorName.
             Entry(5, "CancelAppointment", "Appointment", 1, 14, null, "5"));
         await db.SaveChangesAsync();
 
@@ -205,7 +199,6 @@ public class AppointmentQueryServiceTests : AppointmentTestBase
         Assert.Equal(FailureKind.NotFound, result.Failure);
     }
 
-    // The entries name staff, which demo accounts may not see.
     [Fact]
     public async Task GetHistoryAsync_ForDemoReception_IsForbidden()
     {

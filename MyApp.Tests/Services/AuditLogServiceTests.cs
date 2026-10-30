@@ -18,8 +18,6 @@ public class AuditLogServiceTests
         return mock.Object;
     }
 
-    // An entry is saved with the change it describes, so a failed change
-    // leaves no entry behind.
     [Fact]
     public async Task LogAsync_AddsAnEntryThatTheCallersSaveWrites()
     {
@@ -40,7 +38,6 @@ public class AuditLogServiceTests
         Assert.True(entry.CreatedAt > DateTime.UtcNow.AddMinutes(-1));
     }
 
-    // Tokens issued before they carried the username have only the id.
     [Fact]
     public async Task LogAsync_WithoutAUsernameInTheToken_LooksItUp()
     {

@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Http;
 
 namespace HospitalSystem.Tests;
 
-// The authorization seam every service trusts: who is calling, in which role.
 public class CurrentUserServiceTests
 {
     private static CurrentUserService For(params Claim[] claims) =>

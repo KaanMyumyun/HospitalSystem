@@ -1,6 +1,3 @@
-// The top bar's search, as every list on screen applies it: an item stays if
-// any of its fields contains the search, ignoring case and the spaces around
-// it. An empty search keeps every item, and the same array comes back.
 export function filterBySearch<T>(
   items: T[],
   search: string,

@@ -20,9 +20,6 @@ using Moq;
 
 namespace HospitalSystem.Tests;
 
-// Whole requests through the real pipeline, with an in-memory database:
-// authentication and token checks, rate limits, client addresses behind a
-// proxy, status codes and the exception handler.
 public class HttpPipelineTests
 {
     private const string Password = "correct-horse-battery";
@@ -75,7 +72,6 @@ public class HttpPipelineTests
         return client;
     }
 
-    // A token signed like the API's own, with the parts a test wants wrong.
     private static string MakeToken(UserEntity user, DateTime expires, string key = TestApp.JwtKey,
         string issuer = "HospitalSystem", string audience = "HospitalSystemUsers")
     {
@@ -118,8 +114,6 @@ public class HttpPipelineTests
         }
     }
 
-    // Whatever roles an endpoint lists, it requires DemoReadOnly too, so no
-    // endpoint, now or later, lets a demo account change data.
     [Fact]
     public async Task EveryEndpointButSignInAndHealth_RequiresTheDemoReadOnlyPolicy()
     {
@@ -153,7 +147,6 @@ public class HttpPipelineTests
 
         Assert.Equal(HttpStatusCode.OK, (await demo.GetAsync("/api/departments")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await demo.PostAsJsonAsync("/api/departments", new { name = "Neurology" })).StatusCode);
-        // Open to any signed-in user, so only the policy keeps a demo account out.
         var change = await demo.PostAsJsonAsync("/api/auth/change-password",
             new { currentPassword = "anything-at-all", newPassword = "something-else" });
 
@@ -199,8 +192,6 @@ public class HttpPipelineTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    // Clocks on two API instances can differ slightly, so a token is still
-    // accepted for 30 seconds after it expires; no longer than that.
     [Fact]
     public async Task AnExpiredToken_HasThirtySecondsOfGrace()
     {
@@ -211,8 +202,6 @@ public class HttpPipelineTests
         Assert.Equal(HttpStatusCode.OK, (await Authorized(started.App, justExpired).GetAsync("/api/users")).StatusCode);
     }
 
-    // The token names its user, so a change is audited with who made it: the
-    // id, and the username as stored, whatever case was typed at sign-in.
     [Fact]
     public async Task AChange_IsAuditedWithTheUsersIdAndName()
     {
@@ -227,8 +216,6 @@ public class HttpPipelineTests
         Assert.Equal("admin", entry.ActorName);
     }
 
-    // A signed-in user swaps their token for a new one that works; a token
-    // that does not say when its session began cannot be renewed.
     [Fact]
     public async Task ASession_IsRenewedWithItsOwnToken()
     {
@@ -276,8 +263,6 @@ public class HttpPipelineTests
         Assert.Contains("Too many requests", (await limited.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
     }
 
-    // Without a trusted proxy the header is the client's own claim, so it must
-    // not give anyone a fresh limit.
     [Fact]
     public async Task ByDefault_XForwardedForDoesNotChangeTheLimit()
     {
@@ -303,8 +288,6 @@ public class HttpPipelineTests
             await SignInAsync(client, "admin", "wrong", forwardedFor: "203.0.113.1");
 
         Assert.Equal(HttpStatusCode.TooManyRequests, (await SignInAsync(client, "admin", "wrong", "203.0.113.1")).StatusCode);
-        // With one proxy only the last entry counts: anything a client put in
-        // front of it is ignored, so it cannot pick a fresh address.
         Assert.Equal(HttpStatusCode.TooManyRequests, (await SignInAsync(client, "admin", "wrong", "198.51.100.9, 203.0.113.1")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await SignInAsync(client, "admin", "wrong", "203.0.113.2")).StatusCode);
     }
@@ -326,7 +309,6 @@ public class HttpPipelineTests
         Assert.Contains("IsActive", await invalid.Content.ReadAsStringAsync());
     }
 
-    // The id in the path is the one acted on; an id in the body is ignored.
     [Fact]
     public async Task TheIdInThePath_WinsOverOneInTheBody()
     {

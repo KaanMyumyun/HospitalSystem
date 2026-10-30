@@ -12,9 +12,6 @@ import { CancelAppointmentDialog } from './CancelAppointmentDialog'
 import { DoctorPicker } from './DoctorPicker'
 import { WeekCalendar } from './WeekCalendar'
 
-// The front desk's week: a doctor on the left, their slots in the middle and
-// the chosen booking on the right. Choosing an open slot books it, unless a
-// booking is being moved, which then goes there.
 export function ReceptionDashboard({
   appointments,
   selectedDoctor,
@@ -27,7 +24,6 @@ export function ReceptionDashboard({
   onSelectDoctor,
   onWeekOffsetChange,
 }: {
-  // The selected doctor's appointments for the week shown; null while loading.
   appointments: AppointmentDto[] | null
   selectedDoctor: DoctorDto | null
   selectedDoctorId: number | null
@@ -43,8 +39,6 @@ export function ReceptionDashboard({
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<number | null>(null)
   const [cancellingAppointmentId, setCancellingAppointmentId] = useState<number | null>(null)
-  // The booking being moved. Meanwhile an open slot, of any doctor or week
-  // the desk turns to, is where it goes.
   const [moving, setMoving] = useState<AppointmentDto | null>(null)
   const [departmentFilter, setDepartmentFilter] = useState<number | 'all'>('all')
   const activeDepartments = useMemo(() => departments.filter((department) => department.isActive), [departments])

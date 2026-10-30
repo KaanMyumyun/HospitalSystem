@@ -50,7 +50,6 @@ public class DepartmentStatusServiceTests : DepartmentTestBase
         Assert.Equal(FailureKind.NotFound, result.Failure);
     }
 
-    // A request without a status must not deactivate the department by default.
     [Fact]
     public async Task ChangeDepartmentStatusAsync_MissingIsActive_FailsAndChangesNothing()
     {

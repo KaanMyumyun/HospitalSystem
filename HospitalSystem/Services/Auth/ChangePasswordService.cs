@@ -6,8 +6,6 @@ using Microsoft.Extensions.Options;
 
 namespace HospitalSystem.Services.Auth;
 
-// A signed-in user changes their own password. Like an admin's reset, it
-// signs out the user's other sessions; this one gets a new token.
 public class ChangePasswordService(
     ApplicationDbContext context,
     ICurrentUserService currentUser,
@@ -52,8 +50,6 @@ public class ChangePasswordService(
         if (user is null)
             return ChangePasswordResultDto.NotFound("User not found");
 
-        // A stolen session must not be a way around the sign-in lock, so wrong
-        // current passwords count towards it too.
         var now = clock.GetUtcNow().UtcDateTime;
         if (SignInLockout.IsLocked(user, now))
             return ChangePasswordResultDto.Fail(SignInLockout.LockedMessage(user, now));
@@ -85,7 +81,6 @@ public class ChangePasswordService(
         await context.SaveChangesAsync(cancellationToken);
 
         var result = ChangePasswordResultDto.Success();
-        // The password was just checked, so the session counts from now.
         result.Token = SessionTokens.Issue(user, _jwtSettings, clock.GetUtcNow());
         return result;
     }

@@ -41,7 +41,6 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
 
         Assert.True(result.IsSuccess);
 
-        // Stored without the formatting, as digits.
         var patient = await db.Patients.FirstOrDefaultAsync(p => p.PhoneNumber == "1234567");
         Assert.NotNull(patient);
         Assert.Equal("New Patient", patient!.Name);
@@ -209,7 +208,6 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Doctor already booked for that time slot", result.Error);
-        // The same 409 as when a concurrent booking wins the race below.
         Assert.True(result.IsConflict);
     }
 
@@ -353,8 +351,6 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.Equal("Date of birth cannot be after the appointment date", result.Error);
     }
 
-    // Bookings start on the doctor's slots, every 15 minutes from 08:00 here,
-    // on the minute, so two bookings for one slot always have the same time.
     [Theory]
     [InlineData(9, 46, 0)]
     [InlineData(9, 59, 0)]
@@ -406,7 +402,6 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.True(result.IsSuccess);
     }
 
-    // The seeded booking is at 10:00 on 2026-01-01.
     [Theory]
     [InlineData(10, 9, 50)]
     [InlineData(10, 10, 10)]
@@ -427,9 +422,6 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.True(result.IsSuccess);
     }
 
-    // A booking made before times had to start on a slot can sit between two
-    // slots, here at 10:05 on 2026-01-02. A new booking lasts one of the
-    // doctor's slots, however long, and may not overlap it.
     [Theory]
     [InlineData(15, 10, 0)]
     [InlineData(15, 10, 15)]
@@ -627,8 +619,6 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.Equal(DateTimeKind.Utc, stored.TimeOfAppointment.Kind);
     }
 
-    // Hours are the clinic's, whatever offset the desk's computer sends: 17:00
-    // UTC is 20:00 in Istanbul, outside 08:00-18:00 there though inside in UTC.
     [Theory]
     [InlineData(20, 3)]
     [InlineData(17, 0)]
@@ -654,7 +644,6 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await SeedStandardDataAsync(db);
         var service = CreateService(db);
 
-        // 3 January 2026 is a Saturday; the seeded schedule works Monday to Friday.
         var result = await service.CreateAppointmentAsync(NewPatientAt(new DateTime(2026, 1, 3, 10, 0, 0, DateTimeKind.Utc)));
 
         Assert.False(result.IsSuccess);
@@ -675,7 +664,6 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.True(result.IsSuccess);
     }
 
-    // The day is the clinic's: 22:00 UTC on Friday is Saturday 01:00 in Istanbul.
     [Fact]
     public async Task CreateAppointmentAsync_WorkingDayIsTheClinicsDay()
     {
@@ -693,8 +681,6 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.Equal("The doctor does not work on Saturdays", result.Error);
     }
 
-    // The calendar greys out slots that have started; the API must refuse them
-    // too, including the one starting this very minute.
     [Theory]
     [InlineData(-60)]
     [InlineData(0)]
@@ -725,7 +711,6 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         await SeedStandardDataAsync(db);
         var service = CreateService(db);
 
-        // Now is Monday 1 December 2025, 09:00 UTC; the schedule starts at 08:00.
         var result = await service.CreateAppointmentAsync(new CreateAppointmentDto
         {
             DoctorId = 1,
@@ -738,8 +723,6 @@ public class AppointmentCreationServiceTests : AppointmentTestBase
         Assert.True(result.IsSuccess, result.Error);
     }
 
-    // With a 12:00-13:00 break and 15-minute slots, 11:45 ends as the break
-    // begins and 13:00 starts as it ends.
     [Theory]
     [InlineData(11, 45, null)]
     [InlineData(12, 0, "Appointment time falls in the doctor's break, 12:00-13:00")]

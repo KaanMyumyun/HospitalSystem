@@ -34,10 +34,6 @@ type Dialogs = {
   chooseDepartment: (userName: string, departments: DepartmentDto[]) => Promise<number | null>
 }
 
-// What the admin screens can change. Each asks first where a change is hard
-// to take back, and runs through App's runAction, or runBookingChange when
-// it can strand future bookings. The same object comes back until one of the
-// inputs changes, so the tabs do not get new callbacks on every render.
 export function useAdminActions(
   departments: DepartmentDto[],
   runAction: RunAction,
@@ -46,7 +42,6 @@ export function useAdminActions(
 ): AdminActions {
   return useMemo<AdminActions>(
     () => ({
-      // Bookings on those days are listed for the admin to cancel or keep.
       addTimeOff: (scheduleId, input) =>
         runBookingChange((cancel) => api.addTimeOff(scheduleId, input, cancel), 'Time off added'),
       assignDoctor: async (doctor, departmentId) => {
@@ -89,7 +84,6 @@ export function useAdminActions(
       changeSchedule: (scheduleId, input) =>
         runBookingChange((cancel) => api.changeSchedule(scheduleId, input, cancel), 'Schedule updated'),
       changeUserRole: async (user, role) => {
-        // A new doctor needs a department; choosing one is the confirmation.
         let departmentId: number | undefined
         if (role === 'Doctor') {
           const chosen = await chooseDepartment(user.userName, departments)

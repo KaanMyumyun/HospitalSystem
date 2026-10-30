@@ -74,7 +74,7 @@ describe('buildWeekSlots', () => {
   })
 
   it('marks a matching appointment as booked and leaves other future slots available', () => {
-    const farFutureWeekOffset = 520 // ~10 years ahead, safely clear of "now"
+    const farFutureWeekOffset = 520
     const days = weekDays(farFutureWeekOffset)
     const targetDay = days[0]!
 
@@ -108,7 +108,7 @@ describe('buildWeekSlots', () => {
 
     const grid = buildWeekSlots(schedule, 42, appointments, farFutureWeekOffset)
 
-    expect(grid).toHaveLength(2) // 09:00 and 10:00 rows
+    expect(grid).toHaveLength(2)
     expect(grid[0]).toHaveLength(5)
 
     const bookedSlot = grid[0]![0]!
@@ -213,7 +213,7 @@ describe('buildWeekSlots', () => {
   })
 
   it('marks slots in the past as past rather than available', () => {
-    const farPastWeekOffset = -520 // ~10 years ago, safely before "now"
+    const farPastWeekOffset = -520
 
     const schedule: ScheduleDto = {
       scheduleId: 1,

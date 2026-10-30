@@ -5,12 +5,9 @@ export default defineConfig({
     env: {
       TZ: 'UTC',
     },
-    // Playwright runs those (npm run e2e).
     exclude: [...configDefaults.exclude, 'e2e/**'],
     projects: [
-      // Logic, in Node: *.test.ts.
       { extends: true, test: { name: 'unit', environment: 'node', include: ['src/**/*.test.ts'] } },
-      // Components rendered into jsdom: *.test.tsx.
       {
         extends: true,
         test: {

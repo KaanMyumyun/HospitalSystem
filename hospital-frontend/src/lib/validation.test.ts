@@ -57,7 +57,6 @@ describe('validateAppointmentInput', () => {
 
   it("compares with the appointment's date at the clinic", () => {
     setClinicTimeZone('Asia/Tokyo')
-    // 23:30 UTC on June 15 is June 16 in Tokyo, so a baby born that day can be seen.
     const lateEvening = new Date('2026-06-15T23:30:00Z')
 
     expect(validateAppointmentInput('Baby Doe', '5550100', '2026-06-16', lateEvening)).toBeNull()

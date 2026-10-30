@@ -14,10 +14,6 @@ namespace HospitalSystem.Migrations
                 name: "IX_Patients_PhoneNumber",
                 table: "Patients");
 
-            // Booking now stores phone numbers as digits with an optional
-            // leading +, and compares them that way. Existing numbers get the
-            // same form here, after the unique index is gone: numbers that
-            // differed only in formatting become equal.
             migrationBuilder.Sql("""
                 UPDATE "Patients"
                 SET "PhoneNumber" =
@@ -40,8 +36,6 @@ namespace HospitalSystem.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            // Fails while two patients share a phone number. Numbers keep the
-            // form Up gave them.
             migrationBuilder.DropIndex(
                 name: "IX_Patients_DateOfBirth",
                 table: "Patients");

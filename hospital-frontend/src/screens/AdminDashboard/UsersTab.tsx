@@ -8,10 +8,8 @@ import { guarded } from '../../lib/readOnly'
 import { formatTime } from '../../lib/format'
 import type { ActionOutcome } from '../../types'
 
-// Demo roles are never assigned from the app; accounts get them in the database.
 const assignableRoles: UserRole[] = ['Admin', 'Doctor', 'FrontDesk']
 
-// The API searches, sorts and pages the users; this tab shows one page.
 export function UsersTab({
   usersPage,
   loading,
@@ -21,7 +19,6 @@ export function UsersTab({
   onResetPassword,
 }: {
   usersPage: UsersPage | null
-  // The shared loading flag, or the users page loading.
   loading: boolean
   onChangeUserRole: (user: UserDto, role: UserRole) => Promise<ActionOutcome>
   onCreateUser: (name: string, password: string) => Promise<ActionOutcome>
@@ -77,7 +74,6 @@ export function UsersTab({
         </thead>
         <tbody>
           {visibleUsers.map((user) => {
-            // Demo accounts are managed in the database, not here.
             const locked = isReadOnly || isDemoRole(user.role)
             return (
               <tr key={user.userId}>

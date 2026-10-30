@@ -5,9 +5,6 @@ using Microsoft.Extensions.Options;
 
 namespace HospitalSystem.Services.Auth;
 
-// Swaps a signed-in user's token for a new one, so that a session in use does
-// not end after an hour. A revoked token never gets here: the stamp check on
-// every request refuses it first.
 public class SessionRenewalService(
     ApplicationDbContext context,
     ICurrentUserService currentUser,
@@ -19,8 +16,6 @@ public class SessionRenewalService(
 
     public async Task<LoginResultDto> RenewAsync(CancellationToken cancellationToken = default)
     {
-        // Tokens issued before renewal existed do not say when their session
-        // began, so they run out as they always did.
         if (!int.TryParse(currentUser.UserId, out var userId) || currentUser.SignedInAt is not { } signedInAt)
             return LoginResultDto.Fail("Sign in again to carry on");
 

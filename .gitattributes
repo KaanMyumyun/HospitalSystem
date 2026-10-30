@@ -1,10 +1,7 @@
-# Store text files with LF line endings and check them out with LF.
 * text=auto eol=lf
 
-# Visual Studio solution files keep their CRLF line endings and BOM as-is.
 *.sln -text
 
-# Binary files: never convert line endings.
 *.png binary
 *.jpg binary
 *.jpeg binary
@@ -14,7 +11,6 @@
 *.woff binary
 *.woff2 binary
 
-# Generated files: collapsed in GitHub diffs and left out of language stats.
 hospital-frontend/package-lock.json linguist-generated=true
 HospitalSystem/Migrations/*.Designer.cs linguist-generated=true
 HospitalSystem/Migrations/ApplicationDbContextModelSnapshot.cs linguist-generated=true

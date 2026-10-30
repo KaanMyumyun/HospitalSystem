@@ -4,9 +4,6 @@ import { formatLongDate, formatTime } from '../lib/format'
 import type { ActionOutcome } from '../types'
 import { Modal } from './ui'
 
-// A change the API refused because it would strand future bookings. The admin
-// cancels them with a reason, which the desk sees when it contacts the
-// patients, or keeps things as they are.
 export function AffectedBookingsDialog({
   affected,
   loading,

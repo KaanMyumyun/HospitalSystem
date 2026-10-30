@@ -3,10 +3,6 @@ import pg from 'pg'
 
 const serverVariable = 'HOSPITALSYSTEM_TEST_POSTGRES'
 
-// Each run has a database of its own on the server the backend's PostgreSQL
-// tests use. The API creates and migrates it as it starts, and the global
-// teardown drops it. The name is chosen once, when the main process loads
-// the config, and the API and the workers inherit it.
 process.env.HOSPITALSYSTEM_E2E_DATABASE ??= `hs_e2e_${randomBytes(6).toString('hex')}`
 export const databaseName = process.env.HOSPITALSYSTEM_E2E_DATABASE
 
@@ -21,7 +17,6 @@ function serverConnection() {
   return connection
 }
 
-// The server's connection string with this run's database, for the API.
 export function databaseConnection() {
   const settings = serverConnection()
     .split(';')
@@ -34,15 +29,12 @@ export async function dropDatabase() {
   const client = new pg.Client(clientConfig(serverConnection()))
   await client.connect()
   try {
-    // The API is still connected; it stops after the teardown.
     await client.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`)
   } finally {
     await client.end()
   }
 }
 
-// node-postgres settings from an Npgsql connection string: the server, the
-// login and the database to connect to.
 function clientConfig(connection: string): pg.ClientConfig {
   const settings = new Map(
     connection

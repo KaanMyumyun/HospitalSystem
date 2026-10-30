@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HospitalSystem.Tests;
 
-// The seeded "Patient One" has phone 5550001 and was born 30 years ago today.
 public class AppointmentPatientMatchingTests : AppointmentTestBase
 {
     private static readonly DateOnly PatientOneBirthDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-30));

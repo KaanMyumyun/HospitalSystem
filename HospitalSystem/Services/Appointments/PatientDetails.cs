@@ -2,12 +2,10 @@ using System.Text.RegularExpressions;
 
 namespace HospitalSystem.Services.Appointments;
 
-// The phone number rules shared by booking and by editing a patient.
 internal static class PatientDetails
 {
     private static readonly Regex AllowedPhoneCharacters = new(@"^\+?[0-9\s().-]+$", RegexOptions.Compiled);
 
-    // Null when the number is acceptable.
     public static string? PhoneNumberError(string? phoneNumber)
     {
         var trimmed = phoneNumber?.Trim();
@@ -21,8 +19,6 @@ internal static class PatientDetails
         return null;
     }
 
-    // Patients are stored and matched by digits only, keeping a leading +, so
-    // "+359 888 111-222" and "+359888111222" are the same number.
     public static string NormalizePhoneNumber(string? phoneNumber)
     {
         var trimmed = phoneNumber?.Trim() ?? "";

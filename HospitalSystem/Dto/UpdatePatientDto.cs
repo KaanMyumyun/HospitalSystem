@@ -5,11 +5,9 @@ namespace HospitalSystem.Dto;
 
 public class UpdatePatientDto
 {
-    // From the route, never the body.
     [JsonIgnore]
     public int PatientId { get; set; }
 
-    // Limits match the Patients columns.
     [Required]
     [MaxLength(50, ErrorMessage = "Patient name must be 50 characters or fewer")]
     public string Name { get; set; } = "";

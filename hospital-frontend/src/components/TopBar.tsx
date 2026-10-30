@@ -15,11 +15,9 @@ export function TopBar({
   role: string
   searchQuery: string
   userRole: UserRole
-  // Not given for demo accounts, which have no password.
   onChangePassword?: () => void
   onLogout: () => void
   onRefresh: () => void
-  // Not given on a screen that has nothing to search.
   onSearchChange?: (value: string) => void
 }) {
   return (

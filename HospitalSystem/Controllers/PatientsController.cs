@@ -21,7 +21,6 @@ public class PatientsController : ControllerBase
         int patientId, [FromServices] IPatientRecordService service, CancellationToken cancellationToken)
         => this.ToActionResult(await service.GetPatientAsync(patientId, cancellationToken));
 
-    // Replaces the name, phone number and date of birth.
     [Authorize(Policy = Access.Desk)]
     [HttpPut("{patientId:int}")]
     public async Task<ActionResult<PatientActionResultDto>> UpdatePatient(

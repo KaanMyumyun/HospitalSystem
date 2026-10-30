@@ -229,6 +229,8 @@ namespace HospitalSystem.Migrations
 
                     b.HasIndex("PhoneNumber");
 
+                    b.HasIndex("Name", "Id");
+
                     b.ToTable("Patients");
                 });
 

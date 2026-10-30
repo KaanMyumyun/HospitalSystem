@@ -5,7 +5,6 @@ namespace HospitalSystem.Tests;
 
 public class ClinicClockTests
 {
-    // Sofia is at UTC+2 in winter and UTC+3 in summer.
     [Theory]
     [InlineData("2026-01-15T07:00:00Z")]
     [InlineData("2026-07-15T06:00:00Z")]
@@ -25,7 +24,6 @@ public class ClinicClockTests
         Assert.Equal(new DateTime(2026, 1, 15, 7, 0, 0, DateTimeKind.Utc), clinic.ToUtc(new DateTime(2026, 1, 15, 9, 0, 0)));
     }
 
-    // On 29 March 2026 Sofia's clocks go from 03:00 straight to 04:00.
     [Fact]
     public void ToUtc_ATimeTheClocksSkip_IsTheFirstTimeAfterTheGap()
     {
@@ -34,7 +32,6 @@ public class ClinicClockTests
         Assert.Equal(new DateTime(2026, 3, 29, 1, 0, 0, DateTimeKind.Utc), clinic.ToUtc(new DateTime(2026, 3, 29, 3, 30, 0)));
     }
 
-    // Half past ten at night in UTC is already the next day in Sofia.
     [Fact]
     public void Today_IsTheClinicsDate()
     {

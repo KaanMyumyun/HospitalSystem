@@ -44,8 +44,6 @@ export function DoctorsTab({
                   value={doctor.departmentId}
                   onChange={(event) => void onAssignDoctor(doctor, Number(event.target.value))}
                 >
-                  {/* Doctors can only be moved into active departments; an inactive
-                      current department is still listed so the select shows it. */}
                   {departments
                     .filter((department) => department.isActive || department.id === doctor.departmentId)
                     .map((department) => (

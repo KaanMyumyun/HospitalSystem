@@ -7,18 +7,15 @@ import type { Session } from '../types'
 
 type PendingSignIn = 'password' | 'DemoAdmin' | 'DemoFrontDesk'
 
-// Sign-in normally answers within a second; after this long, say why it may not.
 const slowSignInMs = 3000
 
 export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }) {
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
-  // Which button is waiting for the API; all of them are disabled meanwhile.
   const [pending, setPending] = useState<PendingSignIn | null>(null)
   const [slow, setSlow] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // An idle API starts while the visitor reads the page, not on the first click.
   useEffect(() => {
     wakeApi()
   }, [])
@@ -32,7 +29,6 @@ export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }
     setSlow(false)
     setPending(null)
 
-    // A successful sign-in has stored the session.
     const session = result.isSuccess ? getStoredSession() : null
     if (!session) {
       setError(result.error ?? 'Invalid credentials')
@@ -71,7 +67,6 @@ export function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }
             void submit()
           }}
         >
-          {/* name and autocomplete let password managers fill the form. */}
           <label>
             Username
             <input

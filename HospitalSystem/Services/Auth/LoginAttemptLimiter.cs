@@ -2,8 +2,6 @@ using System.Threading.RateLimiting;
 
 namespace HospitalSystem.Services.Auth;
 
-// Use the same five-attempt window as the other authentication endpoints,
-// while allowing two people behind the same address to sign in separately.
 public sealed class LoginAttemptLimiter : IDisposable
 {
     private readonly PartitionedRateLimiter<LoginAttemptKey> _limiter =

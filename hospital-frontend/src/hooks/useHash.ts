@@ -5,8 +5,6 @@ function subscribe(onChange: () => void) {
   return () => window.removeEventListener('hashchange', onChange)
 }
 
-// The address after the #, kept in step with the back and forward buttons.
-// navigate adds a history entry; with replace it corrects the current one.
 export function useHash() {
   const hash = useSyncExternalStore(subscribe, () => window.location.hash)
 

@@ -6,8 +6,6 @@ import { ConfirmDialog } from '../components/ui'
 import type { ConfirmOptions } from '../components/ui'
 import { createDialogRequests } from '../lib/dialogRequests'
 
-// Dialogs a handler awaits, in place of window.confirm: the handler gets the
-// answer, and the app renders `dialog` until there is one.
 export function useDialogs() {
   const [dialog, setDialog] = useState<ReactNode>(null)
   const requests = useRef(createDialogRequests())
@@ -31,8 +29,6 @@ export function useDialogs() {
     [ask],
   )
 
-  // The department for a user who becomes a doctor, or null if the admin
-  // changes their mind.
   const chooseDepartment = useCallback(
     (userName: string, departments: DepartmentDto[]) =>
       ask<number | null>((answer) => (
@@ -41,13 +37,11 @@ export function useDialogs() {
     [ask],
   )
 
-  // Closes whatever is open, as when the session ends.
   const dismiss = useCallback(() => {
     requests.current.dismiss()
     setDialog(null)
   }, [])
 
-  // The caller must receive its cancel value even if this hook unmounts.
   useEffect(() => () => requests.current.dismiss(), [])
 
   return { dialog, confirm, chooseDepartment, dismiss }

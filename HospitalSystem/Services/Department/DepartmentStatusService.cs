@@ -28,7 +28,7 @@ public class DepartmentStatusService(
             var stranded = await AffectedBookings.LoadFutureAsync(
                 context, a => a.Doctor.DepartmentId == department.Id, cancellationToken);
             var bookingRefusal = await AffectedBookings.ResolveAsync<DepartmentActionResultDto>(
-                stranded, dto, auditLog, $"department {department.Name} deactivated", cancellationToken);
+                context, stranded, dto, auditLog, $"department {department.Name} deactivated", cancellationToken);
             if (bookingRefusal is not null)
                 return bookingRefusal;
         }

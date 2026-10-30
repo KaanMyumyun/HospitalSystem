@@ -27,14 +27,11 @@ public class AppointmentCreationService(
         if (dto.AppointmentTime is not DateTimeOffset requestedTime)
             return CreateAppointmentResultDto.Fail("Appointment time is required");
 
-        // The calendar greys out slots that have started; the API refuses
-        // them too.
         var now = clock.GetUtcNow();
         if (requestedTime <= now)
             return CreateAppointmentResultDto.Fail("Appointments cannot be booked in the past");
 
         var appointmentTime = requestedTime.UtcDateTime;
-        // Working days and hours, breaks and time off are clinic times.
         var wallClock = clinic.WallClock(requestedTime);
         var requestedDay = DateOnly.FromDateTime(wallClock);
         var patientName = dto.PatientName?.Trim() ?? "";
@@ -42,18 +39,11 @@ public class AppointmentCreationService(
         var phoneNumber = PatientDetails.NormalizePhoneNumber(dto.PhoneNumber);
         var dateOfBirth = dto.DateOfBirth;
         var chosenPatientId = dto.PatientId;
-        // Possible matches only matter while the desk has not yet picked a
-        // patient on file or asked for a new one.
         var listPossibleMatches = chosenPatientId is null && !dto.CreateNewPatient;
 
-        // Fetched together so the checks below and the patient lookup cost one
-        // round trip, not four.
         var doctor = await (
             from d in context.Doctors
             where d.Id == dto.DoctorId
-            // A join, not FirstOrDefault on d.Calendars, which EF turns into a
-            // numbering of every schedule on file; the join reads the doctor's
-            // one schedule from the DoctorId index.
             from c in d.Calendars.DefaultIfEmpty()
             let samePatientId = context.Patients
                 .Where(p => p.PhoneNumber == phoneNumber && p.Name.ToLower() == patientNameKey && p.DateOfBirth == dateOfBirth)
@@ -70,8 +60,6 @@ public class AppointmentCreationService(
                     : new BookingRules.WorkingHours(
                         c.StartTime, c.EndTime, c.SlotDurationMin, c.WorkingDays, c.BreakStartMinute, c.BreakEndMinute),
                 IsAway = c != null && c.TimeOff.Any(t => t.FirstDay <= requestedDay && t.LastDay >= requestedDay),
-                // The nearest bookings on either side. Whether they overlap
-                // depends on the slot length, known once the schedule is loaded.
                 PreviousStart = d.Appointments
                     .Where(a => a.Status == AppointmentStatus.Scheduled && a.TimeOfAppointment <= appointmentTime)
                     .Max(a => (DateTime?)a.TimeOfAppointment),
@@ -79,10 +67,6 @@ public class AppointmentCreationService(
                     .Where(a => a.Status == AppointmentStatus.Scheduled && a.TimeOfAppointment > appointmentTime)
                     .Min(a => (DateTime?)a.TimeOfAppointment),
                 SamePatientId = samePatientId,
-                // Someone on file with the same phone number, or the same name
-                // and date of birth, may be the patient being booked. Not read
-                // when a patient matches exactly, so a phone that many patients
-                // share costs nothing on a booking for one of them.
                 PossibleMatches = context.Patients
                     .Where(p => listPossibleMatches && samePatientId == null
                         && (p.PhoneNumber == phoneNumber || (p.Name.ToLower() == patientNameKey && p.DateOfBirth == dateOfBirth)))
@@ -129,10 +113,6 @@ public class AppointmentCreationService(
         if (chosenPatientId is not null && !doctor.ChosenPatientExists)
             return CreateAppointmentResultDto.NotFound("Patient not found");
 
-        // A patient whose phone number, name and date of birth all match is
-        // booked again. When only some match (a relative sharing a phone, a
-        // typo, a new number), the desk sees the matches and books again with
-        // PatientId or CreateNewPatient.
         var patientId = chosenPatientId ?? doctor.SamePatientId;
         if (patientId is null && doctor.PossibleMatches.Count > 0)
         {

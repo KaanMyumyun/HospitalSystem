@@ -6,8 +6,6 @@ public static class SecurityStampClaims
 {
     public const string ClaimType = "security_stamp";
 
-    // The stamp a user's tokens must carry, or null if the user is gone. The
-    // stamp cache and the startup warm-up share it so they run the same query.
     public static Task<string?> CurrentStampAsync(
         ApplicationDbContext db, int userId, CancellationToken cancellationToken = default) =>
         db.Users

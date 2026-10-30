@@ -40,7 +40,6 @@ public class CreateAppointmentDtoTests
     public void PhoneNumberLongerThanColumn_IsRejected()
     {
         var dto = ValidDto();
-        // 12 digits, so the digit-count rule accepts it, but 23 characters.
         dto.PhoneNumber = "+90 (532) 123 - 45 - 67";
 
         var error = Assert.Single(Validate(dto));

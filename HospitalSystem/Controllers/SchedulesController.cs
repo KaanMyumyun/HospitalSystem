@@ -21,7 +21,6 @@ public class SchedulesController : ControllerBase
         [FromBody] CreateSchedule dto, [FromServices] IScheduleCreationService service, CancellationToken cancellationToken)
         => this.ToActionResult(await service.CreateScheduleAsync(dto, cancellationToken));
 
-    // Replaces the hours, slot length, break and working days.
     [Authorize(Policy = Access.Admin)]
     [HttpPut("{scheduleId:int}")]
     public async Task<ActionResult<CalendarActionResult>> ChangeSchedule(
@@ -32,7 +31,6 @@ public class SchedulesController : ControllerBase
         return this.ToActionResult(await service.ChangeScheduleAsync(dto, cancellationToken));
     }
 
-    // Days the doctor is away, such as a holiday; nobody can book them then.
     [Authorize(Policy = Access.Admin)]
     [HttpPost("{scheduleId:int}/time-off")]
     public async Task<ActionResult<CalendarActionResult>> AddTimeOff(

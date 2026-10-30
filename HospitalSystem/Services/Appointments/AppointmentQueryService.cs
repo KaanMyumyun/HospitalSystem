@@ -9,7 +9,6 @@ public class AppointmentQueryService(
     ApplicationDbContext context,
     ICurrentUserService currentUser) : IAppointmentQueryService
 {
-    // Six weeks covers a month view and keeps one response small.
     private static readonly TimeSpan MaxWindow = TimeSpan.FromDays(42);
 
     public async Task<ServiceResult<List<ViewAppointmentDto>>> GetAppointmentsAsync(
@@ -29,7 +28,6 @@ public class AppointmentQueryService(
             await ListAsync(a => a.DoctorId == doctorId, from, to, cancellationToken));
     }
 
-    // A doctor sees only their own appointments.
     public async Task<ServiceResult<List<ViewAppointmentDto>>> GetMyAppointmentsAsync(
         MyAppointmentsQueryDto query, CancellationToken cancellationToken = default)
     {
@@ -47,16 +45,12 @@ public class AppointmentQueryService(
             await ListAsync(a => a.Doctor.UserId == userId, from, to, cancellationToken));
     }
 
-    // Who booked, moved, cancelled or marked an appointment, oldest first, from
-    // the audit log. The entries name staff, so demo accounts cannot read them.
     public async Task<ServiceResult<List<AppointmentHistoryEntryDto>>> GetHistoryAsync(
         int appointmentId, CancellationToken cancellationToken = default)
     {
         if (!currentUser.IsDesk())
             return ServiceResult<List<AppointmentHistoryEntryDto>>.Forbidden("Not allowed to read an appointment's history");
 
-        // One query, which also tells a missing appointment from one with no
-        // entries; IX_AuditLogs_EntityType_EntityId_CreatedAt serves it.
         var history = await context.Appointments
             .AsNoTracking()
             .Where(a => a.Id == appointmentId)
@@ -69,8 +63,6 @@ public class AppointmentQueryService(
                     CreatedAt = l.CreatedAt,
                     Action = l.Action,
                     Details = l.Details,
-                    // As in the audit log: an entry an older release wrote
-                    // holds the actor's id in ActorName.
                     Actor = l.ActorUserId != null
                         ? l.ActorName
                         : context.Users.Where(u => u.Id.ToString() == l.ActorName).Select(u => u.Name).FirstOrDefault() ?? l.ActorName
@@ -94,8 +86,6 @@ public class AppointmentQueryService(
         return null;
     }
 
-    // Appointments in every status that start at or after from and before to,
-    // in time order.
     private Task<List<ViewAppointmentDto>> ListAsync(
         Expression<Func<AppointmentEntity, bool>> whose,
         DateTimeOffset from,

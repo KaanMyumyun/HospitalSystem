@@ -23,7 +23,6 @@ public class UserCreationService(
         if ((AccountRules.UsernameError(name) ?? AccountRules.PasswordError(dto.Password)) is { } error)
             return CreateUserResultDto.Fail(error);
 
-        // Usernames ignore case, so "Admin" and "admin" cannot both exist.
         var nameKey = name.ToLowerInvariant();
         var exists = await context.Users.AnyAsync(u => u.Name.ToLower() == nameKey, cancellationToken);
         if (exists)

@@ -1,6 +1,5 @@
 import type { ScheduleDto } from '../api'
 
-// Working hours arrive as times on a placeholder date; only the hour numbers count.
 export function scheduleWindow(schedule: ScheduleDto) {
   const start = new Date(schedule.startTime)
   const end = new Date(schedule.endTime)

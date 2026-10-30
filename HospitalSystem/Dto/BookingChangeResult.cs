@@ -1,12 +1,8 @@
 namespace HospitalSystem.Dto;
 
-// The result of a change that can strand future bookings: a schedule change,
-// or a doctor or department going inactive. Such a change is refused with the
-// bookings listed, until it is sent again with a reason to cancel them.
 public abstract class BookingChangeResult<TSelf> : OperationResult<TSelf>
     where TSelf : BookingChangeResult<TSelf>, new()
 {
-    // How many future bookings the change would strand, and the soonest of them.
     public int AffectedAppointmentCount { get; set; }
     public List<AffectedAppointmentDto>? AffectedAppointments { get; set; }
 

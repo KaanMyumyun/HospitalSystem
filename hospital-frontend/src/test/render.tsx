@@ -4,8 +4,6 @@ import type { AppointmentDto, DepartmentDto, DoctorDto } from '../api'
 import { WorkspaceContext } from '../hooks/useWorkspace'
 import type { Workspace } from '../hooks/useWorkspace'
 
-// Renders part of a screen inside the workspace App would provide; by
-// default an empty one, for a front desk account with nothing loading.
 export function renderInWorkspace(ui: ReactElement, workspace: Partial<Workspace> = {}) {
   return render(
     <WorkspaceContext

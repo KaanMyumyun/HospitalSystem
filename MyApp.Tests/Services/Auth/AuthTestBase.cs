@@ -45,7 +45,6 @@ public abstract class AuthTestBase
         return mock.Object;
     }
 
-    // Nobody signed in, as for someone signing in.
     protected static ICurrentUserService Nobody() => new Mock<ICurrentUserService>().Object;
 
     protected const string TestPassword = "correct-password";

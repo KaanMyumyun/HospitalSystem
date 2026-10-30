@@ -3,9 +3,6 @@ using System.Text.Json.Nodes;
 
 namespace HospitalSystem.Tests;
 
-// The frontend compiles against types generated from hospital-frontend/openapi.json.
-// This test keeps that file equal to what the API serves, so a backend change
-// that the frontend has not caught up with fails here instead of in production.
 public class OpenApiContractTests
 {
     private const string UpdateVariable = "UPDATE_OPENAPI";
@@ -13,7 +10,6 @@ public class OpenApiContractTests
     [Fact]
     public async Task CommittedSpecMatchesTheApi()
     {
-        // Swagger is only served in Development.
         await using var factory = TestApp.Create("Development");
 
         var served = Normalize(await factory.CreateClient().GetStringAsync("/swagger/v1/swagger.json"));
@@ -31,7 +27,6 @@ public class OpenApiContractTests
             "--filter OpenApiContractTests`, then `npm run generate:api` in hospital-frontend.");
     }
 
-    // Indented with \n line ends, so the committed file diffs cleanly.
     private static string Normalize(string json) =>
         JsonNode.Parse(json)!.ToJsonString(new JsonSerializerOptions { WriteIndented = true }).Replace("\r\n", "\n") + "\n";
 

@@ -36,8 +36,6 @@ public class DepartmentQueryServiceTests : DepartmentTestBase
         Assert.Contains(result.Data, d => d.Id == 2 && d.Name == "Neurology" && d.IsActive == false);
     }
 
-    // The admin and reception screens both list departments, for real and
-    // demo accounts alike.
     [Theory]
     [InlineData(UserRole.Admin)]
     [InlineData(UserRole.FrontDesk)]
@@ -79,7 +77,6 @@ public class DepartmentQueryServiceTests : DepartmentTestBase
         Assert.Empty(result.Data!);
     }
 
-    // A request the client has abandoned stops its query.
     [Fact]
     public async Task ListDepartmentsAsync_StopsWhenTheRequestIsCancelled()
     {

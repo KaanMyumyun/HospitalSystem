@@ -11,8 +11,6 @@ namespace HospitalSystem.Controllers;
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
-    // Two limits: 20 a minute per address across usernames, and 5 a minute
-    // per address and username (LoginRateLimitFilter).
     [AllowAnonymous]
     [HttpPost("login")]
     [EnableRateLimiting(RateLimits.SignIn)]
@@ -34,8 +32,6 @@ public class AuthController : ControllerBase
         return result.IsSuccess ? Ok(result) : Unauthorized(result);
     }
 
-    // A new token for the signed-in user, while their session lasts (12 hours
-    // from signing in). The frontend asks before the current one runs out.
     [Authorize]
     [HttpPost("refresh")]
     public async Task<ActionResult<LoginResultDto>> Refresh(

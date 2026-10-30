@@ -1,10 +1,3 @@
-// Writes src/api-schema.ts, one TypeScript type per schema in openapi.json.
-// The backend's OpenApiContractTests keeps openapi.json equal to what the API
-// serves; run `npm run generate:api` after it changes.
-//
-// This covers what Swashbuckle emits for this API: objects, arrays, string
-// enums, nullable, $ref, and a one-item allOf around a $ref that may be null. It is written here because the usual generators
-// need TypeScript 5's compiler API, which TypeScript 7 does not have.
 import { readFile, writeFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 
@@ -35,9 +28,6 @@ function typeOf(schema, indent, isRequest) {
   return schema.nullable ? `${type} | null` : type
 }
 
-// A request body may leave out what its required list does not name. A
-// response has every property, null or not, whether or not the spec says so:
-// Swashbuckle lists none for responses.
 function objectType(schema, indent, isRequest) {
   const required = new Set(schema.required ?? [])
   const inner = `${indent}  `
@@ -48,7 +38,6 @@ function objectType(schema, indent, isRequest) {
   return `{\n${lines.join('\n')}\n${indent}}`
 }
 
-// Schemas that appear in request bodies and in no response.
 function requestOnlySchemas(spec) {
   const requests = new Set()
   const responses = new Set()
@@ -63,7 +52,6 @@ function requestOnlySchemas(spec) {
   return new Set([...requests].filter((name) => !responses.has(name)))
 }
 
-// The names of the schemas a schema refers to, directly or through others.
 function collectRefs(spec, schema, found) {
   if (!schema || typeof schema !== 'object') return
   if (schema.$ref) {

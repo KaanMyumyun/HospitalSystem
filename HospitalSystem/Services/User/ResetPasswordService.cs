@@ -45,7 +45,6 @@ public class ResetPasswordService(
 
         user.PasswordHash = hasher.HashPassword(user, dto.NewPassword);
         user.SecurityStamp = Guid.NewGuid().ToString();
-        // A reset is also how an admin lets a locked-out user back in.
         var unlocked = user.LockedUntil is not null;
         SignInLockout.Clear(user);
         await auditLog.LogAsync(

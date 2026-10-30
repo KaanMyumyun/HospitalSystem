@@ -5,7 +5,6 @@ import { useWorkspace } from '../../hooks/useWorkspace'
 import { formatLongDate } from '../../lib/format'
 import type { ActionOutcome } from '../../types'
 
-// Cancelling a booking needs a reason, which the booking's history keeps.
 export function CancelAppointmentDialog({
   appointment,
   onCancelAppointment,

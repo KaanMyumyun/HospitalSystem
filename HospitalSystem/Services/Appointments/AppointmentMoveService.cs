@@ -5,9 +5,6 @@ using Npgsql;
 
 namespace HospitalSystem.Services.Appointments;
 
-// Moves a booking to another time, or another doctor, in one step: the new
-// slot is checked and taken and the old one freed in a single save, so nobody
-// can take the new slot in between. The appointment keeps its id and history.
 public class AppointmentMoveService(
     ApplicationDbContext context,
     ICurrentUserService currentUser,
@@ -43,11 +40,9 @@ public class AppointmentMoveService(
         if (toDoctorId == fromDoctorId && appointmentTime == appointment.TimeOfAppointment)
             return MoveAppointmentResultDto.Fail("The appointment is already at that time");
 
-        // Working days and hours, breaks and time off are clinic times.
         var wallClock = clinic.WallClock(requestedTime);
         var requestedDay = DateOnly.FromDateTime(wallClock);
 
-        // What the checks need, in one round trip, as for a booking.
         var doctor = await (
             from d in context.Doctors
             where d.Id == toDoctorId
@@ -63,8 +58,6 @@ public class AppointmentMoveService(
                     : new BookingRules.WorkingHours(
                         c.StartTime, c.EndTime, c.SlotDurationMin, c.WorkingDays, c.BreakStartMinute, c.BreakEndMinute),
                 IsAway = c != null && c.TimeOff.Any(t => t.FirstDay <= requestedDay && t.LastDay >= requestedDay),
-                // The nearest other bookings on either side; this one is
-                // moving out of the way, so it does not count.
                 PreviousStart = d.Appointments
                     .Where(a => a.Status == AppointmentStatus.Scheduled && a.Id != dto.AppointmentId && a.TimeOfAppointment <= appointmentTime)
                     .Max(a => (DateTime?)a.TimeOfAppointment),
@@ -106,8 +99,6 @@ public class AppointmentMoveService(
             $"Moved appointment {appointment.Id} from {fromTime:yyyy-MM-dd HH:mm} to {wallClock:yyyy-MM-dd HH:mm}{newDoctor}",
             cancellationToken);
 
-        // The check above is the fast path; the unique index on doctor and
-        // time refuses a booking made for the same slot meanwhile.
         try
         {
             await context.SaveChangesAsync(cancellationToken);

@@ -62,9 +62,6 @@ public class DatabaseMigrationCommandTests
         Assert.DoesNotContain(secret, result.Output + result.Error);
     }
 
-    // Database:RunMigrationsOnStartup runs the same migrations when the API
-    // starts. If they fail, the API stops before it listens, so a platform that
-    // waits for the new release keeps the previous one serving.
     [Fact]
     public async Task StartupMigrationFailure_StopsTheApiBeforeItListens()
     {
@@ -86,7 +83,6 @@ public class DatabaseMigrationCommandTests
         Assert.DoesNotContain(secret, result.Output + result.Error);
     }
 
-    // firstArgument null starts the API itself; environment is set last.
     private static async Task<(int ExitCode, string Output, string Error)> RunCommandAsync(
         string connectionString, string? firstArgument = "--migrate", string? secondArgument = null,
         string timeout = "120", Dictionary<string, string>? environment = null)

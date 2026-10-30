@@ -6,7 +6,6 @@ public class CreateAppointmentDto
 {
     public int DoctorId { get; set; }
 
-    // Limits match the Patients columns.
     [Required]
     [MaxLength(50, ErrorMessage = "Patient name must be 50 characters or fewer")]
     public string PatientName { get; set; } = "";
@@ -19,13 +18,9 @@ public class CreateAppointmentDto
     [Required]
     public DateOnly? DateOfBirth { get; set; }
 
-    // An instant with its UTC offset, e.g. 2026-09-22T09:00:00+03:00. The clinic's
-    // wall clock at that instant must be the start of one of the doctor's slots.
     [Required]
     public DateTimeOffset? AppointmentTime { get; set; }
 
-    // Set when booking again after a reply that listed possible matches: the
-    // patient on file to book for, or a new patient despite the matches.
     public int? PatientId { get; set; }
 
     public bool CreateNewPatient { get; set; }

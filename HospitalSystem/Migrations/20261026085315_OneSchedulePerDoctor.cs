@@ -10,10 +10,6 @@ namespace HospitalSystem.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // A doctor has one schedule: creating one is refused while the
-            // doctor has another, and booking reads the doctor's only one.
-            // A doctor who already has two has to keep one by hand first; the
-            // migration stops rather than pick which.
             migrationBuilder.Sql("""
                 DO $$
                 BEGIN

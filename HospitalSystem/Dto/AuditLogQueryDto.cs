@@ -7,7 +7,6 @@ public class AuditLogQueryDto
     public const int MaxPage = 100_000;
     public const int MaxPageSize = 100;
 
-    // Part of the action or the details, in any case.
     [MaxLength(50)]
     public string? Search { get; set; }
 

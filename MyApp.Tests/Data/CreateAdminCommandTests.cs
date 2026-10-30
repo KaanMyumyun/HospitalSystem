@@ -83,7 +83,6 @@ public class CreateAdminCommandTests
         Assert.DoesNotContain("Now listening", result.Output);
     }
 
-    // The whole command against a migrated database, the password piped in.
     [PostgresFact]
     public async Task OnAMigratedDatabase_CreatesTheAdmin()
     {

@@ -14,7 +14,6 @@ test('refuses a wrong password, signs in with the right one, and signs out', asy
 
   await page.getByRole('button', { name: 'Sign out' }).click()
   await expect(page.getByRole('heading', { name: 'Staff sign in' })).toBeVisible()
-  // The session is gone, not just hidden.
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Staff sign in' })).toBeVisible()
 })

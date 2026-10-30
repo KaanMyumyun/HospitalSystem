@@ -4,11 +4,9 @@ using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace HospitalSystem.Services.Auth;
 
-// Action filters see the model-bound username. A middleware rate-limit policy
-// runs before model binding and cannot safely obtain it from the JSON body.
 public sealed class LoginRateLimitFilter(LoginAttemptLimiter limiter) : IAsyncActionFilter
 {
-    private const int MaximumUserNameLength = 50; // Users.Name column length.
+    private const int MaximumUserNameLength = 50;
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
@@ -24,8 +22,6 @@ public sealed class LoginRateLimitFilter(LoginAttemptLimiter limiter) : IAsyncAc
             return;
         }
 
-        // [ApiController] rejects a missing or blank username first. The
-        // fallback keeps this filter safe if that behavior changes later.
         if (string.IsNullOrWhiteSpace(dto.Name))
         {
             context.Result = new BadRequestObjectResult(new { error = "Invalid login request." });

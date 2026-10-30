@@ -3,11 +3,6 @@ using Npgsql;
 
 namespace HospitalSystem.Tests;
 
-// Runs only when HOSPITALSYSTEM_TEST_POSTGRES holds a connection string to a
-// PostgreSQL server the tests may create databases on; otherwise the test is
-// reported as skipped. The in-memory provider has no unique, filtered or
-// expression indexes, foreign keys, column lengths or migrations, so these
-// tests cover what it cannot.
 public sealed class PostgresFactAttribute : FactAttribute
 {
     public const string Variable = "HOSPITALSYSTEM_TEST_POSTGRES";
@@ -19,7 +14,6 @@ public sealed class PostgresFactAttribute : FactAttribute
     }
 }
 
-// A throwaway database for one test, dropped afterwards.
 public sealed class PostgresDatabase : IAsyncDisposable
 {
     private readonly string _serverConnection;
@@ -39,7 +33,6 @@ public sealed class PostgresDatabase : IAsyncDisposable
         var server = Environment.GetEnvironmentVariable(PostgresFactAttribute.Variable)!;
         var name = "hs_test_" + Guid.NewGuid().ToString("N")[..12];
         await ExecuteAsync(server, $"CREATE DATABASE \"{name}\"");
-        // No pooling, so no idle connection keeps the database from being dropped.
         var connectionString = new NpgsqlConnectionStringBuilder(server) { Database = name, Pooling = false }.ConnectionString;
         return new PostgresDatabase(server, name, connectionString);
     }

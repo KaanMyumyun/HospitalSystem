@@ -18,8 +18,6 @@ public class LoginService(
     private readonly JwtSettings _jwtSettings = jwtOptions.Value;
     private readonly DemoSettings _demoSettings = demoOptions.Value;
 
-    // Checked for an unknown username, so a failed sign-in takes the same time
-    // whether or not the account exists. Made by the same hasher as real ones.
     private static string? _dummyPasswordHash;
     private string DummyPasswordHash =>
         _dummyPasswordHash ??= hasher.HashPassword(new UserEntity(), Guid.NewGuid().ToString());
@@ -40,7 +38,6 @@ public class LoginService(
 
     private async Task<LoginResultDto> LoginWithLockedUserAsync(LoginDto dto, CancellationToken cancellationToken)
     {
-        // Usernames ignore case: "Admin" and "admin" are the same account.
         var nameKey = dto.Name.Trim().ToLowerInvariant();
         var user = await SignInLockout.FindByNameForUpdateAsync(context, nameKey, cancellationToken);
 
@@ -53,8 +50,6 @@ public class LoginService(
         var now = clock.GetUtcNow().UtcDateTime;
         if (SignInLockout.IsLocked(user, now))
         {
-            // A locked account must look like any other failed sign-in to an
-            // anonymous caller, including the password-verification cost.
             hasher.VerifyHashedPassword(new UserEntity(), DummyPasswordHash, dto.Password);
             return await RefuseAsync(user, $"Sign-in refused for user {user.Name}: account locked", cancellationToken);
         }
@@ -70,8 +65,6 @@ public class LoginService(
             return await RefuseAsync(user, $"Failed sign-in for user {user.Name}: wrong password", cancellationToken);
         }
 
-        // The password was right, so earlier wrong ones no longer count, even
-        // if the role checks below refuse the sign-in.
         if (SignInLockout.Clear(user))
             await context.SaveChangesAsync(cancellationToken);
 
@@ -79,7 +72,6 @@ public class LoginService(
             return await RefuseAsync(
                 user, $"Failed sign-in for user {user.Name}: demo accounts have no password sign-in", cancellationToken);
 
-        // Only after the password check, so it does not reveal which usernames exist.
         if (user.Role == UserRole.Pending)
             return await RefuseAsync(
                 user, $"Sign-in refused for user {user.Name}: account awaiting approval", "Account awaiting approval", cancellationToken);
@@ -116,9 +108,6 @@ public class LoginService(
         return LoginResultDto.Success(token, user.Role, clinic.TimeZoneId);
     }
 
-    // Every refused password sign-in is audited. The typed username is kept
-    // only when it names an account: people sometimes type a password there.
-    // The save also keeps the user's failed-sign-in count.
     private Task<LoginResultDto> RefuseAsync(UserEntity? user, string details, CancellationToken cancellationToken) =>
         RefuseAsync(user, details, "Invalid credentials", cancellationToken);
 

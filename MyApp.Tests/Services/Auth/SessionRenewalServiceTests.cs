@@ -18,7 +18,6 @@ public class SessionRenewalServiceTests : AuthTestBase
         return new(db, caller.Object, CreateJwtOptions(), new FixedClock(now), TestClinic.In("Europe/Sofia"));
     }
 
-    // Read without checking expiry: these tokens are issued at a fixed time.
     private static JwtSecurityToken Read(string token) => new JwtSecurityTokenHandler().ReadJwtToken(token);
 
     [Fact]
@@ -67,7 +66,6 @@ public class SessionRenewalServiceTests : AuthTestBase
         Assert.Equal("Sign in again: a session lasts at most 12 hours", result.Error);
     }
 
-    // Tokens from before renewal existed do not say when their session began.
     [Fact]
     public async Task Renew_ATokenWithoutItsSessionStart_IsRefused()
     {

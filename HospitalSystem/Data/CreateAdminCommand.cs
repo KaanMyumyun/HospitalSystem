@@ -6,16 +6,10 @@ using Npgsql;
 
 namespace HospitalSystem.Data;
 
-/// <summary>Creates an admin account without starting the API.</summary>
 public static class CreateAdminCommand
 {
-    // What the audit log shows as the actor: nobody is signed in.
     public const string ActorName = "Command line";
 
-    // A new database has no users, and only an admin can create users through
-    // the API, so the first admin comes from here, after --migrate. The
-    // password is read from standard input, never from the command line, so
-    // it stays out of the shell history and the process list.
     public static async Task<int> RunAsync(string[] args, TextReader input, CancellationToken cancellationToken = default)
     {
         if (args.Length != 2 || args[0] != "--create-admin")
@@ -59,15 +53,12 @@ public static class CreateAdminCommand
         }
         catch (Exception exception)
         {
-            // Like --migrate, never the exception's message: it can contain the
-            // connection string or SQL.
             var sqlState = exception is PostgresException postgres ? $", SQLSTATE {postgres.SqlState}" : "";
             Console.Error.WriteLine($"Creating the admin failed ({exception.GetType().Name}{sqlState}). Check database access, and that --migrate has run.");
             return 1;
         }
     }
 
-    // Null when the admin was created; otherwise why not.
     public static async Task<string?> CreateAsync(
         ApplicationDbContext db,
         string userName,
@@ -104,7 +95,6 @@ public static class CreateAdminCommand
         return null;
     }
 
-    // A line from the input when it is redirected; typed without echo otherwise.
     private static string? ReadPassword(TextReader input, string prompt)
     {
         if (Console.IsInputRedirected)

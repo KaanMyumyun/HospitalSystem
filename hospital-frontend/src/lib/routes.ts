@@ -1,9 +1,6 @@
 import type { UserRole } from '../api'
 import type { Screen } from '../types'
 
-// Every screen has an address after the #, so the back button, a refresh and
-// a bookmark all work. The hash rather than the path: the servers answer
-// only "/" with the app and send a real 404 for every other path.
 const screenPaths: Record<Screen, string> = {
   reception: '/reception',
   patients: '/patients',
@@ -29,7 +26,6 @@ export function canUseDoctor(role: UserRole) {
   return role === 'Doctor'
 }
 
-// Admin and reception screens share the departments, doctors and schedules.
 export function usesHospitalData(role: UserRole) {
   return canUseAdmin(role) || canUseReception(role)
 }
@@ -55,8 +51,6 @@ export function screenFromHash(hash: string): Screen | null {
   return (Object.keys(screenPaths) as Screen[]).find((screen) => screenPaths[screen] === path) ?? null
 }
 
-// The screen the address asks for, if this role may see it; otherwise the
-// role's first screen.
 export function screenFor(role: UserRole, hash: string): Screen {
   const asked = screenFromHash(hash)
   return asked && canSee(role, asked) ? asked : initialScreen(role)
