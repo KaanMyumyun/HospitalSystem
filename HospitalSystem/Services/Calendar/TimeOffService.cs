@@ -56,7 +56,7 @@ public class TimeOffService(
             a => a.DoctorId == calendar.DoctorId && a.TimeOfAppointment >= from && a.TimeOfAppointment < to,
             cancellationToken);
         var bookingRefusal = await AffectedBookings.ResolveAsync<CalendarActionResult>(
-            stranded, dto, auditLog, $"time off for doctor {calendar.DoctorId}", cancellationToken);
+            context, stranded, dto, auditLog, $"time off for doctor {calendar.DoctorId}", cancellationToken);
         if (bookingRefusal is not null)
             return bookingRefusal;
 

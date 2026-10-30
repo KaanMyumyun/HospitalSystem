@@ -34,6 +34,7 @@ public class ApplicationDbContext : DbContext
             builder.Property(s => s.Name).IsRequired().HasMaxLength(50);
             builder.Property(s => s.DateOfBirth).IsRequired();
             builder.HasIndex(s => s.PhoneNumber);
+            builder.HasIndex(s => new { s.Name, s.Id });
         });
 
         modelBuilder.Entity<DepartmentEntity>(builder =>

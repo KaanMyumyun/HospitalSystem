@@ -258,6 +258,19 @@ tagged releases yet, so everything is listed under Unreleased.
   longer logs "Overriding HTTP_PORTS" on every start: it listens on 8080
   through the base image's `ASPNETCORE_HTTP_PORTS`. The frontend build skips
   npm's audit, which CI already runs.
+- Patient search and the audit log search use trigram indexes, and the patient
+  list an index on name, so a search or a page no longer reads the whole
+  table. Measured on 300,000 patients and 1.5 million audit entries: a patient
+  search takes 5-20 ms instead of 160-210 ms, page 3,000 of the patient list
+  60 ms instead of 600 ms, and an audit log search 3-150 ms instead of
+  0.7-1.8 s. The migration `IndexPatientAndAuditLogSearch` installs
+  PostgreSQL's `pg_trgm` extension, which any database owner may install.
+- A change that affects future bookings (deactivating a department or doctor,
+  changing a schedule or a doctor's role, adding time off) reads only those
+  bookings' ids and times, and the names of the 100 it lists, instead of
+  loading every booking with its patient, doctor and user account. Asking to
+  deactivate a department with 5,000 future bookings answers in 16 ms instead
+  of 100 ms.
 - `docker compose` restarts the backend and frontend unless they were stopped,
   as it does the database, and binds their ports to `127.0.0.1` only. The
   database password can come from `.env` (`POSTGRES_PASSWORD`); without it,

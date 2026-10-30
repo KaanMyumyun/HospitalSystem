@@ -53,7 +53,7 @@ public class ChangeRoleService(
         {
             var stranded = await AffectedBookings.LoadFutureAsync(context, a => a.DoctorId == doctor.Id, cancellationToken);
             var bookingRefusal = await AffectedBookings.ResolveAsync<ChangeRoleResultDto>(
-                stranded, dto, auditLog, $"user {user.Name} is no longer a doctor", cancellationToken);
+                context, stranded, dto, auditLog, $"user {user.Name} is no longer a doctor", cancellationToken);
             if (bookingRefusal is not null)
                 return bookingRefusal;
         }

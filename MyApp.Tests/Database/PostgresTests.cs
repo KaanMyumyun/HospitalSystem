@@ -3,6 +3,7 @@ using HospitalSystem.Services;
 using HospitalSystem.Services.Appointments;
 using HospitalSystem.Services.Auth;
 using HospitalSystem.Services.Calendar;
+using HospitalSystem.Services.Department;
 using HospitalSystem.Services.User;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -602,5 +603,55 @@ public class PostgresTests : AuthTestBase
         Assert.Equal(FailureKind.NotFound, missing.Failure);
         Assert.True(made.IsSuccess, made.Error);
         Assert.Equal(department.Id, (await db.Doctors.SingleAsync()).DepartmentId);
+    }
+
+    [PostgresFact]
+    public async Task DeactivatingADepartment_ListsItsFutureBookings_ThenCancelsThemWithAReason()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = await database.CreateMigratedContextAsync();
+        var (doctorId, deskId, patientId) = await SeedBookableDoctorAsync(db);
+        var today = DateTime.UtcNow.Date;
+        AppointmentEntity Booked(DateTime time) => new()
+        {
+            DoctorId = doctorId,
+            PatientId = patientId,
+            CreatedByTheFrontDeskId = deskId,
+            TimeOfAppointment = time,
+            CreatedAt = today.AddDays(-10),
+            Status = AppointmentStatus.Scheduled
+        };
+        var later = Booked(today.AddDays(3).AddHours(9));
+        var sooner = Booked(today.AddDays(2).AddHours(9));
+        var past = Booked(today.AddDays(-2).AddHours(9));
+        db.Appointments.AddRange(later, sooner, past);
+        await db.SaveChangesAsync();
+        var departmentId = await db.Departments.Select(d => d.Id).SingleAsync();
+        var admin = new Mock<ICurrentUserService>();
+        admin.Setup(x => x.IsInRole(UserRole.Admin)).Returns(true);
+        var service = new DepartmentStatusService(db, admin.Object, new AuditLogService(db, admin.Object));
+
+        var preview = await service.ChangeDepartmentStatusAsync(new ChangeDepartmentStatusDto { DepartmentId = departmentId, IsActive = false });
+        var cancelled = await service.ChangeDepartmentStatusAsync(new ChangeDepartmentStatusDto
+        {
+            DepartmentId = departmentId,
+            IsActive = false,
+            CancelAffectedAppointments = true,
+            CancellationReason = "Department closed"
+        });
+
+        Assert.Equal(FailureKind.Conflict, preview.Failure);
+        Assert.Equal(2, preview.AffectedAppointmentCount);
+        Assert.Equal([sooner.Id, later.Id], preview.AffectedAppointments!.Select(a => a.AppointmentId));
+        Assert.All(preview.AffectedAppointments!, a => Assert.Equal(("drhouse", "MI"), (a.DoctorName, a.PatientInitials)));
+        Assert.True(cancelled.IsSuccess, cancelled.Error);
+        var appointments = await db.Appointments.AsNoTracking().OrderBy(a => a.TimeOfAppointment).ToListAsync();
+        Assert.Equal(
+            [(past.Id, AppointmentStatus.Scheduled, null), (sooner.Id, AppointmentStatus.Cancelled, "Department closed"), (later.Id, AppointmentStatus.Cancelled, "Department closed")],
+            appointments.Select(a => (a.Id, a.Status, a.CancellationReason)));
+        Assert.False((await db.Departments.AsNoTracking().SingleAsync()).IsActive);
+        Assert.Equal(
+            [sooner.Id, later.Id],
+            await db.AuditLogs.Where(l => l.Action == "CancelAppointment").OrderBy(l => l.Id).Select(l => l.EntityId).ToListAsync());
     }
 }

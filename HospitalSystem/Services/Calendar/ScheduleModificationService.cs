@@ -55,7 +55,7 @@ public class ScheduleModificationService(
             .Where(a => BookingRules.CheckWorkingHours(newHours, clinic.WallClock(a.TimeOfAppointment)) is not null)
             .ToList();
         var bookingRefusal = await AffectedBookings.ResolveAsync<CalendarActionResult>(
-            stranded, dto, auditLog, $"schedule change for doctor {calendar.DoctorId}", cancellationToken);
+            context, stranded, dto, auditLog, $"schedule change for doctor {calendar.DoctorId}", cancellationToken);
         if (bookingRefusal is not null)
             return bookingRefusal;
 

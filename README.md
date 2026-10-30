@@ -331,7 +331,9 @@ The system is divided into two independent layers:
 ### Prerequisites
 * .NET 10 SDK
 * Node.js 22.12+
-* Docker, to run PostgreSQL locally (or your own PostgreSQL 16)
+* Docker, to run PostgreSQL locally (or your own PostgreSQL 16 with the
+  `pg_trgm` extension available; some Linux distributions package it
+  separately, as `postgresql-contrib`)
 * Python 3, to create the first admin account
 
 ### Clone the Repository
