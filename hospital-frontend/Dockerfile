@@ -12,8 +12,10 @@ ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.31-alpine-slim@sha256:a8cb0f33d51fa107c96fd2bd3a71aaf564ec131e9d2bdf8700944f0ed8b170d7 AS runtime
+# Root only for the upgrade; everything after it runs as nginx's own user.
 USER root
 RUN apk upgrade --no-cache
+USER 101
 COPY --chown=101:101 nginx.conf /etc/nginx/conf.d/default.conf
 COPY --chown=101:101 --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 8080
@@ -21,5 +23,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8080/health >/dev/null || exit 1
 
-USER 101
 CMD ["nginx", "-g", "daemon off;"]
