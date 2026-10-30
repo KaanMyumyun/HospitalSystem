@@ -1,4 +1,7 @@
-FROM node:26-alpine AS builder
+# Base images are pinned by digest, so a rebuild uses the same image until
+# Dependabot proposes a newer one; the runtime stage still upgrades its
+# Alpine packages on every build.
+FROM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
@@ -8,7 +11,7 @@ ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.31-alpine-slim AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine-slim@sha256:a8cb0f33d51fa107c96fd2bd3a71aaf564ec131e9d2bdf8700944f0ed8b170d7 AS runtime
 USER root
 RUN apk upgrade --no-cache
 COPY --chown=101:101 nginx.conf /etc/nginx/conf.d/default.conf
