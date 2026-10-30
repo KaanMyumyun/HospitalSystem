@@ -1,8 +1,10 @@
+import { useMemo } from 'react'
 import type { DoctorDto } from '../../api'
 import { GuardedButton, StatusBadge, TableStatus } from '../../components/ui'
 import { useWorkspace } from '../../hooks/useWorkspace'
 import { guarded } from '../../lib/readOnly'
 import { departmentName } from '../../lib/format'
+import { filterBySearch } from '../../lib/search'
 import type { ActionOutcome } from '../../types'
 
 export function DoctorsTab({
@@ -13,12 +15,9 @@ export function DoctorsTab({
   onChangeDoctorStatus: (doctor: DoctorDto, isActive: boolean) => Promise<ActionOutcome>
 }) {
   const { departments, doctors, loading, searchQuery, isReadOnly } = useWorkspace()
-  const normalizedSearch = searchQuery.trim().toLowerCase()
-  const visibleDoctors = doctors.filter(
-    (doctor) =>
-      !normalizedSearch ||
-      doctor.name.toLowerCase().includes(normalizedSearch) ||
-      departmentName(departments, doctor.departmentId).toLowerCase().includes(normalizedSearch),
+  const visibleDoctors = useMemo(
+    () => filterBySearch(doctors, searchQuery, (doctor) => [doctor.name, departmentName(departments, doctor.departmentId)]),
+    [departments, doctors, searchQuery],
   )
 
   return (

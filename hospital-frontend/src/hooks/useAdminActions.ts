@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import * as api from '../api'
 import type {
   AddTimeOffInput,
-  CancelAffected,
   ChangeScheduleInput,
   CreateScheduleInput,
   DepartmentDto,
@@ -14,6 +13,7 @@ import type {
 import type { ConfirmOptions } from '../components/ui'
 import { formatTimeOff } from '../lib/format'
 import type { ActionOutcome } from '../types'
+import type { RunAction, RunBookingChange } from './useActionRunner'
 
 export type AdminActions = {
   addTimeOff: (scheduleId: number, input: AddTimeOffInput) => Promise<ActionOutcome>
@@ -40,8 +40,8 @@ type Dialogs = {
 // inputs changes, so the tabs do not get new callbacks on every render.
 export function useAdminActions(
   departments: DepartmentDto[],
-  runAction: (action: () => Promise<unknown>, successMessage: string) => Promise<ActionOutcome>,
-  runBookingChange: (change: (cancel?: CancelAffected) => Promise<unknown>, successMessage: string) => Promise<ActionOutcome>,
+  runAction: RunAction,
+  runBookingChange: RunBookingChange,
   { confirm, chooseDepartment }: Dialogs,
 ): AdminActions {
   return useMemo<AdminActions>(

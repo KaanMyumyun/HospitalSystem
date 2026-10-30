@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { AddTimeOffInput, ChangeScheduleInput, CreateScheduleInput, DayOfWeek, ScheduleDto, TimeOffDto } from '../../api'
 import { GuardedButton, TableStatus } from '../../components/ui'
 import { useWorkspace } from '../../hooks/useWorkspace'
 import { formatBreak, formatTimeOff, formatWorkingDays } from '../../lib/format'
+import { filterBySearch } from '../../lib/search'
 import { clockLabel, scheduleWindow } from '../../lib/time'
 import { todayInputValue } from '../../lib/validation'
 import type { ActionOutcome } from '../../types'
@@ -35,11 +36,13 @@ export function SchedulesTab({
   const [editDays, setEditDays] = useState<DayOfWeek[]>([])
   const [editBreak, setEditBreak] = useState<BreakInput>(noBreak)
 
-  const normalizedSearch = searchQuery.trim().toLowerCase()
-  const visibleSchedules = schedules.filter((schedule) => {
-    const doctor = doctors.find((item) => item.doctorId === schedule.doctorId)
-    return !normalizedSearch || (doctor?.name ?? '').toLowerCase().includes(normalizedSearch)
-  })
+  const visibleSchedules = useMemo(
+    () =>
+      filterBySearch(schedules, searchQuery, (schedule) => [
+        doctors.find((doctor) => doctor.doctorId === schedule.doctorId)?.name,
+      ]),
+    [doctors, schedules, searchQuery],
+  )
 
   const schedulableDoctors = doctors.filter(
     (doctor) =>

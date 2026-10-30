@@ -29,7 +29,7 @@ The application uses a three-stage GitHub Actions pipeline:
 
 1. `CI` workflow
    - Runs on pull requests, pushes to `main`, and weekly (Mondays 03:00 UTC)
-     so published images pick up base image security fixes
+     so published images pick up Alpine security fixes
    - Restores, builds and tests the backend
    - Lints, tests and builds the frontend (the build type-checks it), and
      checks that its generated API types match `openapi.json` (see
@@ -69,8 +69,9 @@ rollout wait, but still updates the Deployment image fields. The next manual
 scale-up runs the exact image tag built from the commit that passed CI.
 
 Every action is pinned to a full commit SHA, because a version tag can be
-moved to different code. Dependabot (`.github/dependabot.yml`) opens a weekly
-pull request that updates the pins.
+moved to different code. For the same reason the Dockerfiles pin each base
+image by digest as well as tag. Dependabot (`.github/dependabot.yml`) opens
+weekly pull requests that update both kinds of pin.
 
 The workflows read these repository variables. All but the last two can be
 secrets instead. Docker Image CI also needs the `DOCKER_USERNAME` and
@@ -262,10 +263,11 @@ The system is divided into two independent layers:
 │   ├── scripts/                    # generate-api-types.mjs (+ test)
 │   ├── src/
 │   │   ├── components/             # Shared UI (Sidebar, TopBar, dialogs, ui)
-│   │   ├── hooks/                  # Data loading, shared screen state, admin actions
-│   │   ├── screens/                # LoginScreen, dashboards, patients, NotFoundScreen
-│   │   ├── lib/                    # format, schedule, validation (+ tests)
-│   │   ├── App.tsx                 # Routing and session state
+│   │   ├── hooks/                  # Session, data loading, actions, shared screen state
+│   │   ├── screens/                # LoginScreen, ReceptionDashboard/, AdminDashboard/, ...
+│   │   ├── lib/                    # format, schedule, search, validation (+ tests)
+│   │   ├── test/                   # Setup and helpers for the component tests
+│   │   ├── App.tsx                 # Routing; loads each role's screens when first shown
 │   │   ├── api.ts                  # API client and session storage
 │   │   ├── api-schema.ts           # Generated from openapi.json; do not edit
 │   │   ├── types.ts
@@ -290,6 +292,7 @@ The system is divided into two independent layers:
 │   ├── Migrations/
 │   ├── Properties/
 │   ├── Services/
+│   ├── Startup/                    # Program.cs's setup: tokens, access policies, rate limits
 │   ├── GlobalUsings.cs
 │   ├── Program.cs
 │   ├── appsettings.json
@@ -350,7 +353,10 @@ docker compose up -d postgres
 
 This starts PostgreSQL 16 on `127.0.0.1:5432` with database `HospitalSystemDb`,
 user `hospitaluser` and password `strongpassword`. These are local development
-values only.
+values only. For another password, set `POSTGRES_PASSWORD` in `.env` (see
+`.env.example`) before the database is first created, and use it in the
+connection string below: PostgreSQL keeps the password its volume was made
+with.
 
 ### 2. Create your local configuration
 
@@ -603,7 +609,9 @@ a build argument, and fails to build without one.
 
 * JWT-based authentication
 * Protected endpoints require a Bearer token
-* Role-based access restrictions
+* Role-based access restrictions, written once: `Services/Access.cs` names a
+  policy for each group of roles, controllers require one by name, and the
+  services check the same one
 * Swagger supports authenticated testing
 * Usernames are case-insensitive: `Admin` and `admin` sign in to the same
   account, and a new user cannot take a name that differs from an existing one
@@ -954,12 +962,13 @@ service tests. They also exercise the HTTP pipeline through
 | User | `ChangeRoleService`, `CreateDoctorService`, `DoctorStatusService`, `ResetPasswordService`, `UserQueryService` |
 | Audit log | `AuditLogQueryService`, `AuditLogService` |
 | Data | The `--migrate` and `--create-admin` commands |
-| API | Endpoint authorization and responses, read-only demo accounts, sign-in rate limiting, forwarded headers, the signing key check at startup and the [API contract](#api-contract) |
+| API | Who may call each endpoint (one table), responses, read-only demo accounts, sign-in rate limiting, forwarded headers, the signing key check at startup and the [API contract](#api-contract) |
 
 The service suite also covers `PatientService`, `ScheduleValidation` and
-`CurrentUserService`. The 21 PostgreSQL tests check actual migrations,
-indexes, constraints, concurrent account lockout updates, two schedules made
-for one doctor at the same time, and `--create-admin`. They run only
+`CurrentUserService`. The 23 PostgreSQL tests check actual migrations,
+including through the migrations connection, indexes, constraints, concurrent
+account lockout updates, two schedules made for one doctor at the same time,
+time off, breaks, moves and booking history, and `--create-admin`. They run only
 when `HOSPITALSYSTEM_TEST_POSTGRES` holds a connection string to a PostgreSQL
 server where the tests can create temporary databases, and are reported as
 skipped otherwise, as in CI:
@@ -971,13 +980,18 @@ HOSPITALSYSTEM_TEST_POSTGRES='Host=localhost;Port=5432;Username=hospitaluser;Pas
 The Appointments, Auth, Department and User tests share seed data through
 `*TestBase` classes.
 
-The frontend has unit tests, written with Vitest, in `hospital-frontend/src`
-(`lib/*.test.ts` and `api.test.ts`) and `hospital-frontend/scripts`. They
-cover schedule slots and working days, formatting, form validation, time
-handling, HTTP error messages, the API client's booking errors and the API
-type generator.
+The frontend's tests run with Vitest (`npm test`). Unit tests (`*.test.ts`,
+in `hospital-frontend/src` and `hospital-frontend/scripts`) run in Node and
+cover schedule slots and working days, formatting, search, form validation,
+time handling, HTTP error messages, the API client's booking errors and the
+API type generator.
 
-The screens are covered by end-to-end tests instead of component tests.
+Component tests (`*.test.tsx`) render into jsdom with Testing Library and use
+the app the way a person would, by role and label: the shared buttons, table
+status and dialog, and the reception screen's doctor list, week calendar,
+appointment panel, and booking and cancel dialogs. `src/test` holds their
+setup and a helper that provides the workspace App would. Whole screens are
+covered by the end-to-end tests.
 
 ### End-to-end tests
 
@@ -1080,10 +1094,10 @@ Full Docker support:
 
 ### Run with Docker
 
-Compose sets the connection string itself and takes the JWT signing key from a
-`.env` file in the repository root. `.env` is gitignored; start from the
-template and replace the key with your own random string of at least 32
-characters:
+Compose sets the connection string itself and takes the JWT signing key, and
+optionally the database password (`POSTGRES_PASSWORD`), from a `.env` file in
+the repository root. `.env` is gitignored; start from the template and replace
+the key with your own random string of at least 32 characters:
 
 ```bash
 cp .env.example .env
@@ -1093,17 +1107,20 @@ docker compose up --build
 `appsettings.Development.json` is not used here: it is kept out of the image so
 that no local secrets are built into it.
 
-Compose pulls fresh base images on every build. Docker still reuses the cached
-`apk upgrade` layer, so to pick up Alpine security fixes released since your last
-build, rebuild without the cache:
+The Dockerfiles pin their base images by digest, so every build starts from
+the same images until a Dependabot pull request moves the pins. Docker reuses
+the cached `apk upgrade` layer, so to pick up Alpine security fixes released
+since your last build, rebuild without the cache:
 
 ```bash
 docker compose build --no-cache
 ```
 
 The frontend is served at `http://localhost:3000` and the API at
-`http://localhost:5272`. The backend applies migrations on startup; create the
-first admin as in Backend Setup, step 5.
+`http://localhost:5272`, to this computer only: like PostgreSQL's, their ports
+bind to `127.0.0.1`. A container that stops is restarted unless you stopped it.
+The backend applies migrations on startup; create the first admin as in Backend
+Setup, step 5.
 
 ---
 

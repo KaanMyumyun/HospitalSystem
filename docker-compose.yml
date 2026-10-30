@@ -4,11 +4,13 @@ services:
   postgres:
     image: postgres:16
     container_name: hospital-postgres
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_DB: HospitalSystemDb
       POSTGRES_USER: hospitaluser
-      POSTGRES_PASSWORD: strongpassword
+      # From .env, with a local-only default. PostgreSQL keeps the password
+      # its volume was created with; see .env.example.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-strongpassword}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -25,23 +27,24 @@ services:
       dockerfile: HospitalSystem/Dockerfile
       pull: true
     container_name: hospital-backend
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       Database__RunMigrationsOnStartup: "true"
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=HospitalSystemDb;Username=hospitaluser;Password=strongpassword
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=HospitalSystemDb;Username=hospitaluser;Password=${POSTGRES_PASSWORD:-strongpassword}
       JwtSettings__SecretKey: ${JwtSettings__SecretKey:-}
     ports:
-      - "5272:8080"
+      - "127.0.0.1:5272:8080"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/ready"]
       interval: 30s
       timeout: 5s
       start_period: 20s
       retries: 3
-      
+
   frontend:
     build:
       context: ./hospital-frontend
@@ -50,11 +53,12 @@ services:
       args:
         VITE_API_URL: http://localhost:5272/api
     container_name: hospital-frontend
+    restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
     ports:
-      - "3000:8080"
+      - "127.0.0.1:3000:8080"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
       interval: 30s

@@ -1,5 +1,6 @@
 using HospitalSystem.Interfaces.Auth;
 using HospitalSystem.Services.Auth;
+using HospitalSystem.Startup;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -14,7 +15,7 @@ public class AuthController : ControllerBase
     // per address and username (LoginRateLimitFilter).
     [AllowAnonymous]
     [HttpPost("login")]
-    [EnableRateLimiting("sign-in")]
+    [EnableRateLimiting(RateLimits.SignIn)]
     [ServiceFilter(typeof(LoginRateLimitFilter))]
     public async Task<ActionResult<LoginResultDto>> Login(
         [FromBody] LoginDto dto, [FromServices] ILoginService service, CancellationToken cancellationToken)
@@ -25,7 +26,7 @@ public class AuthController : ControllerBase
 
     [AllowAnonymous]
     [HttpPost("demo-login")]
-    [EnableRateLimiting("login")]
+    [EnableRateLimiting(RateLimits.Login)]
     public async Task<ActionResult<LoginResultDto>> DemoLogin(
         [FromBody] DemoLoginDto dto, [FromServices] ILoginService service, CancellationToken cancellationToken)
     {
@@ -46,7 +47,7 @@ public class AuthController : ControllerBase
 
     [Authorize]
     [HttpPost("change-password")]
-    [EnableRateLimiting("login")]
+    [EnableRateLimiting(RateLimits.Login)]
     public async Task<ActionResult<ChangePasswordResultDto>> ChangePassword(
         [FromBody] ChangePasswordDto dto, [FromServices] IChangePasswordService service, CancellationToken cancellationToken)
         => this.ToActionResult(await service.ChangeOwnPasswordAsync(dto, cancellationToken));

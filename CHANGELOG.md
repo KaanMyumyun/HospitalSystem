@@ -92,6 +92,13 @@ tagged releases yet, so everything is listed under Unreleased.
   off, making a doctor, and the phone layouts. The browser runs in another
   time zone than the clinic, and any console error fails a test. They need
   `HOSPITALSYSTEM_TEST_POSTGRES`, so CI does not run them.
+- Component tests for the frontend (`*.test.tsx`, run by `npm test` in jsdom
+  with Testing Library): the shared buttons, table status and dialog, and the
+  reception screen's doctor list, week calendar, appointment panel, and
+  booking and cancel dialogs.
+- A backend test lists every endpoint with the roles that may call it, and
+  another fails when a policy lets different roles in for the controllers and
+  for the services.
 
 ### Changed
 
@@ -220,6 +227,32 @@ tagged releases yet, so everything is listed under Unreleased.
   loading, search, read-only) from a React context instead of long prop
   lists, their callbacks keep their identity between renders, and the
   reception calendar finds each slot's appointments with one lookup.
+- Who may call each endpoint is written once, as named policies in
+  `Services/Access.cs`. Controllers require a policy by name and services
+  check the same one, instead of role names written out in 24 attributes and
+  again in the services. Every endpoint lets in the same roles as before.
+- `Program.cs` reads as the order of startup. The token checks, access
+  policies, rate limits, client addresses, error responses, OpenAPI document
+  and service registrations each have a file in `HospitalSystem/Startup`.
+- The frontend loads each role's screens the first time they are shown, so
+  signing in no longer downloads the code of screens the account cannot use.
+  A tab opened before a deploy reloads itself, once, when it asks for screen
+  code the new release no longer has.
+- `App.tsx` hands the session, the shared lists, running actions, recent
+  activity and the front desk's actions to hooks of their own. The reception
+  screen is split into its doctor list, week calendar, appointment panel and
+  booking and cancel dialogs, so typing in the booking form no longer redraws
+  the whole screen. The week's counts and the admin tabs' searches are worked
+  out again only when what they show changes.
+- The Dockerfiles pin their base images by digest as well as tag, and
+  Dependabot proposes newer ones. Every build still upgrades the runtime
+  image's Alpine packages.
+- The frontend image runs as nginx's own user from right after its
+  `apk upgrade`, before anything is copied in.
+- `docker compose` restarts the backend and frontend unless they were stopped,
+  as it does the database, and binds their ports to `127.0.0.1` only. The
+  database password can come from `.env` (`POSTGRES_PASSWORD`); without it,
+  compose keeps the local-only `strongpassword`.
 
 ### Removed
 

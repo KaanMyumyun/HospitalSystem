@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { DepartmentDto } from '../../api'
 import { GuardedButton, StatusBadge, TableStatus } from '../../components/ui'
 import { useWorkspace } from '../../hooks/useWorkspace'
 import { coverageForDepartment } from '../../lib/schedule'
+import { filterBySearch } from '../../lib/search'
 import type { ActionOutcome } from '../../types'
 
 // The top bar's search filters this table.
@@ -19,9 +20,9 @@ export function DepartmentsTab({
 }) {
   const { departments, doctors, schedules, loading, searchQuery, isReadOnly } = useWorkspace()
   const [departmentNameInput, setDepartmentNameInput] = useState('')
-  const normalizedSearch = searchQuery.trim().toLowerCase()
-  const visibleDepartments = departments.filter(
-    (department) => !normalizedSearch || department.name.toLowerCase().includes(normalizedSearch),
+  const visibleDepartments = useMemo(
+    () => filterBySearch(departments, searchQuery, (department) => [department.name]),
+    [departments, searchQuery],
   )
 
   return (

@@ -1,4 +1,5 @@
 using HospitalSystem.Interfaces.Appointments;
+using HospitalSystem.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,21 +10,21 @@ namespace HospitalSystem.Controllers;
 public class AppointmentsController : ControllerBase
 {
     // One doctor's appointments in a time window, for the reception calendar.
-    [Authorize(Roles = "FrontDesk,DemoFrontDesk")]
+    [Authorize(Policy = Access.DeskReads)]
     [HttpGet]
     public async Task<ActionResult<ServiceResult<List<ViewAppointmentDto>>>> ListAppointments(
         [FromQuery] AppointmentQueryDto query, [FromServices] IAppointmentQueryService service,
         CancellationToken cancellationToken)
         => this.ToActionResult(await service.GetAppointmentsAsync(query, cancellationToken));
 
-    [Authorize(Roles = "Doctor")]
+    [Authorize(Policy = Access.Doctor)]
     [HttpGet("mine")]
     public async Task<ActionResult<ServiceResult<List<ViewAppointmentDto>>>> MyAppointments(
         [FromQuery] MyAppointmentsQueryDto query, [FromServices] IAppointmentQueryService service,
         CancellationToken cancellationToken)
         => this.ToActionResult(await service.GetMyAppointmentsAsync(query, cancellationToken));
 
-    [Authorize(Roles = "FrontDesk")]
+    [Authorize(Policy = Access.Desk)]
     [HttpPost]
     public async Task<ActionResult<CreateAppointmentResultDto>> CreateAppointment(
         [FromBody] CreateAppointmentDto dto, [FromServices] IAppointmentCreationService service,
@@ -32,7 +33,7 @@ public class AppointmentsController : ControllerBase
 
     // A cancelled appointment stays on record with its reason, so this is
     // not a DELETE.
-    [Authorize(Roles = "FrontDesk")]
+    [Authorize(Policy = Access.Desk)]
     [HttpPost("{appointmentId:int}/cancel")]
     public async Task<ActionResult<CancelAppointmentResultDto>> CancelAppointment(
         int appointmentId, [FromBody] CancelAppointmentDto dto, [FromServices] IAppointmentCancellationService service,
@@ -44,7 +45,7 @@ public class AppointmentsController : ControllerBase
 
     // To another time, or another doctor, in one step, so nobody can take the
     // new slot in between. The appointment keeps its id and history.
-    [Authorize(Roles = "FrontDesk")]
+    [Authorize(Policy = Access.Desk)]
     [HttpPost("{appointmentId:int}/move")]
     public async Task<ActionResult<MoveAppointmentResultDto>> MoveAppointment(
         int appointmentId, [FromBody] MoveAppointmentDto dto, [FromServices] IAppointmentMoveService service,
@@ -55,14 +56,14 @@ public class AppointmentsController : ControllerBase
     }
 
     // Who booked, moved, cancelled or marked it, oldest first.
-    [Authorize(Roles = "FrontDesk")]
+    [Authorize(Policy = Access.Desk)]
     [HttpGet("{appointmentId:int}/history")]
     public async Task<ActionResult<ServiceResult<List<AppointmentHistoryEntryDto>>>> AppointmentHistory(
         int appointmentId, [FromServices] IAppointmentQueryService service, CancellationToken cancellationToken)
         => this.ToActionResult(await service.GetHistoryAsync(appointmentId, cancellationToken));
 
     // Completed or NoShow, once the appointment has started.
-    [Authorize(Roles = "FrontDesk,Doctor")]
+    [Authorize(Policy = Access.DeskOrDoctor)]
     [HttpPatch("{appointmentId:int}/status")]
     public async Task<ActionResult<AppointmentStatusResultDto>> ChangeAppointmentStatus(
         int appointmentId, [FromBody] ChangeAppointmentStatusDto dto, [FromServices] IAppointmentStatusService service,
