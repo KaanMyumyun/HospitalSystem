@@ -13,6 +13,8 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Moq;
 using Npgsql;
+using System.Net;
+using System.Net.Http.Json;
 
 namespace HospitalSystem.Tests;
 
@@ -33,50 +35,47 @@ public class PostgresTests : AuthTestBase
         return user.Id;
     }
 
-    private sealed class PausedWrongPasswordHasher : IPasswordHasher<UserEntity>
+    private static ResetPasswordService CreateResetService(ApplicationDbContext db, IPasswordHasher<UserEntity> hasher)
+    {
+        var admin = new Mock<ICurrentUserService>();
+        admin.Setup(x => x.IsInRole(UserRole.Admin)).Returns(true);
+        return new ResetPasswordService(db, admin.Object, new AuditLogService(db, admin.Object),
+            new SecurityStampCache(new MemoryCache(new MemoryCacheOptions())), hasher);
+    }
+
+    private sealed class PausedHasher(PasswordVerificationResult verification) : IPasswordHasher<UserEntity>
     {
         private readonly TaskCompletionSource<bool> _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource<bool> _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public Task Entered => _entered.Task;
         public void Release() => _release.TrySetResult(true);
-        public string HashPassword(UserEntity user, string password) => throw new NotSupportedException();
+
+        public string HashPassword(UserEntity user, string password)
+        {
+            Pause();
+            return new PasswordHasher<UserEntity>().HashPassword(user, password);
+        }
 
         public PasswordVerificationResult VerifyHashedPassword(UserEntity user, string hashedPassword, string providedPassword)
         {
+            Pause();
+            return verification;
+        }
+
+        private void Pause()
+        {
             _entered.TrySetResult(true);
             _release.Task.GetAwaiter().GetResult();
-            return PasswordVerificationResult.Failed;
         }
     }
 
-    private static async Task WaitForBlockedAccountLockAsync(
-        PostgresDatabase database, Task otherRequest, PausedWrongPasswordHasher paused)
+    private static async Task<T> WhilePausedAsync<T>(PausedHasher paused, Func<Task<T>> other)
     {
         try
         {
-            var deadline = DateTime.UtcNow.AddSeconds(10);
-            while (DateTime.UtcNow < deadline)
-            {
-                if (otherRequest.IsCompleted)
-                {
-                    await otherRequest;
-                    throw new InvalidOperationException("The competing account update completed without waiting for the row lock");
-                }
-
-                var waiting = await database.ScalarAsync<long>("""
-                    SELECT count(*) FROM pg_stat_activity
-                    WHERE datname = current_database()
-                      AND wait_event_type = 'Lock'
-                      AND query LIKE '%FOR UPDATE%'
-                    """);
-                if (waiting > 0)
-                    return;
-
-                await Task.Delay(25);
-            }
-
-            throw new TimeoutException("The competing account update did not reach the row lock");
+            await paused.Entered.WaitAsync(TimeSpan.FromSeconds(10));
+            return await other().WaitAsync(TimeSpan.FromSeconds(10));
         }
         finally
         {
@@ -487,6 +486,58 @@ public class PostgresTests : AuthTestBase
     }
 
     [PostgresFact]
+    public async Task NameRemainingAuditLogActors_NamesTheEntriesThatStillHoldAnId()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        await db.GetService<IMigrator>().MigrateAsync("IndexPatientAndAuditLogSearch");
+        await database.ExecuteAsync("""
+            INSERT INTO "Users" ("Name", "PasswordHash", "Role", "SecurityStamp") VALUES ('alice', 'x', 'FrontDesk', 's');
+            INSERT INTO "AuditLogs" ("Action", "EntityType", "EntityId", "Details", "ActorName", "CreatedAt")
+            SELECT 'CreateAppointment', 'Appointment', 1, 'Created appointment for doctor 1', "Id"::text, now() FROM "Users";
+            INSERT INTO "AuditLogs" ("Action", "EntityType", "EntityId", "Details", "ActorName", "CreatedAt") VALUES
+                ('SignInFailed', 'User', 0, 'Failed sign-in with an unknown username', 'Unknown', now()),
+                ('CreateUser', 'User', 1, 'Created admin root', 'Command line', now()),
+                ('ResetPassword', 'User', 1, 'Password reset for user bob', '999', now());
+            """);
+
+        await db.Database.MigrateAsync();
+
+        var aliceId = await db.Users.Select(u => u.Id).SingleAsync();
+        var entries = await db.AuditLogs.OrderBy(a => a.Id).ToListAsync();
+        Assert.Equal([aliceId, null, null, null], entries.Select(e => e.ActorUserId));
+        Assert.Equal(["alice", "Unknown", "Command line", "999"], entries.Select(e => e.ActorName));
+    }
+
+    [PostgresFact]
+    public async Task AnExhaustedConnectionPool_AnswersBusyWithinTheTimeout()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var migrated = await database.CreateMigratedContextAsync();
+        var connectionString = new NpgsqlConnectionStringBuilder(database.ConnectionString)
+        {
+            Pooling = true,
+            MaxPoolSize = 1,
+            Timeout = 1
+        }.ConnectionString;
+        await using var app = TestApp.Create(settings: new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:DefaultConnection"] = connectionString
+        });
+        var client = app.CreateClient();
+        await using var held = new NpgsqlConnection(connectionString);
+        await held.OpenAsync();
+
+        var started = DateTime.UtcNow;
+        var response = await client.PostAsJsonAsync("/api/auth/login", new { name = "anyone", password = "whatever" });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(5));
+        Assert.Equal(TimeSpan.FromSeconds(2), response.Headers.RetryAfter?.Delta);
+        Assert.Contains("The server is busy", await response.Content.ReadAsStringAsync());
+    }
+
+    [PostgresFact]
     public async Task AnOlderImage_CanStillInsertUsersAndSchedules()
     {
         await using var database = await PostgresDatabase.CreateAsync();
@@ -511,16 +562,14 @@ public class PostgresTests : AuthTestBase
         await SeedLoginUserAsync(database, failedCount: 8);
         await using var firstDb = database.CreateContext();
         await using var secondDb = database.CreateContext();
-        await secondDb.Users.SingleAsync();
-        var paused = new PausedWrongPasswordHasher();
+        await firstDb.Users.SingleAsync();
+        var paused = new PausedHasher(PasswordVerificationResult.Failed);
         var wrong = new LoginDto { Name = "lockout", Password = "wrong-password" };
 
         var first = Task.Run(() => CreateLoginService(firstDb, paused).LoginAsync(wrong));
-        await paused.Entered.WaitAsync(TimeSpan.FromSeconds(10));
-        var second = Task.Run(() => CreateLoginService(secondDb, new PasswordHasher<UserEntity>()).LoginAsync(wrong));
-        await WaitForBlockedAccountLockAsync(database, second, paused);
+        var secondResult = await WhilePausedAsync(paused, () =>
+            CreateLoginService(secondDb, new PasswordHasher<UserEntity>()).LoginAsync(wrong));
         var firstResult = await first.WaitAsync(TimeSpan.FromSeconds(10));
-        var secondResult = await second.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal("Invalid credentials", firstResult.Error);
         Assert.Equal("Invalid credentials", secondResult.Error);
@@ -532,54 +581,72 @@ public class PostgresTests : AuthTestBase
     }
 
     [PostgresFact]
-    public async Task CorrectSignInAfterConcurrentWrongPassword_ClearsItsCount()
+    public async Task TheRightPassword_CheckedWhileWrongOnesLockTheAccount_IsRefused()
     {
         await using var database = await PostgresDatabase.CreateAsync();
-        await SeedLoginUserAsync(database, failedCount: 8);
-        await using var firstDb = database.CreateContext();
-        await using var secondDb = database.CreateContext();
-        var paused = new PausedWrongPasswordHasher();
+        await SeedLoginUserAsync(database, failedCount: 9);
+        await using var rightDb = database.CreateContext();
+        await using var wrongDb = database.CreateContext();
+        var paused = new PausedHasher(PasswordVerificationResult.Success);
 
-        var first = Task.Run(() => CreateLoginService(firstDb, paused).LoginAsync(new LoginDto { Name = "lockout", Password = "wrong-password" }));
-        await paused.Entered.WaitAsync(TimeSpan.FromSeconds(10));
-        var second = Task.Run(() => CreateLoginService(secondDb, new PasswordHasher<UserEntity>())
+        var right = Task.Run(() => CreateLoginService(rightDb, paused)
             .LoginAsync(new LoginDto { Name = "lockout", Password = TestPassword }));
-        await WaitForBlockedAccountLockAsync(database, second, paused);
-        await first.WaitAsync(TimeSpan.FromSeconds(10));
-        Assert.True((await second.WaitAsync(TimeSpan.FromSeconds(10))).IsSuccess);
+        await WhilePausedAsync(paused, () => CreateLoginService(wrongDb, new PasswordHasher<UserEntity>())
+            .LoginAsync(new LoginDto { Name = "lockout", Password = "wrong-password" }));
+        var result = await right.WaitAsync(TimeSpan.FromSeconds(10));
 
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Invalid credentials", result.Error);
         await using var check = database.CreateContext();
-        var user = await check.Users.SingleAsync();
-        Assert.Equal(0, user.FailedSignInCount);
-        Assert.Null(user.LockedUntil);
+        Assert.Equal(LockoutTime.UtcDateTime.AddMinutes(15), (await check.Users.SingleAsync()).LockedUntil);
+        Assert.Contains(await check.AuditLogs.Select(a => a.Details).ToListAsync(), details => details.Contains("account locked"));
     }
 
     [PostgresFact]
-    public async Task AdminResetAfterConcurrentWrongPassword_LiftsItsLock()
+    public async Task AdminResetDuringAWrongPasswordCheck_LiftsTheLock_AndTheCountStartsAgain()
     {
         await using var database = await PostgresDatabase.CreateAsync();
         var userId = await SeedLoginUserAsync(database, failedCount: 9);
-        await using var firstDb = database.CreateContext();
+        await using var signInDb = database.CreateContext();
         await using var resetDb = database.CreateContext();
-        var paused = new PausedWrongPasswordHasher();
-        var admin = new Mock<ICurrentUserService>();
-        admin.Setup(x => x.IsInRole(UserRole.Admin)).Returns(true);
-        var reset = new ResetPasswordService(resetDb, admin.Object, new AuditLogService(resetDb, admin.Object),
-            new SecurityStampCache(new MemoryCache(new MemoryCacheOptions())), new PasswordHasher<UserEntity>());
+        var paused = new PausedHasher(PasswordVerificationResult.Failed);
 
-        var first = Task.Run(() => CreateLoginService(firstDb, paused).LoginAsync(new LoginDto { Name = "lockout", Password = "wrong-password" }));
-        await paused.Entered.WaitAsync(TimeSpan.FromSeconds(10));
-        var second = Task.Run(() => reset.ResetPasswordAsync(new ResetPasswordDto { UserId = userId, NewPassword = "replacement-password" }));
-        await WaitForBlockedAccountLockAsync(database, second, paused);
-        Assert.Equal("Invalid credentials", (await first.WaitAsync(TimeSpan.FromSeconds(10))).Error);
-        Assert.True((await second.WaitAsync(TimeSpan.FromSeconds(10))).IsSuccess);
+        var signIn = Task.Run(() => CreateLoginService(signInDb, paused)
+            .LoginAsync(new LoginDto { Name = "lockout", Password = "wrong-password" }));
+        var reset = await WhilePausedAsync(paused, () => CreateResetService(resetDb, new PasswordHasher<UserEntity>())
+            .ResetPasswordAsync(new ResetPasswordDto { UserId = userId, NewPassword = "replacement-password" }));
 
+        Assert.True(reset.IsSuccess);
+        Assert.Equal("Invalid credentials", (await signIn.WaitAsync(TimeSpan.FromSeconds(10))).Error);
         await using var check = database.CreateContext();
         var user = await check.Users.SingleAsync();
-        Assert.Equal(0, user.FailedSignInCount);
+        Assert.Equal(1, user.FailedSignInCount);
         Assert.Null(user.LockedUntil);
         Assert.Equal(PasswordVerificationResult.Success,
             new PasswordHasher<UserEntity>().VerifyHashedPassword(user, user.PasswordHash, "replacement-password"));
+    }
+
+    [PostgresFact]
+    public async Task AnAccountUpdate_LeavesTheUserFreeForRowsThatReferToIt()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = await database.CreateMigratedContextAsync();
+        var (_, deskId, _) = await SeedBookableDoctorAsync(db);
+        await using var resetDb = database.CreateContext();
+        var paused = new PausedHasher(PasswordVerificationResult.Failed);
+
+        var reset = Task.Run(() => CreateResetService(resetDb, paused)
+            .ResetPasswordAsync(new ResetPasswordDto { UserId = deskId, NewPassword = "replacement-password" }));
+        var foreignKeyCheck = await WhilePausedAsync(paused, async () =>
+        {
+            var update = await Assert.ThrowsAsync<PostgresException>(() =>
+                database.ScalarAsync<int>($"""SELECT 1 FROM "Users" WHERE "Id" = {deskId} FOR NO KEY UPDATE NOWAIT"""));
+            Assert.Equal(PostgresErrorCodes.LockNotAvailable, update.SqlState);
+            return await database.ScalarAsync<int>($"""SELECT 1 FROM "Users" WHERE "Id" = {deskId} FOR KEY SHARE NOWAIT""");
+        });
+
+        Assert.Equal(1, foreignKeyCheck);
+        Assert.True((await reset.WaitAsync(TimeSpan.FromSeconds(10))).IsSuccess);
     }
 
     [PostgresFact]

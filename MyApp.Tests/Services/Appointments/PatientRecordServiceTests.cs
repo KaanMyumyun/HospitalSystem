@@ -30,20 +30,22 @@ public class PatientRecordServiceTests : AppointmentTestBase
 
         Assert.NotNull(result.Data);
         Assert.Equal(expected, result.Data.Items.Select(p => p.Name));
-        Assert.Equal(expected.Length, result.Data.TotalCount);
+        Assert.False(result.Data.HasNextPage);
     }
 
-    [Fact]
-    public async Task List_PagesWithTheTotalOfAllMatches()
+    [Theory]
+    [InlineData(1, new[] { "Patient One", "Patient Three" }, true)]
+    [InlineData(2, new[] { "Patient Two" }, false)]
+    public async Task List_Pages_AndSaysWhetherAnotherPageFollows(int page, string[] expected, bool hasNextPage)
     {
         using var db = CreateDbContext();
         await SeedStandardDataAsync(db);
 
-        var result = await CreateService(db).ListPatientsAsync(new PatientQueryDto { Page = 2, PageSize = 2 });
+        var result = await CreateService(db).ListPatientsAsync(new PatientQueryDto { Page = page, PageSize = 2 });
 
         Assert.NotNull(result.Data);
-        Assert.Equal(["Patient Two"], result.Data.Items.Select(p => p.Name));
-        Assert.Equal(3, result.Data.TotalCount);
+        Assert.Equal(expected, result.Data.Items.Select(p => p.Name));
+        Assert.Equal(hasNextPage, result.Data.HasNextPage);
     }
 
     [Fact]

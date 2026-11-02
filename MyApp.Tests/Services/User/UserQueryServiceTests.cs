@@ -36,7 +36,7 @@ public class UserQueryServiceTests : UserTestBase
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Data);
         Assert.Equal(2, result.Data.Items.Count);
-        Assert.Equal(2, result.Data.TotalCount);
+        Assert.False(result.Data.HasNextPage);
         Assert.Contains(result.Data.Items, u => u.UserId == 1 && u.UserName == "Alice" && u.Role == UserRole.Doctor);
         Assert.Contains(result.Data.Items, u => u.UserId == 2 && u.UserName == "Bob" && u.Role == UserRole.FrontDesk);
     }
@@ -55,27 +55,29 @@ public class UserQueryServiceTests : UserTestBase
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Data);
         Assert.Equal(new[] { "Carol", "Dave" }, result.Data.Items.Select(u => u.UserName));
-        Assert.Equal(5, result.Data.TotalCount);
+        Assert.True(result.Data.HasNextPage);
         Assert.Equal(2, result.Data.Page);
         Assert.Equal(2, result.Data.PageSize);
     }
 
-    [Fact]
-    public async Task ListUsersAsync_FullFirstPage_CountsEveryMatch()
+    [Theory]
+    [InlineData(2, false)]
+    [InlineData(3, true)]
+    public async Task ListUsersAsync_AFullPage_SaysWhetherAnotherFollows(int userCount, bool hasNextPage)
     {
         var db = CreateDbContext();
-        await SeedUsersAsync(db, ("Alice", UserRole.Admin), ("Bob", UserRole.Doctor), ("Carol", UserRole.Doctor));
+        await SeedUsersAsync(db, new[] { ("Alice", UserRole.Admin), ("Bob", UserRole.Doctor), ("Carol", UserRole.Doctor) }[..userCount]);
         var service = CreateService(db);
 
         var result = await service.ListUsersAsync(new UserQueryDto { PageSize = 2 });
 
         Assert.NotNull(result.Data);
         Assert.Equal(new[] { "Alice", "Bob" }, result.Data.Items.Select(u => u.UserName));
-        Assert.Equal(3, result.Data.TotalCount);
+        Assert.Equal(hasNextPage, result.Data.HasNextPage);
     }
 
     [Fact]
-    public async Task ListUsersAsync_PageAfterTheEnd_IsEmptyWithTheTotal()
+    public async Task ListUsersAsync_PageAfterTheEnd_IsEmpty()
     {
         var db = CreateDbContext();
         await SeedUsersAsync(db, ("Alice", UserRole.Admin), ("Bob", UserRole.Doctor));
@@ -86,7 +88,7 @@ public class UserQueryServiceTests : UserTestBase
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Data);
         Assert.Empty(result.Data.Items);
-        Assert.Equal(2, result.Data.TotalCount);
+        Assert.False(result.Data.HasNextPage);
     }
 
     [Theory]
@@ -109,7 +111,7 @@ public class UserQueryServiceTests : UserTestBase
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Data);
         Assert.Equal(expected, result.Data.Items.Select(u => u.UserName));
-        Assert.Equal(expected.Length, result.Data.TotalCount);
+        Assert.False(result.Data.HasNextPage);
     }
 
     [Theory]

@@ -7,21 +7,6 @@ internal static class SignInLockout
     public const int MaxFailures = 10;
     public static readonly TimeSpan Duration = TimeSpan.FromMinutes(15);
 
-    public static async Task<UserEntity?> FindByNameForUpdateAsync(
-        ApplicationDbContext context, string nameKey, CancellationToken cancellationToken = default)
-    {
-        if (!context.Database.IsNpgsql())
-            return await context.Users.SingleOrDefaultAsync(u => u.Name.ToLower() == nameKey, cancellationToken);
-
-        var trackedIds = context.ChangeTracker.Entries<UserEntity>().Select(e => e.Entity.Id).ToHashSet();
-        var user = await context.Users
-            .FromSqlInterpolated($"SELECT * FROM \"Users\" WHERE lower(\"Name\") = {nameKey} FOR UPDATE")
-            .SingleOrDefaultAsync(cancellationToken);
-        if (user is not null && trackedIds.Contains(user.Id))
-            await context.Entry(user).ReloadAsync(cancellationToken);
-        return user;
-    }
-
     public static async Task<UserEntity?> FindByIdForUpdateAsync(
         ApplicationDbContext context, int id, CancellationToken cancellationToken = default)
     {
@@ -30,7 +15,7 @@ internal static class SignInLockout
 
         var wasTracked = context.ChangeTracker.Entries<UserEntity>().Any(e => e.Entity.Id == id);
         var user = await context.Users
-            .FromSqlInterpolated($"SELECT * FROM \"Users\" WHERE \"Id\" = {id} FOR UPDATE")
+            .FromSqlInterpolated($"SELECT * FROM \"Users\" WHERE \"Id\" = {id} FOR NO KEY UPDATE")
             .SingleOrDefaultAsync(cancellationToken);
         if (user is not null && wasTracked)
             await context.Entry(user).ReloadAsync(cancellationToken);

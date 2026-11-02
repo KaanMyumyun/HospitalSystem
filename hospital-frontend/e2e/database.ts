@@ -25,6 +25,21 @@ export function databaseConnection() {
   return [...settings, `Database=${databaseName}`].join(';')
 }
 
+export async function addPatients(namePrefix: string, count: number) {
+  const client = new pg.Client(clientConfig(databaseConnection()))
+  await client.connect()
+  try {
+    await client.query(
+      `INSERT INTO "Patients" ("Name", "PhoneNumber", "DateOfBirth")
+       SELECT $1 || ' ' || lpad(i::text, 3, '0'), '+3598' || lpad(i::text, 8, '0'), date '1980-01-01' + i
+       FROM generate_series(1, $2::int) AS i`,
+      [namePrefix, count],
+    )
+  } finally {
+    await client.end()
+  }
+}
+
 export async function dropDatabase() {
   const client = new pg.Client(clientConfig(serverConnection()))
   await client.connect()

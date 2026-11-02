@@ -679,7 +679,8 @@ All user endpoints require Admin. `GET /api/users` returns users sorted by
 name, one page at a time:
 `?page=1&pageSize=50&search=desk`. `pageSize` is 1 to 100 (default 50), and
 `search` matches part of a username or role name, ignoring case. The response
-data holds `items`, `totalCount`, `page` and `pageSize`.
+data holds `items`, `hasNextPage`, `page` and `pageSize`. Lists do not count
+every match: `hasNextPage` says whether another page follows.
 
 ### Doctors
 
@@ -875,6 +876,9 @@ getting healthy containers restarted.
 * 429 Too Many Requests – Rate limit reached; the `Retry-After` header gives
   the number of seconds to wait
 * 500 Internal Server Error – Unexpected server error
+* 503 Service Unavailable – The API is busy, or the database did not answer
+  in time (see [Overload](#overload)); `Retry-After` gives the number of
+  seconds to wait
 
 Errors the API raises itself carry a JSON body with `isSuccess: false` and an
 `error` message, whatever the status code. A 401, and a 403 from an endpoint's
@@ -947,6 +951,23 @@ links from it. To restrict it, set `AllowedHosts` per deployment to the
 semicolon-separated host names clients use, and include the hosts health
 probes send: Kubernetes probes, for example, call the pod's own address.
 
+### Overload
+
+Each API process works on at most as many requests at once as its database
+connection pool holds: `Maximum Pool Size` in the connection string, or
+Npgsql's default of 100. It refuses the rest at once with `503 Service
+Unavailable` and `Retry-After: 2`, instead of queueing them for a connection.
+A request that still waits longer than the connection string's `Timeout` for
+a connection (Npgsql's default is 15 seconds), or whose database work times
+out, gets the same 503. The health checks are not limited. Running more API
+processes does not raise the limit the database sets: processes × pool size
+must stay under its `max_connections`.
+
+The API keeps no session state on its connections (no `SET`, temporary tables
+or advisory locks), so a connection string can add `No Reset On Close=true`.
+Npgsql then no longer sends `DISCARD ALL` each time it reuses a pooled
+connection.
+
 ---
 
 ## Testing
@@ -964,13 +985,14 @@ service tests. They also exercise the HTTP pipeline through
 | User | `ChangeRoleService`, `CreateDoctorService`, `DoctorStatusService`, `ResetPasswordService`, `UserQueryService` |
 | Audit log | `AuditLogQueryService`, `AuditLogService` |
 | Data | The `--migrate` and `--create-admin` commands |
-| API | Who may call each endpoint (one table), responses, read-only demo accounts, sign-in rate limiting, forwarded headers, the signing key check at startup and the [API contract](#api-contract) |
+| API | Who may call each endpoint (one table), responses, read-only demo accounts, sign-in rate limiting, the 503 when busy, forwarded headers, the signing key check at startup and the [API contract](#api-contract) |
 
 The service suite also covers `PatientService`, `ScheduleValidation` and
-`CurrentUserService`. The 23 PostgreSQL tests check actual migrations,
+`CurrentUserService`. The 27 PostgreSQL tests check actual migrations,
 including through the migrations connection, indexes, constraints, concurrent
-account lockout updates, two schedules made for one doctor at the same time,
-time off, breaks, moves and booking history, and `--create-admin`. They run only
+account lockout updates and the row locks they take, two schedules made for
+one doctor at the same time, time off, breaks, moves and booking history,
+`--create-admin`, and the 503 an exhausted connection pool answers. They run only
 when `HOSPITALSYSTEM_TEST_POSTGRES` holds a connection string to a PostgreSQL
 server where the tests can create temporary databases, and are reported as
 skipped otherwise, as in CI:
@@ -990,7 +1012,7 @@ API type generator.
 
 Component tests (`*.test.tsx`) render into jsdom with Testing Library and use
 the app the way a person would, by role and label: the shared buttons, table
-status and dialog, and the reception screen's doctor list, week calendar,
+status, dialog and pager, and the reception screen's doctor list, week calendar,
 appointment panel, and booking and cancel dialogs. `src/test` holds their
 setup and a helper that provides the workspace App would. Whole screens are
 covered by the end-to-end tests.
@@ -1006,6 +1028,7 @@ against the real API and a PostgreSQL database. They cover:
   doctor and time. The booking's history. Session renewal.
 - **Admin:** editing a schedule's break. Adding and removing time off,
   including over a booking. Making a new user a doctor in a new department.
+- **Patients:** paging through a long search.
 - **Phone:** "My day" and reception without sideways scrolling.
 
 `npm run e2e` starts what the tests need on ports of their own (API on 5290,
@@ -1017,8 +1040,9 @@ app on 5190), so a dev server you have running is not touched:
 - the production build of the app, with its content security policy.
 
 The database is dropped when the run ends. Each test adds the departments,
-doctors and bookings it needs through the API, under names no other test
-uses, so tests can run in parallel. The browser runs in Asia/Tokyo, so every
+doctors and bookings it needs through the API (the long patient list straight
+into the database), under names no other test uses, so tests can run in
+parallel. The browser runs in Asia/Tokyo, so every
 date and time the tests look for also shows that the app keeps to the
 clinic's zone. A test fails on any error in the browser console, which
 catches requests the content security policy blocks.

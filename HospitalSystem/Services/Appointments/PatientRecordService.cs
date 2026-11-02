@@ -37,35 +37,19 @@ public class PatientRecordService(
                 : patients.Where(p => p.Name.ToLower().Contains(nameKey));
         }
 
-        var rows = await patients
+        var page = await patients
             .OrderBy(p => p.Name)
             .ThenBy(p => p.Id)
-            .Skip((query.Page - 1) * query.PageSize)
-            .Take(query.PageSize)
-            .Select(p => new
+            .Select(p => new PatientSummaryDto
             {
-                Item = new PatientSummaryDto
-                {
-                    PatientId = p.Id,
-                    Name = p.Name,
-                    DateOfBirth = p.DateOfBirth,
-                    PhoneNumber = p.PhoneNumber
-                },
-                TotalCount = patients.Count()
+                PatientId = p.Id,
+                Name = p.Name,
+                DateOfBirth = p.DateOfBirth,
+                PhoneNumber = p.PhoneNumber
             })
-            .ToListAsync(cancellationToken);
+            .ToPageAsync(query.Page, query.PageSize, cancellationToken);
 
-        var totalCount = rows.Count > 0 ? rows[0].TotalCount
-            : query.Page == 1 ? 0
-            : await patients.CountAsync(cancellationToken);
-
-        return ServiceResult<PagedResult<PatientSummaryDto>>.Success(new PagedResult<PatientSummaryDto>
-        {
-            Items = rows.Select(r => r.Item).ToList(),
-            TotalCount = totalCount,
-            Page = query.Page,
-            PageSize = query.PageSize
-        });
+        return ServiceResult<PagedResult<PatientSummaryDto>>.Success(page);
     }
 
     public async Task<ServiceResult<PatientDetailsDto>> GetPatientAsync(

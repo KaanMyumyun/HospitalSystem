@@ -1936,9 +1936,8 @@
               "$ref": "#/components/schemas/AuditLogEntryDto"
             }
           },
-          "totalCount": {
-            "type": "integer",
-            "format": "int32"
+          "hasNextPage": {
+            "type": "boolean"
           },
           "page": {
             "type": "integer",
@@ -2751,9 +2750,8 @@
               "$ref": "#/components/schemas/PatientSummaryDto"
             }
           },
-          "totalCount": {
-            "type": "integer",
-            "format": "int32"
+          "hasNextPage": {
+            "type": "boolean"
           },
           "page": {
             "type": "integer",
@@ -2894,9 +2892,8 @@
               "$ref": "#/components/schemas/UserDisplayDto"
             }
           },
-          "totalCount": {
-            "type": "integer",
-            "format": "int32"
+          "hasNextPage": {
+            "type": "boolean"
           },
           "page": {
             "type": "integer",

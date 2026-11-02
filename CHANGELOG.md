@@ -275,6 +275,24 @@ tagged releases yet, so everything is listed under Unreleased.
   as it does the database, and binds their ports to `127.0.0.1` only. The
   database password can come from `.env` (`POSTGRES_PASSWORD`); without it,
   compose keeps the local-only `strongpassword`.
+- The patient list, the audit log and the user list no longer count every
+  match for every page. They read one row more than a page holds and answer
+  `hasNextPage` instead of `totalCount`; the pager shows "1-50" while another
+  page follows and "51-73 of 73" on the last one. On the load test's data
+  (25,000 patients, 165,000 audit entries) the audit log's first page takes
+  4 ms instead of 19, an audit search 3 ms instead of 67, and the patient
+  list 4 ms instead of 6.
+- The audit log and booking history show each entry's actor as stored,
+  without looking up a user for older entries. Migration
+  `NameRemainingAuditLogActors` names the entries that still held a user id.
+- Sign-in checks the password before it locks the user's row, so it holds a
+  database connection and the lock only while it updates the failure count.
+  The lock that sign-in, password changes and resets take
+  (`FOR NO KEY UPDATE`) no longer holds up bookings and other rows that
+  refer to the user.
+- EF Core no longer logs every SQL command:
+  `Microsoft.EntityFrameworkCore.Database.Command` logs at `Warning` in
+  `appsettings.json`.
 
 ### Removed
 
@@ -361,6 +379,12 @@ tagged releases yet, so everything is listed under Unreleased.
   the date new schedules use. Migration `RepairScheduleRows` moves existing
   schedules back, and gives schedules from before slot lengths existed the
   30-minute slots the reception calendar showed for them.
+- An overloaded API no longer queues every request for a database
+  connection, then fails it with 500 after 15 seconds. Each API process
+  works on at most as many requests at once as its connection pool holds and
+  refuses the rest at once with 503 and `Retry-After`. A request that waits
+  longer than the connection string's `Timeout` for a connection, or whose
+  database work times out, also gets 503.
 
 ### Security
 

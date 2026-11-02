@@ -32,34 +32,18 @@ public class UserQueryService(
         }
 
         var now = clock.GetUtcNow().UtcDateTime;
-        var rows = await users
+        var page = await users
             .OrderBy(u => u.Name)
-            .Skip((query.Page - 1) * query.PageSize)
-            .Take(query.PageSize)
-            .Select(u => new
+            .Select(u => new UserDisplayDto
             {
-                Item = new UserDisplayDto
-                {
-                    UserId = u.Id,
-                    UserName = u.Name,
-                    Role = u.Role,
-                    LockedUntil = u.LockedUntil > now ? u.LockedUntil : null
-                },
-                TotalCount = users.Count()
+                UserId = u.Id,
+                UserName = u.Name,
+                Role = u.Role,
+                LockedUntil = u.LockedUntil > now ? u.LockedUntil : null
             })
-            .ToListAsync(cancellationToken);
+            .ToPageAsync(query.Page, query.PageSize, cancellationToken);
 
-        var totalCount = rows.Count > 0 ? rows[0].TotalCount
-            : query.Page == 1 ? 0
-            : await users.CountAsync(cancellationToken);
-
-        return ServiceResult<PagedResult<UserDisplayDto>>.Success(new PagedResult<UserDisplayDto>
-        {
-            Items = rows.Select(r => r.Item).ToList(),
-            TotalCount = totalCount,
-            Page = query.Page,
-            PageSize = query.PageSize
-        });
+        return ServiceResult<PagedResult<UserDisplayDto>>.Success(page);
     }
 
     public async Task<ServiceResult<List<DoctorDisplayDto>>> ListDoctorsAsync(CancellationToken cancellationToken = default)

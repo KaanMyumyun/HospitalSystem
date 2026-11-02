@@ -73,6 +73,7 @@ app.UseRouting();
 app.UseCors("ReactPolicy");
 app.UseRateLimiter();
 app.UseHttpMetrics();
+app.UseConcurrencyLimit();
 app.UseAuthentication();
 app.UseAuthorization();
 

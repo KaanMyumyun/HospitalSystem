@@ -25,7 +25,7 @@ public class AuditLogQueryServiceTests
         db.AuditLogs.AddRange(
             Entry(1, "CreateUser", "Created user bob", 7, "alice", new DateTime(2026, 10, 1, 9, 0, 0, DateTimeKind.Utc)),
             Entry(2, "SignInFailed", "Failed sign-in with an unknown username", null, "Unknown", new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc)),
-            Entry(3, "ResetPassword", "Password reset for user bob", null, "7", new DateTime(2026, 10, 3, 9, 0, 0, DateTimeKind.Utc)));
+            Entry(3, "ResetPassword", "Password reset for user bob", 7, "alice", new DateTime(2026, 10, 3, 9, 0, 0, DateTimeKind.Utc)));
         await db.SaveChangesAsync();
     }
 
@@ -45,7 +45,22 @@ public class AuditLogQueryServiceTests
         Assert.NotNull(result.Data);
         Assert.Equal([3, 2, 1], result.Data.Items.Select(e => e.Id));
         Assert.Equal(["alice", "Unknown", "alice"], result.Data.Items.Select(e => e.Actor));
-        Assert.Equal(3, result.Data.TotalCount);
+        Assert.False(result.Data.HasNextPage);
+    }
+
+    [Theory]
+    [InlineData(1, new[] { 3, 2 }, true)]
+    [InlineData(2, new[] { 1 }, false)]
+    public async Task List_Pages_AndSaysWhetherAnotherPageFollows(int page, int[] expected, bool hasNextPage)
+    {
+        using var db = CreateDbContext();
+        await SeedAsync(db);
+
+        var result = await CreateService(db).ListAsync(new AuditLogQueryDto { Page = page, PageSize = 2 });
+
+        Assert.NotNull(result.Data);
+        Assert.Equal(expected, result.Data.Items.Select(e => e.Id));
+        Assert.Equal(hasNextPage, result.Data.HasNextPage);
     }
 
     [Fact]
