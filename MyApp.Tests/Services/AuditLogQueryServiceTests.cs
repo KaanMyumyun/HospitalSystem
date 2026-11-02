@@ -45,7 +45,22 @@ public class AuditLogQueryServiceTests
         Assert.NotNull(result.Data);
         Assert.Equal([3, 2, 1], result.Data.Items.Select(e => e.Id));
         Assert.Equal(["alice", "Unknown", "alice"], result.Data.Items.Select(e => e.Actor));
-        Assert.Equal(3, result.Data.TotalCount);
+        Assert.False(result.Data.HasNextPage);
+    }
+
+    [Theory]
+    [InlineData(1, new[] { 3, 2 }, true)]
+    [InlineData(2, new[] { 1 }, false)]
+    public async Task List_Pages_AndSaysWhetherAnotherPageFollows(int page, int[] expected, bool hasNextPage)
+    {
+        using var db = CreateDbContext();
+        await SeedAsync(db);
+
+        var result = await CreateService(db).ListAsync(new AuditLogQueryDto { Page = page, PageSize = 2 });
+
+        Assert.NotNull(result.Data);
+        Assert.Equal(expected, result.Data.Items.Select(e => e.Id));
+        Assert.Equal(hasNextPage, result.Data.HasNextPage);
     }
 
     [Fact]

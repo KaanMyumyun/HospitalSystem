@@ -48,7 +48,7 @@ export type AuditLogEntryDto = {
 
 export type AuditLogEntryDtoPagedResult = {
   items: AuditLogEntryDto[]
-  totalCount: number
+  hasNextPage: boolean
   page: number
   pageSize: number
 }
@@ -291,7 +291,7 @@ export type PatientSummaryDto = {
 
 export type PatientSummaryDtoPagedResult = {
   items: PatientSummaryDto[]
-  totalCount: number
+  hasNextPage: boolean
   page: number
   pageSize: number
 }
@@ -333,7 +333,7 @@ export type UserDisplayDto = {
 
 export type UserDisplayDtoPagedResult = {
   items: UserDisplayDto[]
-  totalCount: number
+  hasNextPage: boolean
   page: number
   pageSize: number
 }

@@ -1,5 +1,4 @@
 using HospitalSystem.Interfaces;
-using Microsoft.EntityFrameworkCore;
 
 namespace HospitalSystem.Services;
 
@@ -24,42 +23,26 @@ public class AuditLogQueryService(
         if (!string.IsNullOrEmpty(search))
             entries = entries.Where(a => a.Action.ToLower().Contains(search) || a.Details.ToLower().Contains(search));
 
-        var rows = await entries
+        var page = await entries
             .OrderByDescending(a => a.CreatedAt)
             .ThenByDescending(a => a.Id)
-            .Skip((query.Page - 1) * query.PageSize)
-            .Take(query.PageSize)
-            .Select(a => new
+            .Select(a => new AuditLogEntryDto
             {
-                Item = new AuditLogEntryDto
-                {
-                    Id = a.Id,
-                    CreatedAt = a.CreatedAt,
-                    Action = a.Action,
-                    EntityType = a.EntityType,
-                    EntityId = a.EntityId,
-                    Details = a.Details,
-                    Actor = a.ActorUserId != null
-                        ? a.ActorName
-                        : context.Users
-                            .Where(u => u.Id.ToString() == a.ActorName)
-                            .Select(u => u.Name)
-                            .FirstOrDefault() ?? a.ActorName
-                },
-                TotalCount = entries.Count()
+                Id = a.Id,
+                CreatedAt = a.CreatedAt,
+                Action = a.Action,
+                EntityType = a.EntityType,
+                EntityId = a.EntityId,
+                Details = a.Details,
+                Actor = a.ActorUserId != null
+                    ? a.ActorName
+                    : context.Users
+                        .Where(u => u.Id.ToString() == a.ActorName)
+                        .Select(u => u.Name)
+                        .FirstOrDefault() ?? a.ActorName
             })
-            .ToListAsync(cancellationToken);
+            .ToPageAsync(query.Page, query.PageSize, cancellationToken);
 
-        var totalCount = rows.Count > 0 ? rows[0].TotalCount
-            : query.Page == 1 ? 0
-            : await entries.CountAsync(cancellationToken);
-
-        return ServiceResult<PagedResult<AuditLogEntryDto>>.Success(new PagedResult<AuditLogEntryDto>
-        {
-            Items = rows.Select(r => r.Item).ToList(),
-            TotalCount = totalCount,
-            Page = query.Page,
-            PageSize = query.PageSize
-        });
+        return ServiceResult<PagedResult<AuditLogEntryDto>>.Success(page);
     }
 }
