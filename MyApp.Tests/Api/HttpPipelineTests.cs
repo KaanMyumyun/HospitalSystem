@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Moq;
+using Npgsql;
 
 namespace HospitalSystem.Tests;
 
@@ -337,5 +338,55 @@ public class HttpPipelineTests
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains("Something went wrong", body);
         Assert.DoesNotContain("secret detail", body);
+    }
+
+    [Fact]
+    public async Task ADatabaseTimeout_GetsA503WithRetryAfter()
+    {
+        var failing = new Mock<IDepartmentQueryService>();
+        failing.Setup(s => s.ListDepartmentsAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException(
+            "An exception has been raised that is likely due to a transient failure.",
+            new NpgsqlException("The connection pool has been exhausted", new TimeoutException())));
+        await using var started = await StartAsync(services: services =>
+            services.AddScoped(_ => failing.Object));
+        var admin = Authorized(started.App, await TokenAsync(started.App.CreateClient(), "admin"));
+
+        var response = await admin.GetAsync("/api/departments");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(TimeSpan.FromSeconds(2), response.Headers.RetryAfter?.Delta);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("The server is busy", body);
+        Assert.DoesNotContain("pool", body);
+    }
+
+    [Fact]
+    public async Task RequestsBeyondTheConnectionPoolSize_AreRefusedAtOnce()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var slow = new Mock<IDepartmentQueryService>();
+        slow.Setup(s => s.ListDepartmentsAsync(It.IsAny<CancellationToken>())).Returns(async () =>
+        {
+            entered.TrySetResult();
+            await release.Task;
+            return ServiceResult<List<ViewDepartmentDto>>.Success([]);
+        });
+        await using var started = await StartAsync(
+            new Dictionary<string, string?> { ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Maximum Pool Size=1" },
+            services => services.AddScoped(_ => slow.Object));
+        var admin = Authorized(started.App, await TokenAsync(started.App.CreateClient(), "admin"));
+
+        var first = admin.GetAsync("/api/departments");
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var refused = await admin.GetAsync("/api/departments");
+        var health = await started.App.CreateClient().GetAsync("/health");
+        release.TrySetResult();
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, refused.StatusCode);
+        Assert.Equal(TimeSpan.FromSeconds(2), refused.Headers.RetryAfter?.Delta);
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await first.WaitAsync(TimeSpan.FromSeconds(10))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/departments")).StatusCode);
     }
 }

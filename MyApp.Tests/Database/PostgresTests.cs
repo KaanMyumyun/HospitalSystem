@@ -13,6 +13,8 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Moq;
 using Npgsql;
+using System.Net;
+using System.Net.Http.Json;
 
 namespace HospitalSystem.Tests;
 
@@ -484,6 +486,34 @@ public class PostgresTests : AuthTestBase
         var entries = await db.AuditLogs.OrderBy(a => a.Id).ToListAsync();
         Assert.Equal([aliceId, null, null], entries.Select(e => e.ActorUserId));
         Assert.Equal(["alice", "Unknown", "999"], entries.Select(e => e.ActorName));
+    }
+
+    [PostgresFact]
+    public async Task AnExhaustedConnectionPool_AnswersBusyWithinTheTimeout()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var migrated = await database.CreateMigratedContextAsync();
+        var connectionString = new NpgsqlConnectionStringBuilder(database.ConnectionString)
+        {
+            Pooling = true,
+            MaxPoolSize = 1,
+            Timeout = 1
+        }.ConnectionString;
+        await using var app = TestApp.Create(settings: new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:DefaultConnection"] = connectionString
+        });
+        var client = app.CreateClient();
+        await using var held = new NpgsqlConnection(connectionString);
+        await held.OpenAsync();
+
+        var started = DateTime.UtcNow;
+        var response = await client.PostAsJsonAsync("/api/auth/login", new { name = "anyone", password = "whatever" });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(5));
+        Assert.Equal(TimeSpan.FromSeconds(2), response.Headers.RetryAfter?.Delta);
+        Assert.Contains("The server is busy", await response.Content.ReadAsStringAsync());
     }
 
     [PostgresFact]

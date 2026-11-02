@@ -1,3 +1,4 @@
+using HospitalSystem.Services;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -30,6 +31,16 @@ public static class ErrorResponses
                     return;
                 }
 
+                if (IsTransientDatabaseFailure(exception))
+                {
+                    logger.LogWarning(exception,
+                        "Database unavailable or too slow processing {Method} {Path}",
+                        context.Request.Method, context.Request.Path);
+
+                    await BusyResponse.WriteAsync(context);
+                    return;
+                }
+
                 if (exception is not null)
                 {
                     logger.LogError(exception,
@@ -47,5 +58,16 @@ public static class ErrorResponses
         });
 
         return app;
+    }
+
+    private static bool IsTransientDatabaseFailure(Exception? exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is NpgsqlException { IsTransient: true })
+                return true;
+        }
+
+        return false;
     }
 }
