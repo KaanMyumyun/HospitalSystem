@@ -27,36 +27,49 @@ public class LoginService(
         if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Password))
             return LoginResultDto.Fail("Invalid credentials");
 
-        await using var transaction = context.Database.IsNpgsql()
-            ? await context.Database.BeginTransactionAsync(cancellationToken)
-            : null;
-        var result = await LoginWithLockedUserAsync(dto, cancellationToken);
-        if (transaction is not null)
-            await transaction.CommitAsync(cancellationToken);
-        return result;
-    }
-
-    private async Task<LoginResultDto> LoginWithLockedUserAsync(LoginDto dto, CancellationToken cancellationToken)
-    {
         var nameKey = dto.Name.Trim().ToLowerInvariant();
-        var user = await SignInLockout.FindByNameForUpdateAsync(context, nameKey, cancellationToken);
+        var found = await context.Users
+            .AsNoTracking()
+            .SingleOrDefaultAsync(u => u.Name.ToLower() == nameKey, cancellationToken);
 
-        if (user == null)
+        if (found == null)
         {
             hasher.VerifyHashedPassword(new UserEntity(), DummyPasswordHash, dto.Password);
             return await RefuseAsync(null, "Failed sign-in with an unknown username", cancellationToken);
         }
 
         var now = clock.GetUtcNow().UtcDateTime;
-        if (SignInLockout.IsLocked(user, now))
+        if (SignInLockout.IsLocked(found, now))
         {
             hasher.VerifyHashedPassword(new UserEntity(), DummyPasswordHash, dto.Password);
-            return await RefuseAsync(user, $"Sign-in refused for user {user.Name}: account locked", cancellationToken);
+            return await RefuseAsync(found, $"Sign-in refused for user {found.Name}: account locked", cancellationToken);
         }
 
-        var result = hasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password);
+        var verification = hasher.VerifyHashedPassword(found, found.PasswordHash, dto.Password);
 
-        if (result == PasswordVerificationResult.Failed)
+        await using var transaction = context.Database.IsNpgsql()
+            ? await context.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+        var result = await LoginWithLockedUserAsync(found, verification, dto.Password, now, cancellationToken);
+        if (transaction is not null)
+            await transaction.CommitAsync(cancellationToken);
+        return result;
+    }
+
+    private async Task<LoginResultDto> LoginWithLockedUserAsync(
+        UserEntity found, PasswordVerificationResult verification, string password, DateTime now, CancellationToken cancellationToken)
+    {
+        var user = await SignInLockout.FindByIdForUpdateAsync(context, found.Id, cancellationToken);
+        if (user == null)
+            return await RefuseAsync(null, "Failed sign-in with an unknown username", cancellationToken);
+
+        if (SignInLockout.IsLocked(user, now))
+            return await RefuseAsync(user, $"Sign-in refused for user {user.Name}: account locked", cancellationToken);
+
+        if (user.PasswordHash != found.PasswordHash)
+            verification = hasher.VerifyHashedPassword(user, user.PasswordHash, password);
+
+        if (verification == PasswordVerificationResult.Failed)
         {
             if (!SignInLockout.RecordFailure(user, now))
                 return await RefuseAsync(user, $"Failed sign-in for user {user.Name}: wrong password", cancellationToken);
