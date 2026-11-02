@@ -34,12 +34,7 @@ public class AuditLogQueryService(
                 EntityType = a.EntityType,
                 EntityId = a.EntityId,
                 Details = a.Details,
-                Actor = a.ActorUserId != null
-                    ? a.ActorName
-                    : context.Users
-                        .Where(u => u.Id.ToString() == a.ActorName)
-                        .Select(u => u.Name)
-                        .FirstOrDefault() ?? a.ActorName
+                Actor = a.ActorName
             })
             .ToPageAsync(query.Page, query.PageSize, cancellationToken);
 

@@ -25,7 +25,7 @@ public class AuditLogQueryServiceTests
         db.AuditLogs.AddRange(
             Entry(1, "CreateUser", "Created user bob", 7, "alice", new DateTime(2026, 10, 1, 9, 0, 0, DateTimeKind.Utc)),
             Entry(2, "SignInFailed", "Failed sign-in with an unknown username", null, "Unknown", new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc)),
-            Entry(3, "ResetPassword", "Password reset for user bob", null, "7", new DateTime(2026, 10, 3, 9, 0, 0, DateTimeKind.Utc)));
+            Entry(3, "ResetPassword", "Password reset for user bob", 7, "alice", new DateTime(2026, 10, 3, 9, 0, 0, DateTimeKind.Utc)));
         await db.SaveChangesAsync();
     }
 

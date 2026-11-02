@@ -63,9 +63,7 @@ public class AppointmentQueryService(
                     CreatedAt = l.CreatedAt,
                     Action = l.Action,
                     Details = l.Details,
-                    Actor = l.ActorUserId != null
-                        ? l.ActorName
-                        : context.Users.Where(u => u.Id.ToString() == l.ActorName).Select(u => u.Name).FirstOrDefault() ?? l.ActorName
+                    Actor = l.ActorName
                 })
                 .ToList())
             .FirstOrDefaultAsync(cancellationToken);

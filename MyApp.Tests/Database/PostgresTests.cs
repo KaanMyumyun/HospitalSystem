@@ -486,6 +486,30 @@ public class PostgresTests : AuthTestBase
     }
 
     [PostgresFact]
+    public async Task NameRemainingAuditLogActors_NamesTheEntriesThatStillHoldAnId()
+    {
+        await using var database = await PostgresDatabase.CreateAsync();
+        await using var db = database.CreateContext();
+        await db.GetService<IMigrator>().MigrateAsync("IndexPatientAndAuditLogSearch");
+        await database.ExecuteAsync("""
+            INSERT INTO "Users" ("Name", "PasswordHash", "Role", "SecurityStamp") VALUES ('alice', 'x', 'FrontDesk', 's');
+            INSERT INTO "AuditLogs" ("Action", "EntityType", "EntityId", "Details", "ActorName", "CreatedAt")
+            SELECT 'CreateAppointment', 'Appointment', 1, 'Created appointment for doctor 1', "Id"::text, now() FROM "Users";
+            INSERT INTO "AuditLogs" ("Action", "EntityType", "EntityId", "Details", "ActorName", "CreatedAt") VALUES
+                ('SignInFailed', 'User', 0, 'Failed sign-in with an unknown username', 'Unknown', now()),
+                ('CreateUser', 'User', 1, 'Created admin root', 'Command line', now()),
+                ('ResetPassword', 'User', 1, 'Password reset for user bob', '999', now());
+            """);
+
+        await db.Database.MigrateAsync();
+
+        var aliceId = await db.Users.Select(u => u.Id).SingleAsync();
+        var entries = await db.AuditLogs.OrderBy(a => a.Id).ToListAsync();
+        Assert.Equal([aliceId, null, null, null], entries.Select(e => e.ActorUserId));
+        Assert.Equal(["alice", "Unknown", "Command line", "999"], entries.Select(e => e.ActorName));
+    }
+
+    [PostgresFact]
     public async Task AnExhaustedConnectionPool_AnswersBusyWithinTheTimeout()
     {
         await using var database = await PostgresDatabase.CreateAsync();

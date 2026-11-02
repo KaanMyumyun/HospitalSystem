@@ -178,7 +178,7 @@ public class AppointmentQueryServiceTests : AppointmentTestBase
             Entry(2, "CreateAppointment", "Appointment", 1, 10, 5, "Front Desk Admin"),
             Entry(3, "CancelAppointment", "Appointment", 2, 12, 5, "Front Desk Admin"),
             Entry(4, "ChangeSchedule", "Calendar", 1, 13, 99, "admin"),
-            Entry(5, "CancelAppointment", "Appointment", 1, 14, null, "5"));
+            Entry(5, "CancelAppointment", "Appointment", 1, 14, 5, "Front Desk Admin"));
         await db.SaveChangesAsync();
 
         var result = await CreateService(db).GetHistoryAsync(1);
