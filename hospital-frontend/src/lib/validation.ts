@@ -34,3 +34,7 @@ export function validateAppointmentInput(
 
   return null
 }
+
+export function cleanPhone(value: string) {
+  return value.replace(/[^\d\s()+.-]/g, '')
+}

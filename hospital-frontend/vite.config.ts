@@ -20,6 +20,7 @@ function contentSecurityPolicy(apiUrl: string | undefined): Plugin {
     "script-src 'self'",
     "style-src 'self'",
     "img-src 'self'",
+    "font-src 'self'",
     `connect-src 'self'${apiOrigin ? ` ${apiOrigin}` : ''}`,
     "object-src 'none'",
     "base-uri 'self'",
@@ -58,6 +59,6 @@ export default defineConfig(({ command, mode }) => {
 
   return {
     plugins: [react(), notFoundPage(), contentSecurityPolicy(apiUrl)],
-    build: { sourcemap: true },
+    build: { sourcemap: true, assetsInlineLimit: 0 },
   }
 })

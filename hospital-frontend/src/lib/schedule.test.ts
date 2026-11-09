@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AppointmentDto, DoctorDto, ScheduleDto } from '../api'
+import type { AppointmentDto, DoctorDto, ScheduleDto } from '../api/client'
 import { clinicDate } from './clinicTime'
 import {
   buildWeekSlots,
@@ -13,6 +13,7 @@ import {
   isUpcoming,
   shownDays,
   weekDays,
+  weekOffsetOf,
   weekRange,
 } from './schedule'
 
@@ -231,6 +232,25 @@ describe('buildWeekSlots', () => {
 
     grid.forEach((row) => row.forEach((slot) => expect(slot.status).toBe('past')))
   })
+
+  it('keeps the break showing on past days', () => {
+    const farPastWeekOffset = -520
+    const schedule: ScheduleDto = {
+      scheduleId: 1,
+      doctorId: 42,
+      startTime: '2020-01-01T09:00:00Z',
+      endTime: '2020-01-01T12:00:00Z',
+      slotDurationMin: 60,
+      workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      breakStartMinute: 600,
+      breakEndMinute: 660,
+      timeOff: [],
+    }
+
+    const grid = buildWeekSlots(schedule, 42, [], farPastWeekOffset)
+
+    expect(grid.map((row) => row[0]!.status)).toEqual(['past', 'break', 'past'])
+  })
 })
 
 describe('breaks and time off', () => {
@@ -414,5 +434,15 @@ describe('defaultDoctor', () => {
   it('falls back to any active doctor, then to none', () => {
     expect(defaultDoctor([doctor(3)], [])?.doctorId).toBe(3)
     expect(defaultDoctor([doctor(4, false)], [])).toBeNull()
+  })
+})
+
+describe('weekOffsetOf', () => {
+  it('counts whole clinic weeks from this one', () => {
+    const now = new Date('2026-11-11T10:00:00Z')
+    expect(weekOffsetOf(new Date('2026-11-09T08:00:00Z'), now)).toBe(0)
+    expect(weekOffsetOf(new Date('2026-11-15T20:00:00Z'), now)).toBe(0)
+    expect(weekOffsetOf(new Date('2026-11-16T08:00:00Z'), now)).toBe(1)
+    expect(weekOffsetOf(new Date('2026-10-28T08:00:00Z'), now)).toBe(-2)
   })
 })

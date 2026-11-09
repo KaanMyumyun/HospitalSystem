@@ -1,89 +1,98 @@
 import { useState } from 'react'
-import type { ActionOutcome } from '../types'
-import { Modal } from './ui'
+import { changeOwnPassword } from '../api/client'
+import { useWorkspace } from '../app/workspaceContext'
+import { Button } from '../ui/Button'
+import { Dialog } from '../ui/Dialog'
+import { Field, FormError } from '../ui/Field'
+import { PasswordInput } from './PasswordInput'
 
-export function ChangePasswordDialog({
-  loading,
-  onChangePassword,
-  onClose,
-}: {
-  loading: boolean
-  onChangePassword: (currentPassword: string, newPassword: string) => Promise<ActionOutcome>
-  onClose: () => void
-}) {
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [repeatPassword, setRepeatPassword] = useState('')
+export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
+  const { run, busy } = useWorkspace()
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [repeat, setRepeat] = useState('')
+  const [tried, setTried] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const mismatch = repeatPassword.length > 0 && repeatPassword !== newPassword
-  const canSubmit = currentPassword.length > 0 && newPassword.length >= 8 && newPassword === repeatPassword && !loading
+  const tooShort = next.length < 8
+  const sameAsCurrent = next.length > 0 && next === current
+  const mismatch = repeat !== next
 
   const submit = async () => {
-    const outcome = await onChangePassword(currentPassword, newPassword)
+    setTried(true)
+    if (!current || tooShort || sameAsCurrent || mismatch) return
+    const outcome = await run(() => changeOwnPassword(current, next), 'Password changed', { quiet: true })
     if (outcome.ok) onClose()
     else if (outcome.error) setError(outcome.error)
   }
 
+  const clear = () => setError(null)
+
   return (
-    <Modal title="Change password" onClose={onClose}>
-      <form
-        className="form-grid"
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (canSubmit) void submit()
-        }}
-      >
-        <label>
-          Current password
-          <input
-            autoComplete="current-password"
-            type="password"
-            value={currentPassword}
-            onChange={(event) => {
-              setError(null)
-              setCurrentPassword(event.target.value)
-            }}
-          />
-        </label>
-        <label>
-          New password
-          <input
-            autoComplete="new-password"
-            minLength={8}
-            type="password"
-            value={newPassword}
-            onChange={(event) => {
-              setError(null)
-              setNewPassword(event.target.value)
-            }}
-          />
-        </label>
-        <label>
-          Repeat the new password
-          <input
-            autoComplete="new-password"
-            type="password"
-            value={repeatPassword}
-            onChange={(event) => {
-              setError(null)
-              setRepeatPassword(event.target.value)
-            }}
-          />
-        </label>
-        {newPassword.length > 0 && newPassword.length < 8 && <small>Use at least 8 characters.</small>}
-        {mismatch && <small>The two new passwords do not match.</small>}
-        {error && <div className="form-error">{error}</div>}
-        <p className="subtle">Your other signed-in sessions will be signed out.</p>
-        <div className="modal-actions">
-          <button className="secondary-button" type="button" onClick={onClose}>
-            Close
-          </button>
-          <button className="primary-button" disabled={!canSubmit} type="submit">
+    <Dialog
+      description="Your other signed-in sessions are signed out when it changes."
+      dismissOnBackdrop={false}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button busy={busy} type="submit" variant="primary">
             Change password
-          </button>
-        </div>
-      </form>
-    </Modal>
+          </Button>
+        </>
+      }
+      size="sm"
+      title="Change your password"
+      onClose={onClose}
+      onSubmit={() => void submit()}
+    >
+      <Field error={tried && !current ? 'Enter your current password' : null} label="Current password">
+        {(control) => (
+          <PasswordInput
+            {...control}
+            autoComplete="current-password"
+            value={current}
+            onChange={(value) => {
+              clear()
+              setCurrent(value)
+            }}
+          />
+        )}
+      </Field>
+      <Field
+        error={
+          tried && tooShort ? 'Use at least 8 characters' : tried && sameAsCurrent ? 'Choose a password you are not using now' : null
+        }
+        hint="At least 8 characters."
+        label="New password"
+      >
+        {(control) => (
+          <PasswordInput
+            {...control}
+            autoComplete="new-password"
+            value={next}
+            onChange={(value) => {
+              clear()
+              setNext(value)
+            }}
+          />
+        )}
+      </Field>
+      <Field error={tried && mismatch ? 'The two new passwords differ' : null} label="Repeat the new password">
+        {(control) => (
+          <PasswordInput
+            {...control}
+            autoComplete="new-password"
+            value={repeat}
+            onChange={(value) => {
+              clear()
+              setRepeat(value)
+            }}
+          />
+        )}
+      </Field>
+      {error && <FormError>{error}</FormError>}
+    </Dialog>
   )
 }
