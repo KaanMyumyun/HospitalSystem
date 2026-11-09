@@ -293,9 +293,20 @@ tagged releases yet, so everything is listed under Unreleased.
 - EF Core no longer logs every SQL command:
   `Microsoft.EntityFrameworkCore.Database.Command` logs at `Warning` in
   `appsettings.json`.
+- The frontend is redesigned: a new look (paper and ink with a green accent,
+  bundled fonts that cover Cyrillic, light and dark themes) and reworked
+  screens. Reception is a timetable with patient names, breaks and time off,
+  today's column and the current time, and booking finds patients already on
+  file as you type. There is a command palette (Ctrl K), keyboard navigation
+  in the timetable, a week strip on the doctor's day, schedule cards with a
+  side-sheet editor that checks hours, slot length, days and the break before
+  saving, and layouts for phones. Screens say when the API cannot be reached.
+  The folder, build, `Dockerfile` and deployment are unchanged.
 
 ### Removed
 
+- The admin screen's "Recent activity" list, which only showed this
+  browser's own changes; the audit log covers it.
 - Three migrations that did nothing. A database that applied them keeps their
   history rows, which are ignored.
 

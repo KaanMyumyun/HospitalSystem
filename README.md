@@ -262,18 +262,19 @@ The system is divided into two independent layers:
 │   ├── public/
 │   ├── scripts/                    # generate-api-types.mjs (+ test)
 │   ├── src/
-│   │   ├── components/             # Shared UI (Sidebar, TopBar, dialogs, ui)
-│   │   ├── hooks/                  # Session, data loading, actions, shared screen state
-│   │   ├── screens/                # LoginScreen, ReceptionDashboard/, AdminDashboard/, ...
-│   │   ├── lib/                    # format, schedule, search, validation (+ tests)
+│   │   ├── api/                    # API client and session storage
+│   │   ├── app/                    # Session, routing, workspace (data, actions, refresh)
+│   │   ├── components/             # Dialogs shared across screens
+│   │   ├── lib/                    # Clinic time, dates, names, schedule slots, validation (+ tests)
+│   │   ├── screens/                # signin/, reception/, patients/, myday/, admin/, misc/
+│   │   ├── shell/                  # Sidebar, command palette; loads each screen when first shown
+│   │   ├── styles/                 # Design tokens (light and dark) and base styles
 │   │   ├── test/                   # Setup and helpers for the component tests
-│   │   ├── App.tsx                 # Routing; loads each role's screens when first shown
-│   │   ├── api.ts                  # API client and session storage
+│   │   ├── ui/                     # Buttons, fields, dialogs, toasts, icons
 │   │   ├── api-schema.ts           # Generated from openapi.json; do not edit
+│   │   ├── App.tsx
 │   │   ├── types.ts
-│   │   ├── main.tsx
-│   │   ├── App.css
-│   │   └── index.css
+│   │   └── main.tsx
 │   ├── Dockerfile
 │   ├── nginx.conf
 │   ├── index.html
@@ -476,7 +477,7 @@ These migrations need attention on a database that already has data:
 
 * `AddScheduleWorkingDays` gives every existing schedule Monday to Friday,
   and keeps that as the column's default, so an older image can still create
-  schedules. Change the days in the Schedules tab afterwards if a doctor
+  schedules. Change the days on the Schedules screen afterwards if a doctor
   works others.
 
 * `OneSchedulePerDoctor` lets a doctor have only one schedule. It stops with
@@ -527,7 +528,7 @@ http://localhost:5272/swagger
 
 A new database has no users, and only an Admin can create users through the
 API. Create the first admin with `--create-admin`, after the schema exists. It
-asks for the password twice without showing it, and applies the Users tab's
+asks for the password twice without showing it, and applies the Users screen's
 rules: a username that starts with a letter, a password of at least 8
 characters.
 
@@ -557,7 +558,7 @@ Log in as `admin` with that password. New users created from the app start as
 
 ### 6. Demo accounts (optional)
 
-The **Demo Admin** and **Demo Reception** buttons on the sign-in page call
+The **Reception** and **Administration** demo buttons on the sign-in page call
 `POST /api/auth/demo-login`, which signs in a read-only demo account without a
 password. Demo login is off by default. Turn it on only for a deployment whose
 data is fake:
@@ -618,8 +619,8 @@ a build argument, and fails to build without one.
 * Usernames are case-insensitive: `Admin` and `admin` sign in to the same
   account, and a new user cannot take a name that differs from an existing one
   only in case
-* Everyone except demo accounts can change their own password from the top
-  bar
+* Everyone except demo accounts can change their own password from the
+  sidebar
 * A token lasts an hour. While someone keeps using the app, the frontend
   swaps it for a new one (`POST /api/auth/refresh`) once it is ten minutes
   old, so a session in use carries on for up to 12 hours after signing in. A
@@ -760,7 +761,7 @@ is checked as a booking is, and the old slot is freed in the same save, so
 nobody can take the new slot in between. Only a scheduled appointment that has
 not started can be moved; it keeps its id, its patient and its history, and
 the move is recorded in the audit log. In the reception screen, Move
-Appointment lets the desk pick an open slot of any doctor or week.
+lets the desk pick an open slot of any doctor or week.
 
 `history` lists the appointment's audit log entries, oldest first, each with
 `createdAt`, `action`, `details` and `actor`. Both are for the front desk
@@ -1006,30 +1007,36 @@ The Appointments, Auth, Department and User tests share seed data through
 
 The frontend's tests run with Vitest (`npm test`). Unit tests (`*.test.ts`,
 in `hospital-frontend/src` and `hospital-frontend/scripts`) run in Node and
-cover schedule slots and working days, formatting, search, form validation,
-time handling, HTTP error messages, the API client's booking errors and the
-API type generator.
+cover schedule slots and working days, clinic dates and times, names, phone
+numbers, search, form validation, HTTP error messages, the API client's
+booking errors and the API type generator.
 
 Component tests (`*.test.tsx`) render into jsdom with Testing Library and use
-the app the way a person would, by role and label: the shared buttons, table
-status, dialog and pager, and the reception screen's doctor list, week calendar,
-appointment panel, and booking and cancel dialogs. `src/test` holds their
-setup and a helper that provides the workspace App would. Whole screens are
-covered by the end-to-end tests.
+the app the way a person would, by role and label: the form controls, dialog
+and pager, the reception timetable and its keyboard navigation, the booking
+dialog's patient lookup, the appointment pane and the cancel dialog.
+`src/test` holds their setup and a helper that provides the workspace the app
+would. Whole screens are covered by the end-to-end tests.
 
 ### End-to-end tests
 
 `hospital-frontend/e2e` holds Playwright tests that drive the app in Chromium
 against the real API and a PostgreSQL database. They cover:
 
-- **Sign-in:** a wrong password, then signing in and out.
+- **Sign-in:** missing fields, a wrong password, then signing in and out.
+  Each role sees only its own screens.
 - **Reception:** the week in clinic time, with the break and a day away.
-  Booking an open slot, then cancelling it. Moving a booking to another
-  doctor and time. The booking's history. Session renewal.
-- **Admin:** editing a schedule's break. Adding and removing time off,
-  including over a booking. Making a new user a doctor in a new department.
-- **Patients:** paging through a long search.
-- **Phone:** "My day" and reception without sideways scrolling.
+  Booking an open slot for a patient found on file, then cancelling it.
+  Moving a booking to another doctor and time. The booking's history.
+  Moving between slots with the keyboard. Session renewal.
+- **Admin:** editing a schedule's break, and the slot length and day checks.
+  Adding and removing time off, including over a booking. Making a new user a
+  doctor in a new department. Closing a department.
+- **Patients:** paging through a long search. Finding a patient from the
+  command palette, correcting their phone number, and opening their booking
+  in reception.
+- **Phone:** "My day" and reception without sideways scrolling, and the menu
+  drawer.
 
 `npm run e2e` starts what the tests need on ports of their own (API on 5290,
 app on 5190), so a dev server you have running is not touched:
@@ -1069,8 +1076,8 @@ tests: they need a database server and the API.
 
 `hospital-frontend/openapi.json` is the API's OpenAPI document, and
 `hospital-frontend/src/api-schema.ts` holds TypeScript types generated from it,
-which `src/api.ts` uses for requests and responses. `dotnet test` fails when
-the document the API serves differs from `openapi.json`, and CI fails when
+which `src/api/client.ts` uses for requests and responses. `dotnet test` fails
+when the document the API serves differs from `openapi.json`, and CI fails when
 `api-schema.ts` is out of date. After changing a controller or DTO, update
 both and commit them with the change:
 
