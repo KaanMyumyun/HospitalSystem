@@ -2,19 +2,20 @@ import { randomBytes, randomInt } from 'node:crypto'
 import { test as base, expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import type * as Api from '../src/api-schema.ts'
+import { personName } from '../src/lib/names.ts'
 import { clinicInstant } from './clinic.ts'
 import { admin, apiOrigin } from './settings.ts'
 
 export { expect }
 
 export type Account = { name: string; password: string }
-export type Doctor = Account & { doctorId: number; scheduleId: number; department: string }
+export type Doctor = Account & { doctorId: number; scheduleId: number; department: string; shownAs: string }
 export type Patient = { name: string; phoneNumber: string; dateOfBirth: string }
 
 let testsInWorker = 0
 function clientAddress(workerIndex: number) {
   testsInWorker++
-  return `10.${workerIndex % 256}.${Math.floor(testsInWorker / 250) % 256}.${(testsInWorker % 250) + 1}`
+  return `10.${(workerIndex + 100) % 256}.${Math.floor(testsInWorker / 250) % 256}.${(testsInWorker % 250) + 1}`
 }
 
 export function uniqueName(prefix: string) {
@@ -64,7 +65,7 @@ export class Seed {
     const scheduleId = schedules.data?.find((item) => item.doctorId === doctorId)?.scheduleId
     if (scheduleId === undefined) throw new Error(`${account.name} has no schedule`)
 
-    return { ...account, doctorId, scheduleId, department }
+    return { ...account, doctorId, scheduleId, department, shownAs: personName(account.name) }
   }
 
   async frontDesk(): Promise<Account> {
@@ -83,6 +84,7 @@ export class Seed {
       phoneNumber: patient.phoneNumber,
       dateOfBirth: patient.dateOfBirth,
       appointmentTime: clinicInstant(date, time),
+      createNewPatient: true,
     } satisfies Api.CreateAppointmentDto)
   }
 
@@ -161,11 +163,18 @@ export const test = base.extend<{ seed: Seed; browserErrors: void }>({
 export async function signIn(page: Page, account: Account) {
   await page.goto('/')
   await page.getByLabel('Username').fill(account.name)
-  await page.getByLabel('Password').fill(account.password)
+  await page.getByLabel('Password', { exact: true }).fill(account.password)
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible()
+  await expect(
+    page.getByRole('navigation', { name: 'Main navigation' }).or(page.getByRole('button', { name: 'Open menu' })),
+  ).toBeVisible()
 }
 
-export function notice(page: Page, text: string) {
-  return page.getByRole('status').filter({ hasText: text })
+export async function go(page: Page, screen: string) {
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: screen, exact: true }).click()
+  await expect(page.getByRole('heading', { name: screen, level: 1 })).toBeVisible()
+}
+
+export function toast(page: Page, text: string | RegExp) {
+  return page.locator('.toast').filter({ hasText: text })
 }

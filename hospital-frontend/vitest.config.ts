@@ -7,7 +7,7 @@ export default defineConfig({
     },
     exclude: [...configDefaults.exclude, 'e2e/**'],
     projects: [
-      { extends: true, test: { name: 'unit', environment: 'node', include: ['src/**/*.test.ts'] } },
+      { extends: true, test: { name: 'unit', environment: 'node', include: ['src/**/*.test.ts', 'scripts/**/*.test.mjs'] } },
       {
         extends: true,
         test: {

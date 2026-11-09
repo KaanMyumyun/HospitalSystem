@@ -1,4 +1,4 @@
-import type { AppointmentDto, DayOfWeek, DoctorDto, ScheduleDto } from '../api'
+import type { AppointmentDto, DayOfWeek, DoctorDto, ScheduleDto } from '../api/client'
 import type { Slot } from '../types'
 import { atClinicTime, clinicDate, clinicDayStart, clinicWeekday, wallClock } from './clinicTime'
 import { formatHourRange } from './format'
@@ -119,7 +119,11 @@ export function buildWeekSlots(
 
       if (start < now) {
         const cancelled = matching[0]
-        return cancelled ? { day, time, status: 'cancelled', appointment: cancelled } : { day, time, status: 'past' }
+        if (cancelled) return { day, time, status: 'cancelled', appointment: cancelled }
+        if (!works) return { day, time, status: 'off' }
+        if (away) return { day, time, status: 'away' }
+        if (onBreak) return { day, time, status: 'break' }
+        return { day, time, status: 'past' }
       }
       if (!works) return { day, time, status: 'off' }
       if (away) return { day, time, status: 'away' }
@@ -157,4 +161,13 @@ export function canMarkAppointment(appointment: AppointmentDto, now = Date.now()
 export function isInWeek(value: Date, weekOffset = 0) {
   const { from, to } = weekRange(weekOffset)
   return value >= from && value < to
+}
+
+function mondayOf(instant: Date) {
+  const day = clinicWeekday(instant)
+  return clinicDayStart(instant, day === 0 ? -6 : 1 - day)
+}
+
+export function weekOffsetOf(instant: Date, now = new Date()) {
+  return Math.round((mondayOf(instant).getTime() - mondayOf(now).getTime()) / (7 * 24 * 60 * minuteMs))
 }

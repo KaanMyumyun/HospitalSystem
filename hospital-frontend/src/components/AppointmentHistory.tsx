@@ -1,60 +1,43 @@
-import { useEffect, useState } from 'react'
-import { loadAppointmentHistory } from '../api'
-import type { AppointmentDto, AppointmentHistoryEntryDto } from '../api'
-import { formatLongDate, formatTime, historyActionLabel } from '../lib/format'
-import { EmptyState, SkeletonRows } from './ui'
-
-type Loaded = { version: string; entries: AppointmentHistoryEntryDto[] } | { version: string; error: string }
+import { loadAppointmentHistory } from '../api/client'
+import type { AppointmentDto } from '../api/client'
+import { useResource } from '../app/useResource'
+import { mediumDate, timeOf } from '../lib/dates'
+import { historyActionLabel } from '../lib/format'
+import { Skeleton } from '../ui/bits'
 
 export function AppointmentHistory({ appointment, hidden }: { appointment: AppointmentDto; hidden: boolean }) {
-  const { appointmentId } = appointment
-  const version = `${appointmentId} ${appointment.status} ${appointment.appointmentTime} ${appointment.doctorId}`
-  const [loaded, setLoaded] = useState<Loaded | null>(null)
-
-  useEffect(() => {
-    if (hidden) return
-    let current = true
-    loadAppointmentHistory(appointmentId).then(
-      (entries) => {
-        if (current) setLoaded({ version, entries })
-      },
-      (error: unknown) => {
-        if (current) setLoaded({ version, error: error instanceof Error ? error.message : 'Could not load the history' })
-      },
-    )
-    return () => {
-      current = false
-    }
-  }, [appointmentId, hidden, version])
-
-  const shown = loaded?.version === version ? loaded : null
+  const key = hidden
+    ? null
+    : `history:${appointment.appointmentId}:${appointment.status}:${appointment.appointmentTime}:${appointment.doctorId}`
+  const { data, error } = useResource(key, (signal) => loadAppointmentHistory(appointment.appointmentId, signal))
 
   return (
-    <section className="history" aria-label="Booking history">
-      <div className="section-label">History</div>
+    <section aria-label="Booking history" className="history">
+      <h3 className="history-title">History</h3>
       {hidden ? (
-        <EmptyState text="Demo accounts do not see who changed a booking." />
-      ) : !shown ? (
-        <SkeletonRows count={2} />
-      ) : 'error' in shown ? (
-        <div className="form-error">{shown.error}</div>
-      ) : shown.entries.length === 0 ? (
-        <EmptyState text="No changes recorded." />
+        <p className="history-note">Demo accounts don't see who changed a booking.</p>
+      ) : error ? (
+        <p className="history-note">{error}</p>
+      ) : !data ? (
+        <Skeleton lines={2} />
+      ) : data.length === 0 ? (
+        <p className="history-note">No changes recorded.</p>
       ) : (
         <ol className="history-list">
-          {shown.entries.map((entry, index) => {
+          {data.map((entry, index) => {
             const time = new Date(entry.createdAt)
             return (
               <li key={`${entry.createdAt}-${index}`}>
-                <span>
-                  <strong>
-                    {historyActionLabel(entry.action)} by {entry.actor}
-                  </strong>
-                  <small>
-                    {formatLongDate(time)}, {formatTime(time)}
-                  </small>
-                  <small>{entry.details}</small>
-                </span>
+                <span className="history-dot" aria-hidden="true" />
+                <div>
+                  <p className="history-what">
+                    <strong>{historyActionLabel(entry.action)}</strong> by <span className="history-actor">{entry.actor}</span>
+                  </p>
+                  <p className="history-when">
+                    {mediumDate(time)} · <span className="mono">{timeOf(time)}</span>
+                  </p>
+                  {entry.details && <p className="history-details">{entry.details}</p>}
+                </div>
               </li>
             )
           })}

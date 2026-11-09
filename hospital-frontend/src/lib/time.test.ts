@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ScheduleDto } from '../api'
+import type { ScheduleDto } from '../api/client'
 import { clockLabel, scheduleWindow } from './time'
 
 function schedule(startTime: string, endTime: string): ScheduleDto {

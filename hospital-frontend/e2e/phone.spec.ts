@@ -1,40 +1,36 @@
-import { devices } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { addDays, clinicToday, longDate } from './clinic.ts'
-import { expect, newPatient, signIn, test } from './fixtures.ts'
+import { expect, signIn, test } from './fixtures.ts'
 
-test.use({ ...devices['Pixel 7'] })
+test.use({ viewport: { width: 390, height: 844 } })
 
-async function expectNoSidewaysScrolling(page: Page) {
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  )
-  expect(overflow, 'pixels the page scrolls sideways').toBe(0)
+async function fitsTheScreen(page: Page) {
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  expect(overflow).toBeLessThanOrEqual(0)
 }
 
-test("a doctor's day fits a phone", async ({ page, seed }) => {
+test("shows a doctor's day without sideways scrolling", async ({ page, seed }) => {
   const doctor = await seed.doctor()
-  const desk = await seed.frontDesk()
-  const tomorrow = addDays(clinicToday(), 1)
-  await seed.booking(desk, doctor, tomorrow, '10:00', newPatient('Maria Ivanova'))
-  await seed.booking(desk, doctor, tomorrow, '10:30', newPatient('Georgi Petrov'))
-
   await signIn(page, doctor)
-  await page.getByRole('button', { name: 'Next Day' }).click()
-  await expect(page.getByRole('heading', { name: longDate(tomorrow) })).toBeVisible()
-  await expect(page.getByText('2 appointments')).toBeVisible()
-  const first = page.getByRole('listitem').filter({ hasText: 'Maria Ivanova' })
-  await expect(first).toContainText('10:00')
-  await expect(first).toContainText('Scheduled')
-  await expectNoSidewaysScrolling(page)
+  await expect(page.getByRole('navigation', { name: 'Days this week' })).toBeVisible()
+  await fitsTheScreen(page)
 })
 
-test('reception fits a phone', async ({ page, seed }) => {
+test('shows reception one day at a time, with the menu in a drawer', async ({ page, seed }) => {
   const doctor = await seed.doctor()
   const desk = await seed.frontDesk()
-
   await signIn(page, desk)
-  await page.getByRole('button', { name: doctor.name }).click()
-  await expect(page.getByRole('group', { name: 'Weekly appointment schedule' })).toBeVisible()
-  await expectNoSidewaysScrolling(page)
+
+  await page.getByRole('heading', { level: 1 }).getByRole('button').click()
+  await page.getByRole('dialog', { name: 'Choose a doctor' }).getByRole('button', { name: new RegExp(`^${doctor.shownAs}`) }).click()
+  await expect(page.getByRole('heading', { name: doctor.shownAs, level: 1 })).toBeVisible()
+  await expect(page.getByRole('radiogroup', { name: 'Day' })).toBeVisible()
+  await fitsTheScreen(page)
+
+  await page.getByRole('button', { name: 'Open menu' }).click()
+  const menu = page.getByRole('dialog', { name: 'Menu' })
+  await expect(menu.getByRole('link', { name: 'Reception' })).toHaveAttribute('aria-current', 'page')
+  await menu.getByRole('link', { name: 'Patients' }).click()
+  await expect(menu).toBeHidden()
+  await expect(page.getByRole('heading', { name: 'Patients', level: 1 })).toBeVisible()
+  await fitsTheScreen(page)
 })

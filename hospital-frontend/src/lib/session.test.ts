@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { tokenExpiry } from './session'
+import { tokenExpiry, tokenUserName } from './session'
 
 function fakeToken(claims: Record<string, unknown>) {
   const base64url = (value: string) => btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
@@ -19,5 +19,22 @@ describe('tokenExpiry', () => {
     expect(tokenExpiry('not-a-token')).toBeNull()
     expect(tokenExpiry('a.!!!.c')).toBeNull()
     expect(tokenExpiry(fakeToken({ role: 'FrontDesk' }))).toBeNull()
+  })
+})
+
+describe('tokenUserName', () => {
+  it('reads the name claim ASP.NET Core writes', () => {
+    expect(tokenUserName(fakeToken({ 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name': 'desk.anna' }))).toBe(
+      'desk.anna',
+    )
+  })
+
+  it('falls back to the short claim names', () => {
+    expect(tokenUserName(fakeToken({ unique_name: 'elena.markova' }))).toBe('elena.markova')
+  })
+
+  it('gives null without a name', () => {
+    expect(tokenUserName(fakeToken({ exp: 1 }))).toBeNull()
+    expect(tokenUserName('broken')).toBeNull()
   })
 })

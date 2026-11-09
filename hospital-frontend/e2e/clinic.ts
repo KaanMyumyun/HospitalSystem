@@ -38,20 +38,14 @@ function offsetAt(instant: number) {
   return (match[1] === '-' ? -minutes : minutes) * 60_000
 }
 
-export function longDate(date: string) {
-  return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'short',
-    day: '2-digit',
-    timeZone: 'UTC',
-  })
+function label(date: string, options: Intl.DateTimeFormatOptions) {
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-GB', { ...options, timeZone: 'UTC' })
 }
 
-export function shortDate(date: string) {
-  return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  })
+export function longDate(date: string) {
+  return label(date, { weekday: 'long', day: 'numeric', month: 'long' })
+}
+
+export function mediumDate(date: string) {
+  return label(date, { weekday: 'short', day: 'numeric', month: 'short' })
 }

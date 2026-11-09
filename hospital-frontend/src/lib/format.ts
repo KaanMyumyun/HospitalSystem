@@ -1,4 +1,4 @@
-import type { AppointmentStatus, DayOfWeek, DepartmentDto, ScheduleDto, TimeOffDto } from '../api'
+import type { AppointmentStatus, DayOfWeek, DepartmentDto, ScheduleDto, TimeOffDto } from '../api/client'
 import type { AdminSection, SlotStatus } from '../types'
 import { clinicDate, clinicTimeZone } from './clinicTime'
 import { clockLabel, scheduleWindow } from './time'

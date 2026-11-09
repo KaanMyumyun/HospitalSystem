@@ -1,4 +1,4 @@
-import type { AppointmentDto, DepartmentDto, DoctorDto, ScheduleDto, UserRole } from './api'
+import type { AppointmentDto, DepartmentDto, DoctorDto, ScheduleDto, UserRole } from './api/client'
 
 export type AdminSection = 'departments' | 'doctors' | 'schedules' | 'users' | 'audit'
 export type Screen = 'reception' | 'patients' | 'doctor' | AdminSection
@@ -8,11 +8,6 @@ export type HospitalData = {
   departments: DepartmentDto[]
   doctors: DoctorDto[]
   schedules: ScheduleDto[]
-}
-export type ActivityEntry = {
-  id: string
-  message: string
-  at: string
 }
 export type Slot = {
   day: Date

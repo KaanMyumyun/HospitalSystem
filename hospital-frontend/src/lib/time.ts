@@ -1,4 +1,4 @@
-import type { ScheduleDto } from '../api'
+import type { ScheduleDto } from '../api/client'
 
 export function scheduleWindow(schedule: ScheduleDto) {
   const start = new Date(schedule.startTime)

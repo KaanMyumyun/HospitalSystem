@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AppointmentDto, ScheduleDto } from '../api'
+import type { AppointmentDto, ScheduleDto } from '../api/client'
 import {
   clinicDate,
   clinicDayStart,

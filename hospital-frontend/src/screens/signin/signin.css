@@ -1,0 +1,316 @@
+.signin {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(420px, 0.85fr);
+  min-height: 100dvh;
+}
+
+.signin-poster {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 34px clamp(28px, 4.5vw, 72px) 44px;
+  overflow: hidden;
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.poster-copy {
+  margin-top: clamp(48px, 13vh, 150px);
+}
+
+.poster-date {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.poster-time {
+  color: var(--ink-3);
+  font-size: 14px;
+}
+
+.poster-greeting {
+  margin-top: 16px;
+  font-size: clamp(60px, 7.6vw, 118px);
+  font-weight: 370;
+  letter-spacing: -0.04em;
+  line-height: 0.94;
+}
+
+.poster-lede {
+  max-width: 33ch;
+  margin-top: 26px;
+  color: var(--ink-2);
+  font-size: 18.5px;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.poster-grid {
+  display: grid;
+  grid-template-columns: 46px repeat(5, minmax(0, 1fr));
+  gap: 5px;
+  max-width: 600px;
+  margin-top: auto;
+  padding-top: 48px;
+}
+
+.poster-day {
+  padding-bottom: 4px;
+  color: var(--ink-3);
+  font-size: 11.5px;
+  font-weight: 520;
+}
+
+.poster-hour {
+  align-self: center;
+  color: var(--ink-4);
+  font-size: 10.5px;
+}
+
+.poster-cell {
+  height: 26px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+
+.poster-b {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.poster-d {
+  background: var(--done-soft);
+  box-shadow: inset 2px 0 0 var(--ink-4);
+}
+
+.poster-n {
+  background: var(--amber-soft);
+  box-shadow: inset 2px 0 0 var(--amber);
+}
+
+.poster-h {
+  background: repeating-linear-gradient(135deg, var(--hatch) 0 1px, transparent 1px 7px);
+  box-shadow: none;
+}
+
+.poster-a {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--amber) 26%, transparent) 0 1px,
+    transparent 1px 7px
+  );
+  box-shadow: none;
+}
+
+.signin-panel {
+  display: grid;
+  place-items: center;
+  padding: 40px 24px;
+  background: var(--sheet);
+}
+
+.signin-card {
+  width: min(400px, 100%);
+}
+
+.signin-mobile-brand {
+  display: none;
+  margin-bottom: 32px;
+}
+
+.signin-title {
+  font-size: 40px;
+  font-weight: 400;
+}
+
+.signin-sub {
+  margin-top: 8px;
+  color: var(--ink-2);
+}
+
+.signin-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  background: var(--amber-soft);
+  color: var(--amber-text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.signin-notice .icon {
+  margin-top: 2px;
+}
+
+.signin-form {
+  margin-top: 28px;
+}
+
+.signin-form .btn {
+  margin-top: 4px;
+}
+
+.signin-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 30px 0 14px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.signin-divider::before,
+.signin-divider::after {
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+  content: '';
+}
+
+.demo-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.demo-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px 12px 16px;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: var(--ink);
+  text-align: left;
+  transition:
+    border-color var(--fast) var(--ease),
+    background-color var(--fast) var(--ease);
+}
+
+.demo-card .icon {
+  color: var(--ink-3);
+  transition:
+    transform var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.demo-card:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--raised), var(--accent-soft) 45%);
+}
+
+.demo-card:hover:not(:disabled) .icon {
+  color: var(--accent-text);
+  transform: translateX(2px);
+}
+
+.demo-card:disabled {
+  opacity: 0.6;
+}
+
+.demo-card-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+}
+
+.demo-card-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.demo-card-detail {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.signin-foot {
+  margin-top: 12px;
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.signin-wake {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  color: var(--ink-2);
+  font-size: 13.5px;
+}
+
+.wake-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+    transform: scale(0.75);
+  }
+}
+
+@media (max-width: 920px) {
+  .signin {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .signin-poster {
+    display: none;
+  }
+
+  .signin-mobile-brand {
+    display: block;
+  }
+
+  .signin-panel {
+    place-items: start center;
+    padding-top: 48px;
+  }
+}
+
+.center-page {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 24px;
+  background: var(--paper);
+}
+
+.center-card {
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+  width: min(480px, 100%);
+}
+
+.center-code {
+  margin-top: 30px;
+  color: var(--ink-4);
+  font-size: 104px;
+  letter-spacing: -0.05em;
+  line-height: 0.85;
+}
+
+.center-title {
+  margin-top: 10px;
+  font-size: 36px;
+}
+
+.center-text {
+  margin-bottom: 10px;
+  color: var(--ink-2);
+}
